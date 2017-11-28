@@ -1,0 +1,14 @@
+# temporary/backup files
+*~
+
+# c++
+*.d
+*.o
+*.so
+
+# python
+*.pyc
+*__pycache__/
+
+# log files
+*.log
