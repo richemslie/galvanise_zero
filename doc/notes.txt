@@ -1,0 +1,46 @@
+
+======
+XXX
+======
+
+
+install instructions
+====================
+
+Using python 2, keras and tensorflow.
+
+.. code-block:: shell
+
+   virtualenv -p /usr/bin/python2 --system-site-packages $GGPLEARN_PATH/bin/install/_python2
+
+   # activate it
+   . bin/setup.sh
+
+   pip install twisted pytest cffi
+
+   # XXX (DONT switch back and forward) recommend just blowing it away and creating a new vitual evironment
+
+   # choose one of:
+   # pip install tensorflow
+   pip install --upgrade tensorflow-gpu
+
+   pip install keras
+
+
+
+Using tensorflow with single cpu
+--------------------------------
+.. code-block:: python
+
+import tensorflow as tf
+
+# XXX doesn't work
+conf = tf.ConfigProto(
+    device_count={'CPU' : 1, 'GPU' : 0},
+    allow_soft_placement=True,
+    log_device_placement=False
+)
+
+sess = tf.Session()
+with sess.as_default():
+     print tf.constant(42).eval()

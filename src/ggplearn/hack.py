@@ -1,11 +1,3 @@
-
-
-
-
-"""
-THEANO_FLAGS=mode=FAST_RUN,device=gpu,floatX=float32 python build_nn.py score connect5
-"""
-
 import csv
 
 import numpy as np

@@ -10,13 +10,14 @@ import json
 from ggplib.util import log
 from ggplib.player.mcs import MCSPlayer
 from ggplib.player.gamemaster import GameMaster
-from ggplib.propnet.getpropnet import get_filename_for_game
 from ggplib.db.lookup import get_database
+from ggplib.db.helper import get_gdl_for_game
 
 
 class MCSPlayer2(MCSPlayer):
     choose_percentage = 0.25
     choose_temperature = 0.35
+    max_run_time = 1.0
 
     def choose(self):
         assert self.root is not None
@@ -78,16 +79,8 @@ class MCSPlayer2(MCSPlayer):
         return json.dumps(dict(candidates=candidates), indent=4)
 
 
-def get_game(game, replace_map=None):
-    filename = get_filename_for_game(game)
-    contents = open(filename).read()
-    if replace_map:
-        for k, v in replace_map.items():
-            contents.replace(k, v)
-    return contents
-
-
 def pretty_print_board(state_str):
+    ' XXX Only for breakthrough '
     from ggplib.symbols import SymbolFactory
     sf = SymbolFactory()
     states = sf.to_symbols(state_str)
@@ -125,11 +118,9 @@ def pretty_print_board(state_str):
 
 def run_game(game_name):
     # create gamemaster and add players
-    gm = GameMaster(get_game(game_name))
-    for role in gm.sm.roles:
-        player = MCSPlayer2(role)
-        player.max_run_time = 1.0
-        gm.add_player(player, role)
+    gm = GameMaster(get_gdl_for_game(game_name))
+    for role in gm.sm.get_roles():
+        gm.add_player(MCSPlayer2(role), role)
 
     gm.start(meta_time=30, move_time=5)
 
@@ -178,6 +169,7 @@ def main(game_name):
     from ggplib import interface
     interface.initialise_k273(1)
 
+    # XXX reduce log 
     # import ggplib.util.log
     # ggplib.util.log.initialise()
 
@@ -189,7 +181,7 @@ def main(game_name):
     game_name = sys.argv[1]
     while True:
         games = []
-        for i in range(25):
+        for i in range(100):
             games.append(run_game(game_name))
 
         fd, path = tempfile.mkstemp(suffix='.json', prefix="mcs_%s_" % game_name, dir=".")
