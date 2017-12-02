@@ -1,41 +1,3 @@
-"""
-otalMemory: 7.92GiB freeMemory: 7.41GiB
-2017-12-02 01:16:35.244645: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1120] Creating TensorFlow device (/device:GPU:0) -> (device: 0, name: GeForce GTX 1080, pci bus id: 0000:01:00.0, compute capability: 6.1)
-387973/387973 [==============================] - 141s 365us/step - loss: 0.0022 - categorical_accuracy: 0.1536 - top_3_accuracy: 0.3053 -
-
- val_loss: 7.9887e-04 - val_categorical_accuracy: 0.2614 - val_top_3_accuracy: 0.4768
-
-
-
-Epoch 2/16
-387973/387973 [==============================] - 139s 357us/step - loss: 6.4375e-04 - categorical_accuracy: 0.2740 - top_3_accuracy: 0.4810 - val_loss: 3.7318e-04 - val_categorical_accuracy: 0.3373 - val_top_3_accuracy: 0.5825
-
-Epoch 3/16
-387973/387973 [==============================] - 141s 362us/step - loss: 3.3996e-04 - categorical_accuracy: 0.3357 - top_3_accuracy: 0.5948 - val_loss: 2.6881e-04 - val_categorical_accuracy: 0.3684 - val_top_3_accuracy: 0.6564
-
-Epoch 4/16
-387973/387973 [==============================] - 140s 360us/step - loss: 2.4416e-04 - categorical_accuracy: 0.3699 - top_3_accuracy: 0.6459 - val_loss: 2.0378e-04 - val_cat
-egorical_accuracy: 0.3942 - val_top_3_accuracy: 0.6866
-
-Epoch 5/16
-387973/387973 [==============================] - 140s 360us/step - loss: 2.0620e-04 - categorical_accuracy: 0.3907 - top_3_accuracy: 0.6724 - val_loss: 1.7678e-04 - val_categorical_accuracy: 0.4074 - val_top_3_accuracy: 0.6990
-
-"""
-
-"""
-
-388195/388195 [==============================] - 109s 280us/step - loss: 0.0021 - categorical_accuracy: 0.1508 - top_2_accuracy: 0.2389 - top_3_accuracy: 0.3019 - top_5_accuracy: 0.3931
-
-- val_loss: 8.3125e-04 - val_categorical_accuracy: 0.2459 - val_top_2_accuracy: 0.3634 - val_top_3_accuracy: 0.4447 - val_top_5_accuracy: 0.5376
-
-
-
-
-
-"""
-
-
-
 import os
 import sys
 import json
@@ -369,8 +331,6 @@ def build_and_train_nn(data_path, game_name, max_games):
 
     nn_model.save_weights("weights_nn_%s.h5" % game_name, overwrite=True)
 
-###############################################################################
-###############################################################################
 ###############################################################################
 
 def main_wrap():

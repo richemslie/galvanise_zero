@@ -30,7 +30,7 @@ def get_network_model(config, number_of_outputs=1):
         model.add(Convolution2D(256, 3))
         size -= 2
 
-    # lost of dropout
+    # lots of dropout
     model.add(BatchNormalization())
     model.add(Activation('relu'))
     model.add(Dropout(0.1))
@@ -52,8 +52,6 @@ def get_network_model(config, number_of_outputs=1):
         return metrics.top_k_categorical_accuracy(y_true, y_pred, k=5)
 
     # add a bunch of regression metrics
-    # metrics.mean_squared_logarithmic_error
-    # metrics.mean_absolute_percentage_error
     model.compile(loss='mean_squared_error',
                   optimizer='adam',
                   metrics=[metrics.categorical_accuracy, top_2_accuracy, top_3_accuracy, top_5_accuracy])
