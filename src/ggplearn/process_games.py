@@ -1,78 +1,143 @@
 """
+otalMemory: 7.92GiB freeMemory: 7.41GiB
+2017-12-02 01:16:35.244645: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1120] Creating TensorFlow device (/device:GPU:0) -> (device: 0, name: GeForce GTX 1080, pci bus id: 0000:01:00.0, compute capability: 6.1)
+387973/387973 [==============================] - 141s 365us/step - loss: 0.0022 - categorical_accuracy: 0.1536 - top_3_accuracy: 0.3053 -
 
-            #if depth > 2:
-            #    if state in self.all_states:
-            #        Game.dupes += 1
-            #    else:
-            #        Game.all_states.add(state)
-
-    print "#games", len(games)
-    print "#dupe states", Game.dupes
-    print "#unique states", len(Game.all_states)
-    print "% of dupe states", Game.dupes / float(Game.dupes + len(Game.all_states))
+ val_loss: 7.9887e-04 - val_categorical_accuracy: 0.2614 - val_top_3_accuracy: 0.4768
 
 
 
-class TrainingData:
-    def __init__(self, config, data, do_score_only=True):
-        self.config = config
-        self.model = config.get_model()
-        self.data = data
+Epoch 2/16
+387973/387973 [==============================] - 139s 357us/step - loss: 6.4375e-04 - categorical_accuracy: 0.2740 - top_3_accuracy: 0.4810 - val_loss: 3.7318e-04 - val_categorical_accuracy: 0.3373 - val_top_3_accuracy: 0.5825
 
-    def gen(self, filter_by_role_index):
-        for row in self.data:
+Epoch 3/16
+387973/387973 [==============================] - 141s 362us/step - loss: 3.3996e-04 - categorical_accuracy: 0.3357 - top_3_accuracy: 0.5948 - val_loss: 2.6881e-04 - val_categorical_accuracy: 0.3684 - val_top_3_accuracy: 0.6564
 
-            # # numerics please:
-            # role_index = int(row[0])
+Epoch 4/16
+387973/387973 [==============================] - 140s 360us/step - loss: 2.4416e-04 - categorical_accuracy: 0.3699 - top_3_accuracy: 0.6459 - val_loss: 2.0378e-04 - val_cat
+egorical_accuracy: 0.3942 - val_top_3_accuracy: 0.6866
 
-            # # filtering?
-            # if not self.do_scores:
-            #     if role_index != filter_by_role_index:
-            #         continue
-
-            game_depth = int(row[1])
-            if game_depth > 100:
-                continue
-
-            scores = [float(row[3]), float(row[4])]
-
-            # XXX THESE HACKS WERE HERE FOR POLICY NETWORK...
-            #if scores[0] > 0.499 and scores[1] < 0.499 and game_depth > 20:
-            #    print "Playing randomly since game is already a draw"
-            #    continue
-
-            #if scores[role_index] < 0.01:
-            #    print "Skip low score move - would be playing randomly"
-            #    continue
-
-            state = [1 if x == "1" else 0 for x in row[5:]]
-            X_0 = self.config.map_state_with_roles(state,
-                                                   self.analyser.base_state_info,
-                                                   role_index)
-
-            if self.do_scores:
-                y_0 = scores
-            else:
-                action = int(row[2])
-                y_0 = self.action_to_one_hot(role_index, action)
-
-            yield role_index, X_0, y_0
-
-###############################################################################
-dupes = 0
-all_states = set()
+Epoch 5/16
+387973/387973 [==============================] - 140s 360us/step - loss: 2.0620e-04 - categorical_accuracy: 0.3907 - top_3_accuracy: 0.6724 - val_loss: 1.7678e-04 - val_categorical_accuracy: 0.4074 - val_top_3_accuracy: 0.6990
 
 """
+
+"""
+
+388195/388195 [==============================] - 109s 280us/step - loss: 0.0021 - categorical_accuracy: 0.1508 - top_2_accuracy: 0.2389 - top_3_accuracy: 0.3019 - top_5_accuracy: 0.3931
+
+- val_loss: 8.3125e-04 - val_categorical_accuracy: 0.2459 - val_top_2_accuracy: 0.3634 - val_top_3_accuracy: 0.4447 - val_top_5_accuracy: 0.5376
+
+
+
+
+
+"""
+
+
 
 import os
 import sys
 import json
+import random
+
+import numpy as np
+
+from ggplib.symbols import SymbolFactory
+from ggplib.db import lookup
+
+from ggplearn.net import get_network_model
+
+
+class Config(object):
+    role_count = 2
+
+    @property
+    def num_rows(self):
+        return len(self.x_cords)
+
+    @property
+    def num_cols(self):
+        return len(self.y_cords)
+
+    @property
+    def channel_size(self):
+        return self.num_cols * self.num_rows
+
+    @property
+    def num_channels(self):
+        # one for each role to indicate turn, one for each pieces
+        return self.role_count + len(self.pieces)
+
+
+class AtariGo_7x7(Config):
+    game = "atariGo_7x7"
+    x_cords = "1 2 3 4 5 6 7".split()
+    y_cords = "1 2 3 4 5 6 7".split()
+
+    base_term = "cell"
+    x_term = 1
+    y_term = 2
+    piece_term = 3
+
+    pieces = ['black', 'white']
+
+
+class Breakthrough(Config):
+    game = "breakthrough"
+    x_cords = "1 2 3 4 5 6 7 8".split()
+    y_cords = "1 2 3 4 5 6 7 8".split()
+
+    base_term = "cellHolds"
+    x_term = 1
+    y_term = 2
+    piece_term = 3
+
+    pieces = ['white', 'black']
+
+
+class Reversi(Config):
+    game = "reversi"
+    x_cords = "1 2 3 4 5 6 7 8".split()
+    y_cords = "1 2 3 4 5 6 7 8".split()
+
+    base_term = "cell"
+    x_term = 1
+    y_term = 2
+    piece_term = 3
+
+    pieces = ['black', 'red']
+
+
+def get_config(game_name):
+    for clz in AtariGo_7x7, Breakthrough, Reversi:
+        if clz.game == game_name:
+            return clz()
+
+######################################################################
+
+def get_from_json(path, game_name):
+    files = os.listdir(path)
+    for f in files:
+        if f.endswith(".json"):
+            buf = open(os.path.join(path, f)).read()
+            data = json.loads(buf)
+            for g in data:
+                if g["game"] == game_name:
+                    yield g
+                else:
+                    print f, "NOT CORRECT GAME", g["game"]
+                    break
+
 
 class PlayOne(object):
-    def __init__(self, state, inputs, best_score):
+    def __init__(self, state, actions, lead_role_index):
         self.state = state
-        self.inputs = inputs
-        self.best_score = best_score
+        self.actions = actions
+
+        # who's turn it is...
+        self.lead_role_index = lead_role_index
+
 
 class Game:
     def __init__(self, data, model):
@@ -83,8 +148,8 @@ class Game:
         assert len(self.roles) == 2
         self.expected_state_len = len(model.bases)
         assert len(model.actions) == 2
-        self.expected_inputs_len = sum(len(l) for l in model.actions)
-        self.player_0_inputs_len = len(model.actions[0])
+        self.expected_actions_len = sum(len(l) for l in model.actions)
+        self.player_0_actions_len = len(model.actions[0])
 
         self.plays = []
         depth = 0
@@ -102,134 +167,213 @@ class Game:
             state = tuple(info['state'])
             assert len(state) == self.expected_state_len
 
-            best_score, inputs = self.process_inputs(info['move'], info['candidates'])
-            self.plays.append(PlayOne(state, inputs, best_score))
+            actions, lead_role_index = self.process_actions(info['move'], info['candidates'])
+            self.plays.append(PlayOne(state, actions, lead_role_index))
             depth += 1
 
-    def process_inputs(self, move, candidates):
+    def process_actions(self, move, candidates):
         self.move = move
         assert len(move) == 2
-        lead_role = self.roles[0 if move.index("noop") else 1]
-        passive_role = self.roles[1 if move.index("noop") else 0]
+        lead_role_index = 0 if move.index("noop") else 1
+        lead_role = self.roles[lead_role_index]
+        passive_role = self.roles[0 if lead_role_index else 1]
 
-        # so player0 goes towards 1, player1 goes towards -1
-        m = 2 if move.index("noop") else -2
-        k = -1 if move.index("noop") else 1
+        assert lead_role != passive_role
 
         # noop, throw away
         assert len(candidates[passive_role]) == 1
 
-        inputs = [0 for i in range(self.expected_inputs_len)]
+        actions = [0 for i in range(self.expected_actions_len)]
 
-        # worst possible score
-        best = k
-        v = -k
-
-        index_start = 0 if move.index("noop") else self.player_0_inputs_len
+        index_start = 0 if lead_role_index == 0 else self.player_0_actions_len
         for idx, score in candidates[lead_role]:
-            normalise_score = score * m + k
-            if (v* normalise_score > best *v):
-                best = normalise_score
-
-            inputs[index_start + idx] = normalise_score
+            # scores has to be 0 and 1
+            assert -0.1 < score < 1.1
+            actions[index_start + idx] = score
 
         # XXX set noop to be the -best?  Or just leave it 0?
-        return best, inputs
+        return actions, lead_role_index
 
+###############################################################################
 
-def get_all(path, game_name):
-    files = os.listdir(path)
-    for f in files:
-        if f.endswith(".json"):
-            buf = open(os.path.join(path, f)).read()
-            data = json.loads(buf)
-            for g in data:
-                if g["game"] == game_name:
-                    yield g
-                else:
-                    print f, "NOT CORRECT GAME", g["game"]
-                    break
+def init_base_infos(config, sm_model):
+    symbol_factory = SymbolFactory()
 
+    class BaseInfo(object):
+        def __init__(self, gdl_str, symbols):
+            self.gdl_str = gdl_str
+            self.symbols = symbols
 
+            # drops true ie (true (control black)) -> (control black)
+            self.terms = symbols[1]
 
+            self.channel = None
+            self.cord_idx = None
 
-
-
-
-
-
-class AtariGo_7x7(object):
-    game = "atariGo_7x7_"
-    x_cords = "1 2 3 4 5 6 7".split()
-    y_cords = "1 2 3 4 5 6 7".split()
-    base_term = "cell"
-    pieces = ['black', 'white']
-
-
-def search_for_terms(self):
-    return [(p,) for p in self.pieces]
-
-def init_state(config, model):
-    sf = SymbolFactory()
-    sf.
-    for b in model.bases:
+    base_infos = []
+    for s in sm_model.bases:
+        base_infos.append(BaseInfo(s, symbol_factory.symbolize(s)))
 
     all_cords = []
     for x_cord in config.x_cords:
         for y_cord in config.y_cords:
             all_cords.append((x_cord, y_cord))
 
-    for b_info in bs_info.bases:
-        b_info.channel = None
-
     # need to match up there terms.  There will be one channel each.  We don't care what
     # the order is, the NN doesn't care either.
-    for (channel_count, args) in enumerate(self.search_for_terms):
+    BASE_TERM = 0
+
+    def match_terms(b_info, arg):
+        return b_info.terms[config.piece_term] == arg
+
+    for channel_count, arg in enumerate(config.pieces):
         count = 0
         for board_pos, (x_cord, y_cord) in enumerate(all_cords):
             # this is slow.  Will go through all the bases and match up terms.
-            for b_info in bs_info.bases:
-                if b_info.terms[BASE_TERM] != self.base_term:
+            for b_info in base_infos:
+                if b_info.terms[BASE_TERM] != config.base_term:
                     continue
 
-                if (b_info.terms[self.x_term] == x_cord and
-                    b_info.terms[self.y_term] == y_cord):
+                if b_info.terms[config.x_term] == x_cord and \
+                   b_info.terms[config.y_term] == y_cord:
 
-                    if self.match_terms(b_info, args):
+                    if match_terms(b_info, arg):
                         count += 1
                         b_info.channel = channel_count
                         b_info.cord_idx = board_pos
                         break
 
-        print "init_state() found %s states for %s" % (count, args)
+        print "init_state() found %s states for channel %s" % (count, channel_count)
 
-def training_data_rows(games, model):
-    config = AtariGo_7x7()
-
-    init_state(config, model.bases)
+    return base_infos
 
 
-    for g in games:
-        for p in g.plays:
-            X_0 = map_state_with_roles(state, base_state_info, role_index)
+def state_to_channels(basestate, lead_role_index, config, base_infos):
+    # create a bunch of zero channels
+    channels = [np.zeros(config.channel_size)
+                for _ in range(len(config.pieces))]
 
-            xxx
+    # simply add to channel
+    for b_info, base_value in zip(base_infos, basestate):
+        # XXX sanity
+        assert isinstance(base_value, int) and abs(base_value) <= 1
 
-def go(path, game_name):
-    from ggplib.db import lookup
-    info = lookup.by_name(game)
+        if base_value and b_info.channel is not None:
+            channels[b_info.channel][b_info.cord_idx] = 1
 
-    games = []
-    for data in get_all(path, game_name):
-        games.append(Game(data, info.model))
-        if len(games) % 100 == 0:
-            print len(games)
+    # here we add in who's turn it is, by adding a layer for each role and then setting
+    # everything to 1.
+    for ii in range(config.role_count):
+        if lead_role_index == ii:
+            channels.append(np.ones(config.channel_size))
+        else:
+            channels.append(np.zeros(config.channel_size))
 
-    assert games
+    X_0 = np.array(channels)
+    X_0 = np.rollaxis(X_0, -1)
+    X_0 = np.reshape(X_0, (config.num_rows, config.num_rows, len(channels)))
+
+    return X_0
 
 ###############################################################################
 
-if __name__ == "__main__":
+def training_data_rows(data_path, sm_model, config, max_games):
+
+    base_infos = init_base_infos(config, sm_model)
+
+    games_processed = 0
+
+    print "Processing games:", config.game
+
+    # just gather all the data from the games for now (XXX this is crude)
+    samples_X = []
+    samples_y = []
+
+    for data in get_from_json(data_path, config.game):
+        game = Game(data, sm_model)
+
+        for depth, play in enumerate(game.plays):
+            if depth < 5:
+                # drop 75% moves from start of game
+                # lots of dupes here
+                if random.random() < 0.75:
+                    continue
+            else:
+                # drop 30% moves from this point on
+                if random.random() < 0.3:
+                    continue
+
+            X_0 = state_to_channels(play.state, play.lead_role_index, config, base_infos)
+            samples_X.append(X_0)
+            samples_y.append(play.actions)
+
+        if games_processed % 100 == 0:
+            print "GAMES PROCESSED", games_processed
+
+        games_processed += 1
+        if max_games > 0 and games_processed > max_games:
+            break
+
+    return samples_X, samples_y
+
+###############################################################################
+
+def reshape_and_shuffle(X, y, config):
+    X = np.array(X)
+    y = np.array(y)
+
+    # shuffle data
+    shuffle = np.arange(len(y))
+    np.random.shuffle(shuffle)
+
+    X = X[shuffle]
+    y = y[shuffle]
+
+    X = X.astype('float32')
+    y = y.astype('float32')
+
+    return X, y
+
+
+def build_and_train_nn(data_path, game_name, max_games):
+
+    # look game_name
+    info = lookup.by_name(game_name)
+
+    # see get_config
+    config = get_config(game_name)
+
+    number_of_outputs = sum(len(l) for l in info.model.actions)
+    nn_model = get_network_model(config, number_of_outputs)
+
+    X, y = training_data_rows(data_path, info.model, config, max_games)
+
+    print "gathered %s samples" % len(X)
+
+    # shuffle
+    print "Shuffling data"
+    X, y = reshape_and_shuffle(X, y, config)
+
+    print "Shape of X", X.shape
+    print "Shape of y", y.shape
+
+    BATCH_SIZE = 64
+    EPOCHS = 16
+
+    history = nn_model.fit(X, y, batch_size=BATCH_SIZE, epochs=EPOCHS, validation_split=0.2)
+    print history.history
+
+    f = open("model_nn_%s.json" % game_name, "w")
+    f.write(nn_model.to_json())
+    f.close()
+
+    nn_model.save_weights("weights_nn_%s.h5" % game_name, overwrite=True)
+
+###############################################################################
+###############################################################################
+###############################################################################
+
+def main_wrap():
     import pdb
     import traceback
     try:
@@ -241,9 +385,18 @@ if __name__ == "__main__":
 
         path = sys.argv[1]
         game = sys.argv[2]
-        go(path, game)
+
+        max_games = -1
+
+        build_and_train_nn(path, game, max_games)
 
     except Exception as exc:
+        print exc
         type, value, tb = sys.exc_info()
         traceback.print_exc()
         pdb.post_mortem(tb)
+
+###############################################################################
+
+if __name__ == "__main__":
+    main_wrap()
