@@ -17,7 +17,7 @@ from ggplib.db.helper import get_gdl_for_game
 class MCSPlayer2(MCSPlayer):
     choose_percentage = 0.25
     choose_temperature = 0.35
-    max_run_time = 1.0
+    max_run_time = 2.5
 
     def choose(self):
         assert self.root is not None
@@ -150,7 +150,7 @@ def run_game(game_name):
             info = json.loads(player.before_apply_info())
             actions = []
             for c in info["candidates"]:
-                actions.append([c['choice'], c['score']])
+                actions.append([c['choice'], c['score'], c['visits']])
             candidates[role] = actions
 
         depth += 1
@@ -181,7 +181,7 @@ def main(game_name):
     game_name = sys.argv[1]
     while True:
         games = []
-        for i in range(100):
+        for i in range(25):
             games.append(run_game(game_name))
 
         fd, path = tempfile.mkstemp(suffix='.json', prefix="mcs_%s_" % game_name, dir=".")

@@ -17,8 +17,8 @@ class NNPlayerOneShot(MatchPlayer):
             self.nn_model = model_from_json(f.read())
 
         self.nn_model.load_weights("weights_nn_%s.h5" % game_info.game)
-        self.nn_config = process_games.get_config(game_info.game)
-        self.base_infos = process_games.init_base_infos(self.nn_config, game_info.model)
+        self.nn_config = process_games.get_bases_config(game_info.game)
+        self.base_infos = process_games.create_base_infos(self.nn_config, game_info.model)
 
     def on_next_move(self, finish_time):
         sm = self.match.sm
@@ -33,37 +33,57 @@ class NNPlayerOneShot(MatchPlayer):
 
         bs = self.match.get_current_state()
         state = [bs.get(i) for i in range(bs.len())]
+
         X_0 = process_games.state_to_channels(state, self.match.our_role_index, self.nn_config, self.base_infos)
-
-        # reshape hacks
-        X = X_0.reshape(1, self.nn_config.num_rows, self.nn_config.num_cols, self.nn_config.num_channels)
-        result = self.nn_model.predict(X, batch_size=1)[0]
-
+        X_0 = X_0.reshape(1, self.nn_config.num_rows, self.nn_config.num_cols, self.nn_config.num_channels)
+        X_1 = np.array([[v for v, base_info in zip(state, self.base_infos) if base_info.channel is None]])
+        result = self.nn_model.predict([X_0, X_1], batch_size=1)
+        policy, scores = result[0][0], result[1][0]
 
         if self.match.our_role_index == 1:
             start_pos = len(self.match.game_info.model.actions[0])
         else:
             start_pos = 0
 
-        best_score = -1
+        use_policy = True
+        best = -1
         best_idx = None
+        best_ridx = None
         for idx in range(len(self.match.game_info.model.actions[1])):
             ridx = start_pos + idx
             if idx in legals:
-                print sm.legal_to_move(0, idx), "%.2f" % result[ridx]
+                print sm.legal_to_move(0, idx), "%.2f" % (policy[ridx] * 100), "%.2f" % scores[ridx]
 
-                if result[ridx] > best_score:
-                    best_score = result[ridx]
-                    best_idx = idx
+                if use_policy:
+                    if policy[ridx] > best:
+                        best = policy[ridx]
+                        best_idx = idx
+                        best_ridx = ridx
 
-        print "NOT LEGAL"
+                else:
+                    if scores[ridx] > best:
+                        best = scores[ridx]
+                        best_idx = idx
+                        best_ridx = ridx
+
+        print "WEIRD NOT LEGAL:"
         for idx in range(len(self.match.game_info.model.actions[1])):
             ridx = start_pos + idx
             if idx not in legals:
-                print sm.legal_to_move(0, idx), "%.2f" % result[ridx]
+                #if policy[ridx] * 100 > 0:
+                print sm.legal_to_move(0, idx), "%.2f" % (policy[ridx] * 100), "%.2f" % scores[ridx]
+
 
         if best_idx is not None:
+            print "============="
+            print "Choice is %s, %.2f / %.2f" % (sm.legal_to_move(0, best_idx),
+                                                 (policy[best_ridx] * 100),
+                                                 scores[best_ridx])
+            print "============="
+
+
             return best_idx
+        ZZZ
 
         return ls.get_legal(0)
 

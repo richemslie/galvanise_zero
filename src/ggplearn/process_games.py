@@ -8,11 +8,14 @@ import numpy as np
 from ggplib.symbols import SymbolFactory
 from ggplib.db import lookup
 
-from ggplearn.net import get_network_model
+from ggplearn import net
 
 
-class Config(object):
+class BasesConfig(object):
     role_count = 2
+
+    # will be updated later
+    number_of_non_cord_states = 0
 
     @property
     def num_rows(self):
@@ -32,7 +35,7 @@ class Config(object):
         return self.role_count + len(self.pieces)
 
 
-class AtariGo_7x7(Config):
+class AtariGo_7x7(BasesConfig):
     game = "atariGo_7x7"
     x_cords = "1 2 3 4 5 6 7".split()
     y_cords = "1 2 3 4 5 6 7".split()
@@ -45,7 +48,7 @@ class AtariGo_7x7(Config):
     pieces = ['black', 'white']
 
 
-class Breakthrough(Config):
+class Breakthrough(BasesConfig):
     game = "breakthrough"
     x_cords = "1 2 3 4 5 6 7 8".split()
     y_cords = "1 2 3 4 5 6 7 8".split()
@@ -58,7 +61,7 @@ class Breakthrough(Config):
     pieces = ['white', 'black']
 
 
-class Reversi(Config):
+class Reversi(BasesConfig):
     game = "reversi"
     x_cords = "1 2 3 4 5 6 7 8".split()
     y_cords = "1 2 3 4 5 6 7 8".split()
@@ -71,7 +74,7 @@ class Reversi(Config):
     pieces = ['black', 'red']
 
 
-def get_config(game_name):
+def get_bases_config(game_name):
     for clz in AtariGo_7x7, Breakthrough, Reversi:
         if clz.game == game_name:
             return clz()
@@ -93,9 +96,10 @@ def get_from_json(path, game_name):
 
 
 class PlayOne(object):
-    def __init__(self, state, actions, lead_role_index):
+    def __init__(self, state, actions, scores, lead_role_index):
         self.state = state
         self.actions = actions
+        self.scores = scores
 
         # who's turn it is...
         self.lead_role_index = lead_role_index
@@ -129,8 +133,9 @@ class Game:
             state = tuple(info['state'])
             assert len(state) == self.expected_state_len
 
-            actions, lead_role_index = self.process_actions(info['move'], info['candidates'])
-            self.plays.append(PlayOne(state, actions, lead_role_index))
+            actions, scores, lead_role_index = self.process_actions(info['move'], info['candidates'])
+            self.plays.append(PlayOne(state, actions, scores, lead_role_index))
+
             depth += 1
 
     def process_actions(self, move, candidates):
@@ -146,35 +151,45 @@ class Game:
         assert len(candidates[passive_role]) == 1
 
         actions = [0 for i in range(self.expected_actions_len)]
+        scores = [0 for i in range(self.expected_actions_len)]
 
         index_start = 0 if lead_role_index == 0 else self.player_0_actions_len
-        for idx, score in candidates[lead_role]:
+
+        total_visits = 0
+        for idx, score, visits in candidates[lead_role]:
+            actions[index_start + idx] = visits
+            total_visits += visits
+
+        for idx, score, visits in candidates[lead_role]:
+            actions[index_start + idx] /= float(total_visits)
+
+
+        for idx, score, visits in candidates[lead_role]:
             # scores has to be 0 and 1
             assert -0.1 < score < 1.1
-            actions[index_start + idx] = score
+            scores[index_start + idx] = score
 
         # XXX set noop to be the -best?  Or just leave it 0?
-        return actions, lead_role_index
+        return actions, scores, lead_role_index
 
 ###############################################################################
 
-def init_base_infos(config, sm_model):
+class BaseInfo(object):
+    def __init__(self, gdl_str, symbols):
+        self.gdl_str = gdl_str
+        self.symbols = symbols
+
+        # drops true ie (true (control black)) -> (control black)
+        self.terms = symbols[1]
+
+        # populated in update_base_infos()
+        self.channel = None
+        self.cord_idx = None
+
+
+def create_base_infos(config, sm_model):
     symbol_factory = SymbolFactory()
-
-    class BaseInfo(object):
-        def __init__(self, gdl_str, symbols):
-            self.gdl_str = gdl_str
-            self.symbols = symbols
-
-            # drops true ie (true (control black)) -> (control black)
-            self.terms = symbols[1]
-
-            self.channel = None
-            self.cord_idx = None
-
-    base_infos = []
-    for s in sm_model.bases:
-        base_infos.append(BaseInfo(s, symbol_factory.symbolize(s)))
+    base_infos = [BaseInfo(s, symbol_factory.symbolize(s)) for s in sm_model.bases]
 
     all_cords = []
     for x_cord in config.x_cords:
@@ -207,8 +222,15 @@ def init_base_infos(config, sm_model):
 
         print "init_state() found %s states for channel %s" % (count, channel_count)
 
-    return base_infos
+    # update the config for non cord states
+    config.number_of_non_cord_states = 0
+    for b_info in base_infos:
+        if b_info.channel is None:
+            config.number_of_non_cord_states += 1
 
+    print "Number of number_of_non_cord_states", config.number_of_non_cord_states
+
+    return base_infos
 
 def state_to_channels(basestate, lead_role_index, config, base_infos):
     # create a bunch of zero channels
@@ -239,17 +261,26 @@ def state_to_channels(basestate, lead_role_index, config, base_infos):
 
 ###############################################################################
 
-def training_data_rows(data_path, sm_model, config, max_games):
+def shuffle(*arrays):
+    arrays = [np.array(a) for a in arrays]
 
-    base_infos = init_base_infos(config, sm_model)
+    # shuffle data
+    shuffle = np.arange(len(arrays[0]))
+    np.random.shuffle(shuffle)
 
+    for i in range(len(arrays)):
+        a = arrays[i]
+        a.astype('float32')
+        arrays[i] = arrays[i][shuffle]
+
+    return arrays
+
+def training_data(data_path, base_infos, sm_model, config, max_games):
     games_processed = 0
-
     print "Processing games:", config.game
 
-    # just gather all the data from the games for now (XXX this is crude)
-    samples_X = []
-    samples_y = []
+    # just gather all the data from the games for now
+    samples_X0, samples_X1, samples_y0, samples_y1 = [], [], [], []
 
     for data in get_from_json(data_path, config.game):
         game = Game(data, sm_model)
@@ -266,68 +297,62 @@ def training_data_rows(data_path, sm_model, config, max_games):
                     continue
 
             X_0 = state_to_channels(play.state, play.lead_role_index, config, base_infos)
-            samples_X.append(X_0)
-            samples_y.append(play.actions)
+            samples_X0.append(X_0)
 
+            X_1 = [v for v, base_info in zip(play.state, base_infos) if base_info.channel is None]
+            samples_X1.append(X_1)
+
+            samples_y0.append(play.actions)
+            samples_y1.append(play.scores)
+
+        games_processed += 1
         if games_processed % 100 == 0:
             print "GAMES PROCESSED", games_processed
 
-        games_processed += 1
-        if max_games > 0 and games_processed > max_games:
+        if max_games is not None and games_processed > max_games:
             break
 
-    return samples_X, samples_y
+    print "Total games processed", games_processed
 
-###############################################################################
-
-def reshape_and_shuffle(X, y, config):
-    X = np.array(X)
-    y = np.array(y)
-
-    # shuffle data
-    shuffle = np.arange(len(y))
-    np.random.shuffle(shuffle)
-
-    X = X[shuffle]
-    y = y[shuffle]
-
-    X = X.astype('float32')
-    y = y.astype('float32')
-
-    return X, y
-
-
-def build_and_train_nn(data_path, game_name, max_games):
-
-    # look game_name
-    info = lookup.by_name(game_name)
-
-    # see get_config
-    config = get_config(game_name)
-
-    number_of_outputs = sum(len(l) for l in info.model.actions)
-    nn_model = get_network_model(config, number_of_outputs)
-
-    X, y = training_data_rows(data_path, info.model, config, max_games)
-
-    print "gathered %s samples" % len(X)
+    assert len(samples_X0) == len(samples_X1) and len(samples_y0) == len(samples_y1) and len(samples_X0) == len(samples_y1)
+    print "gathered %s samples" % len(samples_X0)
 
     # shuffle
     print "Shuffling data"
-    X, y = reshape_and_shuffle(X, y, config)
+    X0, X1, y0, y1 = shuffle(samples_X0, samples_X1, samples_y0, samples_y1)
 
-    print "Shape of X", X.shape
-    print "Shape of y", y.shape
+    print "Shapes of X0, X1", X0.shape, X1.shape
+    print "Shape of y0, y1", y0.shape, y1.shape
 
+    return X0, X1, y0, y1
+
+
+def build_and_train_nn(data_path, game_name, max_games):
     BATCH_SIZE = 64
-    EPOCHS = 16
+    EPOCHS = 12
+    VALIDATION_SPLIT = 0.2
 
-    history = nn_model.fit(X, y, batch_size=BATCH_SIZE, epochs=EPOCHS, validation_split=0.2)
-    print history.history
+    # lookup via game_name (this gets statemachine & statemachine model)
+    info = lookup.by_name(game_name)
 
-    f = open("model_nn_%s.json" % game_name, "w")
-    f.write(nn_model.to_json())
-    f.close()
+    # the bases config (XXX idea is not to use hard coded stuff)
+    config = get_bases_config(game_name)
+
+    # update the base_infos and config
+    base_infos = create_base_infos(config, info.model)
+
+    number_of_outputs = sum(len(l) for l in info.model.actions)
+    nn_model = net.get_network_model(config, number_of_outputs)
+    print nn_model.summary()
+
+    X0, X1, y0, y1 = training_data(data_path, base_infos, info.model, config, max_games)
+
+    # train
+    nn_model.fit([X0, X1], [y0, y1], verbose=1, batch_size=BATCH_SIZE, epochs=EPOCHS, validation_split=VALIDATION_SPLIT)
+
+    # save model / weights
+    with open("model_nn_%s.json" % game_name, "w") as f:
+        f.write(nn_model.to_json())
 
     nn_model.save_weights("weights_nn_%s.h5" % game_name, overwrite=True)
 
@@ -346,7 +371,7 @@ def main_wrap():
         path = sys.argv[1]
         game = sys.argv[2]
 
-        max_games = -1
+        max_games = None
 
         build_and_train_nn(path, game, max_games)
 
