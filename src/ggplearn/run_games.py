@@ -17,7 +17,7 @@ from ggplib.db.helper import get_gdl_for_game
 class MCSPlayer2(MCSPlayer):
     choose_percentage = 0.25
     choose_temperature = 0.35
-    max_run_time = 2.5
+    max_run_time = 1.0
 
     def choose(self):
         assert self.root is not None

@@ -1,3 +1,4 @@
+# XXX report dupes
 import os
 import sys
 import json
@@ -5,11 +6,85 @@ import random
 
 import numpy as np
 
+import keras.callbacks
+
 from ggplib.symbols import SymbolFactory
 from ggplib.db import lookup
 
 from ggplearn import net
 
+# hyperparameters
+
+BATCH_SIZE = 32
+EPOCHS = 16
+VALIDATION_SPLIT = 0.2
+MAX_GAMES = None
+TOP_K = None
+
+###############################################################################
+
+class MyCallback(keras.callbacks.Callback):
+    def on_epoch_end(self, epoch, logs=None):
+        l = []
+        for k in "loss policy_loss scores_loss".split():
+            if k in logs:
+                l.append("%s = %.4f" % (k, logs[k]))
+        print ", ".join(l)
+
+        l = []
+        for k in "val_loss val_policy_loss val_scores_loss".split():
+            if k in logs:
+                l.append("%s = %.4f" % (k, logs[k]))
+        print ", ".join(l)
+
+        print
+
+        l = []
+        for k in self.params['metrics']:
+            if 'policy' in k and 'acc' in k and 'val' not in k:
+                if k in logs:
+                    l.append("%s = %.3f" % (k, logs[k]))
+        print ", ".join(l)
+
+        l = []
+        for k in self.params['metrics']:
+            if 'policy' in k and 'acc' in k and 'val' in k:
+                if k in logs:
+                    l.append("%s = %.3f" % (k, logs[k]))
+        print ", ".join(l)
+        print
+
+
+class MyProgbarLogger(keras.callbacks.Callback):
+    ' simple progress bar '
+    def on_train_begin(self, logs=None):
+        self.epochs = self.params['epochs']
+
+    def on_epoch_begin(self, epoch, logs=None):
+        print('Epoch %d/%d' % (epoch + 1, self.epochs))
+
+        self.target = self.params['samples']
+
+        from keras.utils.generic_utils import Progbar
+        self.progbar = Progbar(target=self.target)
+        self.seen = 0
+
+    def on_batch_begin(self, batch, logs=None):
+        if self.seen < self.target:
+            self.log_values = []
+            self.progbar.update(self.seen, self.log_values)
+
+    def on_batch_end(self, batch, logs=None):
+        self.seen += logs.get('size')
+
+        for k in "loss policy_loss scores_loss".split():
+            if k in logs:
+                self.log_values.append((k, logs[k]))
+
+        self.progbar.update(self.seen, self.log_values)
+
+
+###############################################################################
 
 class BasesConfig(object):
     role_count = 2
@@ -85,6 +160,10 @@ def get_from_json(path, game_name):
     files = os.listdir(path)
     for f in files:
         if f.endswith(".json"):
+            if "model" in f:
+                continue
+            if game_name not in f:
+                continue
             buf = open(os.path.join(path, f)).read()
             data = json.loads(buf)
             for g in data:
@@ -96,13 +175,25 @@ def get_from_json(path, game_name):
 
 
 class PlayOne(object):
-    def __init__(self, state, actions, scores, lead_role_index):
+    def __init__(self, state, actions, lead_role_index):
         self.state = state
         self.actions = actions
-        self.scores = scores
 
         # who's turn it is...
         self.lead_role_index = lead_role_index
+
+    def set_scores(self, best, final):
+        self.scores = [0] * 4
+        if self.lead_role_index:
+            self.scores[0] = 1 - best
+            self.scores[1] = 1 - final
+            self.scores[2] = best
+            self.scores[3] = final
+        else:
+            self.scores[0] = best
+            self.scores[1] = final
+            self.scores[2] = 1 - best
+            self.scores[3] = 1 - final
 
 
 class Game:
@@ -133,8 +224,13 @@ class Game:
             state = tuple(info['state'])
             assert len(state) == self.expected_state_len
 
-            actions, scores, lead_role_index = self.process_actions(info['move'], info['candidates'])
-            self.plays.append(PlayOne(state, actions, scores, lead_role_index))
+            actions, best_score, lead_role_index = self.process_actions(info['move'], info['candidates'])
+            final_score = data["final_scores"][self.roles[lead_role_index]] / 100.0
+
+            play = PlayOne(state, actions, lead_role_index)
+            play.set_scores(best_score, final_score)
+
+            self.plays.append(play)
 
             depth += 1
 
@@ -151,26 +247,27 @@ class Game:
         assert len(candidates[passive_role]) == 1
 
         actions = [0 for i in range(self.expected_actions_len)]
-        scores = [0 for i in range(self.expected_actions_len)]
 
         index_start = 0 if lead_role_index == 0 else self.player_0_actions_len
 
         total_visits = 0
-        for idx, score, visits in candidates[lead_role]:
+        best_score = 0
+        cand = candidates[lead_role][:]
+        if TOP_K:
+            cand.sort(key=lambda e: e[2], reverse=True)
+            cand = cand[:TOP_K]
+
+        for idx, score, visits in cand:
             actions[index_start + idx] = visits
             total_visits += visits
 
-        for idx, score, visits in candidates[lead_role]:
+            if score > best_score:
+                best_score = score
+
+        for idx, score, visits in cand:
             actions[index_start + idx] /= float(total_visits)
 
-
-        for idx, score, visits in candidates[lead_role]:
-            # scores has to be 0 and 1
-            assert -0.1 < score < 1.1
-            scores[index_start + idx] = score
-
-        # XXX set noop to be the -best?  Or just leave it 0?
-        return actions, scores, lead_role_index
+        return actions, best_score, lead_role_index
 
 ###############################################################################
 
@@ -275,7 +372,7 @@ def shuffle(*arrays):
 
     return arrays
 
-def training_data(data_path, base_infos, sm_model, config, max_games):
+def training_data(data_path, base_infos, sm_model, config):
     games_processed = 0
     print "Processing games:", config.game
 
@@ -309,7 +406,7 @@ def training_data(data_path, base_infos, sm_model, config, max_games):
         if games_processed % 100 == 0:
             print "GAMES PROCESSED", games_processed
 
-        if max_games is not None and games_processed > max_games:
+        if MAX_GAMES is not None and games_processed > MAX_GAMES:
             break
 
     print "Total games processed", games_processed
@@ -327,11 +424,7 @@ def training_data(data_path, base_infos, sm_model, config, max_games):
     return X0, X1, y0, y1
 
 
-def build_and_train_nn(data_path, game_name, max_games):
-    BATCH_SIZE = 64
-    EPOCHS = 12
-    VALIDATION_SPLIT = 0.2
-
+def build_and_train_nn(data_path, game_name, postfix):
     # lookup via game_name (this gets statemachine & statemachine model)
     info = lookup.by_name(game_name)
 
@@ -345,16 +438,24 @@ def build_and_train_nn(data_path, game_name, max_games):
     nn_model = net.get_network_model(config, number_of_outputs)
     print nn_model.summary()
 
-    X0, X1, y0, y1 = training_data(data_path, base_infos, info.model, config, max_games)
+    X0, X1, y0, y1 = training_data(data_path, base_infos, info.model, config)
 
     # train
-    nn_model.fit([X0, X1], [y0, y1], verbose=1, batch_size=BATCH_SIZE, epochs=EPOCHS, validation_split=VALIDATION_SPLIT)
+    my_cb = MyCallback()
+    progbar = MyProgbarLogger()
+
+    nn_model.fit([X0, X1], [y0, y1],
+                 verbose=0,
+                 batch_size=BATCH_SIZE,
+                 epochs=EPOCHS,
+                 validation_split=VALIDATION_SPLIT,
+                 callbacks=[progbar, my_cb])
 
     # save model / weights
-    with open("model_nn_%s.json" % game_name, "w") as f:
+    with open("model_nn_%s_%s.json" % (game_name, postfix), "w") as f:
         f.write(nn_model.to_json())
 
-    nn_model.save_weights("weights_nn_%s.h5" % game_name, overwrite=True)
+    nn_model.save_weights("weights_nn_%s_%s.h5" % (game_name, postfix), overwrite=True)
 
 ###############################################################################
 
@@ -370,10 +471,9 @@ def main_wrap():
 
         path = sys.argv[1]
         game = sys.argv[2]
+        postfix = sys.argv[3]
 
-        max_games = None
-
-        build_and_train_nn(path, game, max_games)
+        build_and_train_nn(path, game, postfix)
 
     except Exception as exc:
         print exc
