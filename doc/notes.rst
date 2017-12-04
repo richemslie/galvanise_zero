@@ -29,18 +29,18 @@ Using tensorflow with single cpu
 --------------------------------
 .. code-block:: python
 
-import tensorflow as tf
+    import tensorflow as tf
 
-# XXX TEST THIS
-conf = tf.ConfigProto(
-    device_count={'CPU' : 1, 'GPU' : 0},
-    allow_soft_placement=True,
-    log_device_placement=False
-)
+    # XXX TEST THIS
+    conf = tf.ConfigProto(
+        device_count={'CPU' : 1, 'GPU' : 0},
+        allow_soft_placement=True,
+        log_device_placement=False
+    )
 
-sess = tf.Session()
-with sess.as_default():
-     print tf.constant(42).eval()
+    sess = tf.Session()
+    with sess.as_default():
+         print tf.constant(42).eval()
 
 
 possible todos
