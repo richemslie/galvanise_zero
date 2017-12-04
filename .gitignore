@@ -9,6 +9,7 @@
 # python
 *.pyc
 *__pycache__/
+*.cache
 
 # log files
 *.log
