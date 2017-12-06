@@ -1,8 +1,7 @@
-
 install instructions
 ====================
 
-Using python 2, keras and tensorflow.  Install two different environments.
+Using python 2, keras and tensorflow.  Install two different environments for cpu/gpu.
 
 .. code-block:: shell
 
@@ -25,47 +24,15 @@ Using python 2, keras and tensorflow.  Install two different environments.
    pip install keras h5py
 
 
-Using tensorflow with single cpu
---------------------------------
-.. code-block:: python
-
-    import tensorflow as tf
-
-    # XXX TEST THIS
-    conf = tf.ConfigProto(
-        device_count={'CPU' : 1, 'GPU' : 0},
-        allow_soft_placement=True,
-        log_device_placement=False
-    )
-
-    sess = tf.Session()
-    with sess.as_default():
-         print tf.constant(42).eval()
-
-
 possible todos
 --------------
 
 * mypy (sanity)
 
-* better player for generating data (don't know, rather just try and improve via self play)
-
-* figure out how to use tensorflow (cpu) to predict in c++ (not train)
-
 * break up process_games.py smaller files
 
-* try different networks
+* some sort of monte-carlo / iterative deeping player
 
-* more layers
+* self play, retrain and evaluate
 
-    * resnet
-
-* players for self play - start simple and work up
-
-    * a minimax player
-    * some sort of monte-carlo, iterative deeping player
-
-* performance test
-
-  * especially cpu/gpu
-
+* figure out how to use tensorflow (cpu) to predict in c++ (not train)
