@@ -79,43 +79,6 @@ class MCSPlayer2(MCSPlayer):
         return json.dumps(dict(candidates=candidates), indent=4)
 
 
-def pretty_print_board(state_str):
-    ' XXX Only for breakthrough '
-    from ggplib.symbols import SymbolFactory
-    sf = SymbolFactory()
-    states = sf.to_symbols(state_str)
-    mapping = {}
-    control = None
-    for s in list(states):
-        if s[1][0] == "control":
-            control = s[1][1]
-        else:
-            assert s[1][0] == "cellHolds"
-            key = int(s[1][1]), int(s[1][2])
-            mapping[key] = s[1][3]
-
-    lines = []
-    line_len = 8 * 4 + 1
-    lines.append("-" * line_len)
-    for i in range(1, 9):
-        l = ["|"]
-        for j in range(1, 9):
-            key = j, i
-            if key in mapping:
-                if mapping[key] == "black":
-                    l.append(" b |")
-                else:
-                    assert mapping[key] == "white"
-                    l.append(" w |")
-            else:
-                l.append("   |")
-
-        lines.append("".join(l))
-        lines.append("-" * line_len)
-    print "CONTROL", control
-    print "\n".join(lines)
-
-
 def run_game(game_name):
     # create gamemaster and add players
     gm = GameMaster(get_gdl_for_game(game_name))
@@ -139,7 +102,6 @@ def run_game(game_name):
         return [bs.get(i) for i in range(bs.len())]
 
     current["state"] = bases()
-    # pretty_print_board(current["state"])
 
     while not gm.finished():
         last_move = gm.play_single_move(last_move=last_move)
@@ -156,8 +118,6 @@ def run_game(game_name):
         depth += 1
         current = game["depth_%s" % depth] = OrderedDict()
         current["state"] = bases()
-
-        # pretty_print_board(current["state"])
 
     gm.play_to_end(last_move)
     game["final_scores"] = gm.scores

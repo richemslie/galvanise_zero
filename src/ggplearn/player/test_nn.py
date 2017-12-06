@@ -9,21 +9,23 @@ def setup():
     from ggplib.util.init import setup_once
     setup_once()
 
+    from ggplearn.utils.keras import use_one_cpu_please
+    use_one_cpu_please()
 
 
-# def test_breakthrough():
-#     gm = GameMaster(get_gdl_for_game("breakthrough"))
+def test_breakthrough():
+    gm = GameMaster(get_gdl_for_game("breakthrough"))
 
-#     # add two players
-#     white = get.get_player("pymcs")
-#     white.max_run_time = 0.5
-#     black = NNPlayerOneShot()
+    # add two players
+    white = get.get_player("pymcs")
+    white.max_run_time = 0.5
+    black = NNPlayerOneShot("lasttoday")
 
-#     gm.add_player(black, "white")
-#     gm.add_player(white, "black")
+    gm.add_player(black, "white")
+    gm.add_player(white, "black")
 
-#     gm.start(meta_time=30, move_time=15)
-#     gm.play_to_end()
+    gm.start(meta_time=30, move_time=15)
+    gm.play_to_end()
 
 def test_reversi_tournament():
     gm = GameMaster(get_gdl_for_game("reversi"))
@@ -77,14 +79,14 @@ def test_bt_tournament():
 
 
 def test_expander():
-    gm = GameMaster(get_gdl_for_game("reversi"))
+    gm = GameMaster(get_gdl_for_game("breakthrough"))
 
     # add two players
-    black = get.get_player("random")
-    red = NNExpander()
+    pyrandom = get.get_player("pyrandom")
+    nne = NNExpander("bt5")
 
-    gm.add_player(black, "black")
-    gm.add_player(red, "red")
+    gm.add_player(nne, "white")
+    gm.add_player(pyrandom, "black")
 
     gm.start(meta_time=30, move_time=15)
     gm.play_to_end()

@@ -1,4 +1,3 @@
-# XXX report dupes
 import os
 import sys
 import json
@@ -12,48 +11,55 @@ from ggplib.symbols import SymbolFactory
 from ggplib.db import lookup
 
 from ggplearn import net
+from ggplib.util import log
 
 # hyperparameters
-
-BATCH_SIZE = 32
-EPOCHS = 16
-VALIDATION_SPLIT = 0.2
-MAX_GAMES = None
-TOP_K = None
+class TrainConfig:
+    BATCH_SIZE = 128
+    EPOCHS = 24
+    VALIDATION_SPLIT = 0.2
+    MAX_GAMES = None
+    DROP_MOVES_FROM_START_PCT = 0.9
+    DROP_MOVES_AFTER_START_PCT = 0.6
 
 ###############################################################################
 
 class MyCallback(keras.callbacks.Callback):
+    def on_train_begin(self, logs=None):
+        self.epochs = self.params['epochs']
+
     def on_epoch_end(self, epoch, logs=None):
-        l = []
-        for k in "loss policy_loss scores_loss".split():
-            if k in logs:
-                l.append("%s = %.4f" % (k, logs[k]))
-        print ", ".join(l)
+        assert logs
+        log.debug("Epoch %s/%s" % (epoch, self.epochs))
 
-        l = []
-        for k in "val_loss val_policy_loss val_scores_loss".split():
-            if k in logs:
-                l.append("%s = %.4f" % (k, logs[k]))
-        print ", ".join(l)
+        def str_by_name(names, dp=3):
+            fmt = "%%s = %%.%df" % dp
+            strs = [fmt % (k, logs[k]) for k in names]
+            return ", ".join(strs)
 
-        print
+        loss_names = "loss policy_loss score0_loss score1_loss".split()
+        val_loss_names = "val_loss val_policy_loss val_score0_loss val_score1_loss".split()
 
-        l = []
-        for k in self.params['metrics']:
-            if 'policy' in k and 'acc' in k and 'val' not in k:
-                if k in logs:
-                    l.append("%s = %.3f" % (k, logs[k]))
-        print ", ".join(l)
+        log.info(str_by_name(loss_names, 4))
+        log.info(str_by_name(val_loss_names, 4))
 
-        l = []
-        for k in self.params['metrics']:
-            if 'policy' in k and 'acc' in k and 'val' in k:
-                if k in logs:
-                    l.append("%s = %.3f" % (k, logs[k]))
-        print ", ".join(l)
-        print
+        # accuracy:
+        for output in "policy score0 score1".split():
+            acc = []
+            val_acc = []
+            for k in self.params['metrics']:
+                if output not in k or "acc" not in k:
+                    continue
+                if "score" in output and "top" in k:
+                    continue
 
+                if 'val' in k:
+                    val_acc.append(k)
+                else:
+                    acc.append(k)
+
+            log.info("%s : %s" % (output, str_by_name(acc)))
+            log.info("%s : %s" % (output, str_by_name(val_acc)))
 
 class MyProgbarLogger(keras.callbacks.Callback):
     ' simple progress bar '
@@ -77,8 +83,8 @@ class MyProgbarLogger(keras.callbacks.Callback):
     def on_batch_end(self, batch, logs=None):
         self.seen += logs.get('size')
 
-        for k in "loss policy_loss scores_loss".split():
-            if k in logs:
+        for k in logs:
+            if "loss" in k and "val" not in k:
                 self.log_values.append((k, logs[k]))
 
         self.progbar.update(self.seen, self.log_values)
@@ -148,9 +154,32 @@ class Reversi(BasesConfig):
 
     pieces = ['black', 'red']
 
+class Connect4(BasesConfig):
+    game = "connectFour"
+    x_cords = "1 2 3 4 5 6 7 8".split()
+    y_cords = "1 2 3 4 5 6".split()
+
+    base_term = "cell"
+    x_term = 1
+    y_term = 2
+    piece_term = 3
+
+    pieces = ['red', 'black']
+
+class Hex(BasesConfig):
+    game = "hex"
+    x_cords = "a b c d e f g h i".split()
+    y_cords = "1 2 3 4 5 6 7 8 9".split()
+
+    base_term = "cell"
+    x_term = 1
+    y_term = 2
+    piece_term = 3
+
+    pieces = ['red', 'blue']
 
 def get_bases_config(game_name):
-    for clz in AtariGo_7x7, Breakthrough, Reversi:
+    for clz in AtariGo_7x7, Breakthrough, Reversi, Connect4, Hex:
         if clz.game == game_name:
             return clz()
 
@@ -170,7 +199,7 @@ def get_from_json(path, game_name):
                 if g["game"] == game_name:
                     yield g
                 else:
-                    print f, "NOT CORRECT GAME", g["game"]
+                    log.warning("%s NOT CORRECT GAME (%s)" % (f, g["game"]))
                     break
 
 
@@ -186,13 +215,15 @@ class PlayOne(object):
         self.scores = [0] * 4
         if self.lead_role_index:
             self.scores[0] = 1 - best
-            self.scores[1] = 1 - final
-            self.scores[2] = best
+            self.scores[1] = best
+
+            self.scores[2] = 1 - final
             self.scores[3] = final
         else:
             self.scores[0] = best
-            self.scores[1] = final
-            self.scores[2] = 1 - best
+            self.scores[1] = 1 - best
+
+            self.scores[2] = final
             self.scores[3] = 1 - final
 
 
@@ -252,11 +283,7 @@ class Game:
 
         total_visits = 0
         best_score = 0
-        cand = candidates[lead_role][:]
-        if TOP_K:
-            cand.sort(key=lambda e: e[2], reverse=True)
-            cand = cand[:TOP_K]
-
+        cand = candidates[lead_role]
         for idx, score, visits in cand:
             actions[index_start + idx] = visits
             total_visits += visits
@@ -317,7 +344,7 @@ def create_base_infos(config, sm_model):
                         b_info.cord_idx = board_pos
                         break
 
-        print "init_state() found %s states for channel %s" % (count, channel_count)
+        log.info("init_state() found %s states for channel %s" % (count, channel_count))
 
     # update the config for non cord states
     config.number_of_non_cord_states = 0
@@ -325,7 +352,7 @@ def create_base_infos(config, sm_model):
         if b_info.channel is None:
             config.number_of_non_cord_states += 1
 
-    print "Number of number_of_non_cord_states", config.number_of_non_cord_states
+    log.info("Number of number_of_non_cord_states %d" % config.number_of_non_cord_states)
 
     return base_infos
 
@@ -352,7 +379,7 @@ def state_to_channels(basestate, lead_role_index, config, base_infos):
 
     X_0 = np.array(channels)
     X_0 = np.rollaxis(X_0, -1)
-    X_0 = np.reshape(X_0, (config.num_rows, config.num_rows, len(channels)))
+    X_0 = np.reshape(X_0, (config.num_rows, config.num_cols, len(channels)))
 
     return X_0
 
@@ -374,10 +401,18 @@ def shuffle(*arrays):
 
 def training_data(data_path, base_infos, sm_model, config):
     games_processed = 0
-    print "Processing games:", config.game
+    log.debug("Processing games: %s" % config.game)
 
     # just gather all the data from the games for now
-    samples_X0, samples_X1, samples_y0, samples_y1 = [], [], [], []
+    samples_X0, samples_X1 = [], []
+    samples_y0, samples_y1, samples_y2 = [], [], []
+    the_samples = [samples_X0, samples_X1, samples_y0, samples_y1, samples_y2]
+
+    from collections import Counter
+    early_states = Counter()
+    later_states = Counter()
+    early_states_dropped = 0
+    later_states_dropped = 0
 
     for data in get_from_json(data_path, config.game):
         game = Game(data, sm_model)
@@ -386,11 +421,22 @@ def training_data(data_path, base_infos, sm_model, config):
             if depth < 5:
                 # drop 75% moves from start of game
                 # lots of dupes here
-                if random.random() < 0.75:
+                if random.random() < TrainConfig.DROP_MOVES_FROM_START_PCT:
                     continue
+
+                early_states[play.state] += 1
+                if early_states[play.state] > 5:
+                    early_states_dropped += 1
+                    continue
+
             else:
                 # drop 30% moves from this point on
-                if random.random() < 0.3:
+                if random.random() < TrainConfig.DROP_MOVES_AFTER_START_PCT:
+                    continue
+
+                later_states[play.state] += 1
+                if later_states[play.state] > 1:
+                    later_states_dropped += 1
                     continue
 
             X_0 = state_to_channels(play.state, play.lead_role_index, config, base_infos)
@@ -400,31 +446,46 @@ def training_data(data_path, base_infos, sm_model, config):
             samples_X1.append(X_1)
 
             samples_y0.append(play.actions)
-            samples_y1.append(play.scores)
+
+            samples_y1.append(play.scores[:2])
+            samples_y2.append(play.scores[2:])
 
         games_processed += 1
         if games_processed % 100 == 0:
-            print "GAMES PROCESSED", games_processed
+            log.debug("GAMES PROCESSED %s" % games_processed)
+            log.info("early_states_dropped %s" % early_states_dropped)
+            log.info("later_states_dropped %s" % later_states_dropped)
 
-        if MAX_GAMES is not None and games_processed > MAX_GAMES:
+        if TrainConfig.MAX_GAMES is not None and games_processed > TrainConfig.MAX_GAMES:
             break
 
-    print "Total games processed", games_processed
+    log.info("Total games processed %s" % games_processed)
+    log.warning("early_states_dropped %s" % early_states_dropped)
+    log.warning("later_states_dropped %s" % later_states_dropped)
 
-    assert len(samples_X0) == len(samples_X1) and len(samples_y0) == len(samples_y1) and len(samples_X0) == len(samples_y1)
-    print "gathered %s samples" % len(samples_X0)
+    for samp in the_samples[1:]:
+        assert len(the_samples[0]) == len(samp)
+
+    log.info("gathered %s samples" % len(samples_X0))
 
     # shuffle
-    print "Shuffling data"
-    X0, X1, y0, y1 = shuffle(samples_X0, samples_X1, samples_y0, samples_y1)
+    log.debug("Shuffling data")
+    the_samples = shuffle(*the_samples)
 
-    print "Shapes of X0, X1", X0.shape, X1.shape
-    print "Shape of y0, y1", y0.shape, y1.shape
+    for i, s in enumerate(the_samples):
+        log.debug("Shape of sample %d: %s" % (i, s[0].shape))
 
-    return X0, X1, y0, y1
+    return the_samples[0:2], the_samples[2:]
 
 
 def build_and_train_nn(data_path, game_name, postfix):
+
+    for attr in vars(TrainConfig):
+        if "__" in attr:
+            continue
+        log.info("TrainConfig.%s = %s" % (attr, getattr(TrainConfig, attr)))
+
+
     # lookup via game_name (this gets statemachine & statemachine model)
     info = lookup.by_name(game_name)
 
@@ -436,19 +497,24 @@ def build_and_train_nn(data_path, game_name, postfix):
 
     number_of_outputs = sum(len(l) for l in info.model.actions)
     nn_model = net.get_network_model(config, number_of_outputs)
-    print nn_model.summary()
 
-    X0, X1, y0, y1 = training_data(data_path, base_infos, info.model, config)
+    # one way to get print_summary to output string!
+    lines = []
+    nn_model.summary(print_fn=lines.append)
+    for l in lines:
+        log.verbose(l)
+
+    inputs, outputs = training_data(data_path, base_infos, info.model, config)
 
     # train
     my_cb = MyCallback()
     progbar = MyProgbarLogger()
 
-    nn_model.fit([X0, X1], [y0, y1],
+    nn_model.fit(inputs, outputs,
                  verbose=0,
-                 batch_size=BATCH_SIZE,
-                 epochs=EPOCHS,
-                 validation_split=VALIDATION_SPLIT,
+                 batch_size=TrainConfig.BATCH_SIZE,
+                 epochs=TrainConfig.EPOCHS,
+                 validation_split=TrainConfig.VALIDATION_SPLIT,
                  callbacks=[progbar, my_cb])
 
     # save model / weights
@@ -462,16 +528,16 @@ def build_and_train_nn(data_path, game_name, postfix):
 def main_wrap():
     import pdb
     import traceback
+
+    from ggplib import interface
     try:
-        from ggplib import interface
-        interface.initialise_k273(1, log_name_base="perf_test")
-
-        import ggplib.util.log
-        ggplib.util.log.initialise()
-
         path = sys.argv[1]
         game = sys.argv[2]
         postfix = sys.argv[3]
+
+        log_name_base = "process_and_train__%s_%s_" % (game, postfix)
+        interface.initialise_k273(1, log_name_base=log_name_base)
+        log.initialise()
 
         build_and_train_nn(path, game, postfix)
 

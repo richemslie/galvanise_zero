@@ -1,8 +1,12 @@
+import os
 import numpy as np
 from keras.models import model_from_json
 from ggplearn import process_games
 from ggplib.player.base import MatchPlayer
 from ggplib.util import log
+from ggplearn.utils.bt import pretty_print_board
+
+models_path = os.path.join(os.environ["GGPLEARN_PATH"], "src", "ggplearn", "models")
 
 class NNPlayerOneShot(MatchPlayer):
 
@@ -16,13 +20,17 @@ class NNPlayerOneShot(MatchPlayer):
         sm = self.match.sm
         game_info = self.match.game_info
 
-        # look up game...
-        with open("model_nn_%s_%s.json" % (game_info.game, self.postfix), "r") as f:
-            self.nn_model = model_from_json(f.read())
-
-        self.nn_model.load_weights("weights_nn_%s_%s.h5" % (game_info.game, self.postfix))
         self.nn_config = process_games.get_bases_config(game_info.game)
         self.base_infos = process_games.create_base_infos(self.nn_config, game_info.model)
+
+        # load neural network model and weights
+        model_filename = os.path.join(models_path, "model_nn_%s_%s.json" % (game_info.game, self.postfix))
+        weights_filename = os.path.join(models_path, "weights_nn_%s_%s.h5" % (game_info.game, self.postfix))
+
+        with open(model_filename, "r") as f:
+            self.nn_model = model_from_json(f.read())
+
+        self.nn_model.load_weights(weights_filename)
 
     def on_next_move(self, finish_time):
         sm = self.match.sm
@@ -47,7 +55,8 @@ class NNPlayerOneShot(MatchPlayer):
         X_1 = np.array([[v for v, base_info in zip(state, self.base_infos) if base_info.channel is None]])
         result = self.nn_model.predict([X_0, X_1], batch_size=1)
 
-        policy, av_scores = result[0][0], result[1][0]
+        x = [result[i][0] for i in range(3)]
+        policy, scores = x[0], x[1:]
 
         if self.match.our_role_index == 1:
             start_pos = len(self.match.game_info.model.actions[0])
@@ -60,8 +69,16 @@ class NNPlayerOneShot(MatchPlayer):
         best_idx = None
         best_move = None
 
+        if self.match.game_info.game == "breakthrough":
+            pretty_print_board(sm, state)
+            print
+
         weirds = []
-        for idx, move in enumerate(actions):
+        print "all states"
+        actions = list(enumerate(actions))
+        actions.sort(key=lambda c: policy[start_pos + c[0]], reverse=True)
+
+        for idx, move in actions:
             ridx = start_pos + idx
             pvalue = policy[ridx] * 100
 
@@ -84,13 +101,19 @@ class NNPlayerOneShot(MatchPlayer):
                 print move, "%.2f" % pvalue
             print
 
+
         if best is not None:
             s = 2 if self.match.our_role_index else 0
             print "============="
-            print "Choice is %s, %.2f / %.2f / %.2f" % (best_move, best, av_scores[s], av_scores[s+1])
+            print "Priors %.3f / %.3f" % tuple(scores[0])
+            print "Finals %.3f / %.3f" % tuple(scores[1])
+            print "Choice is %s" % best_move
+            print "============="
             return best_idx
 
         return ls.get_legal(0)
+
+###############################################################################
 
 def main():
     import sys
@@ -100,14 +123,18 @@ def main():
     from ggplib.util import log
     from ggplib.server import GGPServer
     from ggplib import interface
+    from ggplearn.utils.keras import use_one_cpu_please
 
     port = int(sys.argv[1])
+    model_postfix = sys.argv[2]
 
-    player_name = NNPlayerOneShot
+    player_name = NNPlayerOneShot.__class__.__name__ + "_" + model_postfix
     interface.initialise_k273(1, log_name_base=player_name)
     log.initialise()
 
-    player = NNPlayerOneShot(sys.argv[2])
+    use_one_cpu_please()
+
+    player = NNPlayerOneShot(model_postfix)
 
     ggp = GGPServer()
     ggp.set_player(player)
