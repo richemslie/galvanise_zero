@@ -1,19 +1,25 @@
 import os
 import sys
-import json
 import random
+import tempfile
 
+from collections import OrderedDict
+
+import json
 import numpy as np
 
-import keras.callbacks
+from ggplib.util import log
 
-from ggplib.symbols import SymbolFactory
 from ggplib.db import lookup
 
 from ggplearn import net
-from ggplib.util import log
+from ggplearn import net_config
 
+json.encoder.FLOAT_REPR = lambda f: ("%.4f" % f)
+
+###############################################################################
 # hyperparameters
+
 class TrainConfig:
     BATCH_SIZE = 128
     EPOCHS = 24
@@ -21,169 +27,9 @@ class TrainConfig:
     MAX_GAMES = None
     DROP_MOVES_FROM_START_PCT = 0.9
     DROP_MOVES_AFTER_START_PCT = 0.6
+    SAVE_DATA_BEFORE_TRAIN = True
 
 ###############################################################################
-
-class MyCallback(keras.callbacks.Callback):
-    def on_train_begin(self, logs=None):
-        self.epochs = self.params['epochs']
-
-    def on_epoch_end(self, epoch, logs=None):
-        assert logs
-        log.debug("Epoch %s/%s" % (epoch, self.epochs))
-
-        def str_by_name(names, dp=3):
-            fmt = "%%s = %%.%df" % dp
-            strs = [fmt % (k, logs[k]) for k in names]
-            return ", ".join(strs)
-
-        loss_names = "loss policy_loss score0_loss score1_loss".split()
-        val_loss_names = "val_loss val_policy_loss val_score0_loss val_score1_loss".split()
-
-        log.info(str_by_name(loss_names, 4))
-        log.info(str_by_name(val_loss_names, 4))
-
-        # accuracy:
-        for output in "policy score0 score1".split():
-            acc = []
-            val_acc = []
-            for k in self.params['metrics']:
-                if output not in k or "acc" not in k:
-                    continue
-                if "score" in output and "top" in k:
-                    continue
-
-                if 'val' in k:
-                    val_acc.append(k)
-                else:
-                    acc.append(k)
-
-            log.info("%s : %s" % (output, str_by_name(acc)))
-            log.info("%s : %s" % (output, str_by_name(val_acc)))
-
-class MyProgbarLogger(keras.callbacks.Callback):
-    ' simple progress bar '
-    def on_train_begin(self, logs=None):
-        self.epochs = self.params['epochs']
-
-    def on_epoch_begin(self, epoch, logs=None):
-        print('Epoch %d/%d' % (epoch + 1, self.epochs))
-
-        self.target = self.params['samples']
-
-        from keras.utils.generic_utils import Progbar
-        self.progbar = Progbar(target=self.target)
-        self.seen = 0
-
-    def on_batch_begin(self, batch, logs=None):
-        if self.seen < self.target:
-            self.log_values = []
-            self.progbar.update(self.seen, self.log_values)
-
-    def on_batch_end(self, batch, logs=None):
-        self.seen += logs.get('size')
-
-        for k in logs:
-            if "loss" in k and "val" not in k:
-                self.log_values.append((k, logs[k]))
-
-        self.progbar.update(self.seen, self.log_values)
-
-
-###############################################################################
-
-class BasesConfig(object):
-    role_count = 2
-
-    # will be updated later
-    number_of_non_cord_states = 0
-
-    @property
-    def num_rows(self):
-        return len(self.x_cords)
-
-    @property
-    def num_cols(self):
-        return len(self.y_cords)
-
-    @property
-    def channel_size(self):
-        return self.num_cols * self.num_rows
-
-    @property
-    def num_channels(self):
-        # one for each role to indicate turn, one for each pieces
-        return self.role_count + len(self.pieces)
-
-
-class AtariGo_7x7(BasesConfig):
-    game = "atariGo_7x7"
-    x_cords = "1 2 3 4 5 6 7".split()
-    y_cords = "1 2 3 4 5 6 7".split()
-
-    base_term = "cell"
-    x_term = 1
-    y_term = 2
-    piece_term = 3
-
-    pieces = ['black', 'white']
-
-
-class Breakthrough(BasesConfig):
-    game = "breakthrough"
-    x_cords = "1 2 3 4 5 6 7 8".split()
-    y_cords = "1 2 3 4 5 6 7 8".split()
-
-    base_term = "cellHolds"
-    x_term = 1
-    y_term = 2
-    piece_term = 3
-
-    pieces = ['white', 'black']
-
-
-class Reversi(BasesConfig):
-    game = "reversi"
-    x_cords = "1 2 3 4 5 6 7 8".split()
-    y_cords = "1 2 3 4 5 6 7 8".split()
-
-    base_term = "cell"
-    x_term = 1
-    y_term = 2
-    piece_term = 3
-
-    pieces = ['black', 'red']
-
-class Connect4(BasesConfig):
-    game = "connectFour"
-    x_cords = "1 2 3 4 5 6 7 8".split()
-    y_cords = "1 2 3 4 5 6".split()
-
-    base_term = "cell"
-    x_term = 1
-    y_term = 2
-    piece_term = 3
-
-    pieces = ['red', 'black']
-
-class Hex(BasesConfig):
-    game = "hex"
-    x_cords = "a b c d e f g h i".split()
-    y_cords = "1 2 3 4 5 6 7 8 9".split()
-
-    base_term = "cell"
-    x_term = 1
-    y_term = 2
-    piece_term = 3
-
-    pieces = ['red', 'blue']
-
-def get_bases_config(game_name):
-    for clz in AtariGo_7x7, Breakthrough, Reversi, Connect4, Hex:
-        if clz.game == game_name:
-            return clz()
-
-######################################################################
 
 def get_from_json(path, game_name):
     files = os.listdir(path)
@@ -204,9 +50,12 @@ def get_from_json(path, game_name):
 
 
 class PlayOne(object):
-    def __init__(self, state, actions, lead_role_index):
+    def __init__(self, state, actions, dist_desc, lead_role_index):
         self.state = state
         self.actions = actions
+
+        # for persistence
+        self.dist_desc = dist_desc
 
         # who's turn it is...
         self.lead_role_index = lead_role_index
@@ -229,8 +78,6 @@ class PlayOne(object):
 
 class Game:
     def __init__(self, data, model):
-        # don't keep data
-
         # should we do this everytime... thinking about speed
         self.roles = model.roles
         assert len(self.roles) == 2
@@ -255,10 +102,13 @@ class Game:
             state = tuple(info['state'])
             assert len(state) == self.expected_state_len
 
-            actions, best_score, lead_role_index = self.process_actions(info['move'], info['candidates'])
+            (actions, best_score,
+             lead_role_index, dist) = self.process_actions(info['move'],
+                                                           info['candidates'])
+
             final_score = data["final_scores"][self.roles[lead_role_index]] / 100.0
 
-            play = PlayOne(state, actions, lead_role_index)
+            play = PlayOne(state, actions, dist, lead_role_index)
             play.set_scores(best_score, final_score)
 
             self.plays.append(play)
@@ -277,7 +127,7 @@ class Game:
         # noop, throw away
         assert len(candidates[passive_role]) == 1
 
-        actions = [0 for i in range(self.expected_actions_len)]
+        actions = [0 for _ in range(self.expected_actions_len)]
 
         index_start = 0 if lead_role_index == 0 else self.player_0_actions_len
 
@@ -291,97 +141,12 @@ class Game:
             if score > best_score:
                 best_score = score
 
+        cand_probs = []
         for idx, score, visits in cand:
             actions[index_start + idx] /= float(total_visits)
+            cand_probs.append((idx, actions[index_start + idx]))
 
-        return actions, best_score, lead_role_index
-
-###############################################################################
-
-class BaseInfo(object):
-    def __init__(self, gdl_str, symbols):
-        self.gdl_str = gdl_str
-        self.symbols = symbols
-
-        # drops true ie (true (control black)) -> (control black)
-        self.terms = symbols[1]
-
-        # populated in update_base_infos()
-        self.channel = None
-        self.cord_idx = None
-
-
-def create_base_infos(config, sm_model):
-    symbol_factory = SymbolFactory()
-    base_infos = [BaseInfo(s, symbol_factory.symbolize(s)) for s in sm_model.bases]
-
-    all_cords = []
-    for x_cord in config.x_cords:
-        for y_cord in config.y_cords:
-            all_cords.append((x_cord, y_cord))
-
-    # need to match up there terms.  There will be one channel each.  We don't care what
-    # the order is, the NN doesn't care either.
-    BASE_TERM = 0
-
-    def match_terms(b_info, arg):
-        return b_info.terms[config.piece_term] == arg
-
-    for channel_count, arg in enumerate(config.pieces):
-        count = 0
-        for board_pos, (x_cord, y_cord) in enumerate(all_cords):
-            # this is slow.  Will go through all the bases and match up terms.
-            for b_info in base_infos:
-                if b_info.terms[BASE_TERM] != config.base_term:
-                    continue
-
-                if b_info.terms[config.x_term] == x_cord and \
-                   b_info.terms[config.y_term] == y_cord:
-
-                    if match_terms(b_info, arg):
-                        count += 1
-                        b_info.channel = channel_count
-                        b_info.cord_idx = board_pos
-                        break
-
-        log.info("init_state() found %s states for channel %s" % (count, channel_count))
-
-    # update the config for non cord states
-    config.number_of_non_cord_states = 0
-    for b_info in base_infos:
-        if b_info.channel is None:
-            config.number_of_non_cord_states += 1
-
-    log.info("Number of number_of_non_cord_states %d" % config.number_of_non_cord_states)
-
-    return base_infos
-
-def state_to_channels(basestate, lead_role_index, config, base_infos):
-    # create a bunch of zero channels
-    channels = [np.zeros(config.channel_size)
-                for _ in range(len(config.pieces))]
-
-    # simply add to channel
-    for b_info, base_value in zip(base_infos, basestate):
-        # XXX sanity
-        assert isinstance(base_value, int) and abs(base_value) <= 1
-
-        if base_value and b_info.channel is not None:
-            channels[b_info.channel][b_info.cord_idx] = 1
-
-    # here we add in who's turn it is, by adding a layer for each role and then setting
-    # everything to 1.
-    for ii in range(config.role_count):
-        if lead_role_index == ii:
-            channels.append(np.ones(config.channel_size))
-        else:
-            channels.append(np.zeros(config.channel_size))
-
-    X_0 = np.array(channels)
-    X_0 = np.rollaxis(X_0, -1)
-    X_0 = np.reshape(X_0, (config.num_rows, config.num_cols, len(channels)))
-
-    return X_0
+        return actions, best_score, lead_role_index, cand_probs
 
 ###############################################################################
 
@@ -414,6 +179,8 @@ def training_data(data_path, base_infos, sm_model, config):
     early_states_dropped = 0
     later_states_dropped = 0
 
+    # incase we store the data (otherwise just warming up the cpu)
+    persist_samples = []
     for data in get_from_json(data_path, config.game):
         game = Game(data, sm_model)
 
@@ -439,7 +206,9 @@ def training_data(data_path, base_infos, sm_model, config):
                     later_states_dropped += 1
                     continue
 
-            X_0 = state_to_channels(play.state, play.lead_role_index, config, base_infos)
+            X_0 = net_config.state_to_channels(play.state,
+                                               play.lead_role_index,
+                                               config, base_infos)
             samples_X0.append(X_0)
 
             X_1 = [v for v, base_info in zip(play.state, base_infos) if base_info.channel is None]
@@ -449,6 +218,15 @@ def training_data(data_path, base_infos, sm_model, config):
 
             samples_y1.append(play.scores[:2])
             samples_y2.append(play.scores[2:])
+
+            if TrainConfig.SAVE_DATA_BEFORE_TRAIN:
+                d = OrderedDict()
+                d["state"] = play.state
+                d["lead_role_index"] = play.lead_role_index
+                d["final_scores"] = play.scores[:2]
+                d["best_scores"] = play.scores[2:]
+                d["policy_dist"] = play.dist_desc
+                persist_samples.append(d)
 
         games_processed += 1
         if games_processed % 100 == 0:
@@ -466,34 +244,61 @@ def training_data(data_path, base_infos, sm_model, config):
     for samp in the_samples[1:]:
         assert len(the_samples[0]) == len(samp)
 
-    log.info("gathered %s samples" % len(samples_X0))
+    num_samples = len(samples_X0)
+    log.info("gathered %s samples" % num_samples)
 
     # shuffle
     log.debug("Shuffling data")
+
+    # keep indices around
+    the_samples.append(range(len(samples_X0)))
     the_samples = shuffle(*the_samples)
+    indices = the_samples.pop(-1)
 
-    for i, s in enumerate(the_samples):
-        log.debug("Shape of sample %d: %s" % (i, s[0].shape))
+    # split data into training/validation
+    num_training_samples = int(num_samples * (1 - TrainConfig.VALIDATION_SPLIT))
 
-    return the_samples[0:2], the_samples[2:]
+    if TrainConfig.SAVE_DATA_BEFORE_TRAIN:
+        persist_data = OrderedDict()
+        persist_data["game"] = config.game
+        persist_data["generation"] = "gen0"
+        persist_data["num_samples"] = num_samples
+        persist_data["num_training_samples"] = num_training_samples
+        persist_data["num_validation_samples"] = num_samples - num_training_samples
+        persist_data["samples"] = [persist_samples[i] for i in indices]
+
+        fd, path = tempfile.mkstemp(suffix='.json',
+                                    prefix="initial_data_%s_" % (config.game),
+                                    dir=".")
+        with os.fdopen(fd, 'w') as open_file:
+            open_file.write(json.dumps(persist_data, indent=4))
+
+    training_data = [a[:num_training_samples] for a in the_samples]
+    validation_data = [a[num_training_samples:] for a in the_samples]
+
+    for i, s in enumerate(training_data):
+        log.debug("Shape of training data %d: %s" % (i, s.shape))
+
+    for i, s in enumerate(validation_data):
+        log.debug("Shape of validation data %d: %s" % (i, s.shape))
+
+    return training_data[0:2], training_data[2:], validation_data[0:2], validation_data[2:]
 
 
 def build_and_train_nn(data_path, game_name, postfix):
-
     for attr in vars(TrainConfig):
         if "__" in attr:
             continue
         log.info("TrainConfig.%s = %s" % (attr, getattr(TrainConfig, attr)))
 
-
     # lookup via game_name (this gets statemachine & statemachine model)
     info = lookup.by_name(game_name)
 
     # the bases config (XXX idea is not to use hard coded stuff)
-    config = get_bases_config(game_name)
+    config = net_config.get_bases_config(game_name)
 
     # update the base_infos and config
-    base_infos = create_base_infos(config, info.model)
+    base_infos = net_config.create_base_infos(config, info.model)
 
     number_of_outputs = sum(len(l) for l in info.model.actions)
     nn_model = net.get_network_model(config, number_of_outputs)
@@ -504,17 +309,19 @@ def build_and_train_nn(data_path, game_name, postfix):
     for l in lines:
         log.verbose(l)
 
-    inputs, outputs = training_data(data_path, base_infos, info.model, config)
+    (training_inputs, training_outputs,
+     validation_inputs, validation_outputs) = training_data(data_path, base_infos, info.model, config)
 
     # train
-    my_cb = MyCallback()
-    progbar = MyProgbarLogger()
+    my_cb = net.MyCallback()
+    progbar = net.MyProgbarLogger()
 
-    nn_model.fit(inputs, outputs,
+
+    nn_model.fit(training_inputs, training_outputs,
                  verbose=0,
                  batch_size=TrainConfig.BATCH_SIZE,
                  epochs=TrainConfig.EPOCHS,
-                 validation_split=TrainConfig.VALIDATION_SPLIT,
+                 validation_data=(validation_inputs, validation_outputs),
                  callbacks=[progbar, my_cb])
 
     # save model / weights

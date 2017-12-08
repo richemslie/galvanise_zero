@@ -15,5 +15,5 @@ python process_games.py data/$1 $1 $2
 
 mv model_nn_$1_$2.json models/
 mv weights_nn_$1_$2.h5 models/
-mv process_and_train__$1_$2*.log
+mv process_and_train__$1_$2*.log models/
 echo "DONE"

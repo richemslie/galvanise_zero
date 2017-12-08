@@ -3,6 +3,7 @@ from ggplib.player.gamemaster import GameMaster
 from ggplib.db.helper import get_gdl_for_game
 from ggplearn.player.simple import NNPlayerOneShot
 from ggplearn.player.expander import NNExpander
+from ggplearn.player.mc import NNMonteCarlo
 
 
 def setup():
@@ -87,6 +88,22 @@ def test_expander():
 
     gm.add_player(nne, "white")
     gm.add_player(pyrandom, "black")
+
+    gm.start(meta_time=30, move_time=15)
+    gm.play_to_end()
+
+
+
+
+def test_montecarlo():
+    gm = GameMaster(get_gdl_for_game("breakthrough"))
+
+    # add two players
+    white = NNMonteCarlo("asdd")
+    black = NNPlayerOneShot("asdd")
+
+    gm.add_player(black, "white")
+    gm.add_player(white, "black")
 
     gm.start(meta_time=30, move_time=15)
     gm.play_to_end()

@@ -1,5 +1,8 @@
 from keras import layers as klayers
 from keras import metrics, models
+import keras.callbacks
+
+from ggplib.util import log
 
 
 def top_2_acc(y_true, y_pred):
@@ -65,14 +68,11 @@ def get_network_model(config, number_of_outputs):
 
     # keep adding layers til network gets too small
     size = min(config.num_rows, config.num_cols)
-    while True:
+    while size > 5:
         x = Conv2D_WithBN(CNN_FILTERS_SIZE, 3,
-                              padding='valid',
-                              activation='relu')(x)
-
+                          padding='valid',
+                          activation='relu')(x)
         size -= 2
-        if size < 5:
-            break
 
     x = Conv2D_WithBN(CNN_FILTERS_SIZE, 1, padding='valid', activation='relu')(x)
     flattened = klayers.Flatten()(x)
@@ -90,16 +90,17 @@ def get_network_model(config, number_of_outputs):
     # add in dropout
     ################
     dropout_layer = klayers.Dropout(0.5)(resultant_layer)
+    mass_dropout_layer = klayers.Dropout(0.75)(resultant_layer)
 
     # the policy
     output_policy = klayers.Dense(number_of_outputs, activation="softmax", name="policy")(dropout_layer)
 
     # two scores for each player.  the score of the node (acts as a prior).  the final score of the
     # game (back propagated)
-    scores_prelude0 = klayers.Dense(32, activation="relu")(dropout_layer)
+    scores_prelude0 = klayers.Dense(32, activation="relu")(mass_dropout_layer)
     scores_prelude0 = klayers.Dropout(0.5)(scores_prelude0)
 
-    scores_prelude1 = klayers.Dense(32, activation="relu")(dropout_layer)
+    scores_prelude1 = klayers.Dense(32, activation="relu")(mass_dropout_layer)
     scores_prelude1 = klayers.Dropout(0.5)(scores_prelude1)
 
     # best
@@ -116,3 +117,72 @@ def get_network_model(config, number_of_outputs):
                   optimizer='adam', loss_weights=[1.0, 1.0, 0.5], metrics=["acc", top_2_acc, top_3_acc])
 
     return model
+
+###############################################################################
+
+class MyCallback(keras.callbacks.Callback):
+    ''' custom callbac to do nice logging '''
+    def on_train_begin(self, logs=None):
+        self.epochs = self.params['epochs']
+
+    def on_epoch_end(self, epoch, logs=None):
+        assert logs
+        log.debug("Epoch %s/%s" % (epoch, self.epochs))
+
+        def str_by_name(names, dp=3):
+            fmt = "%%s = %%.%df" % dp
+            strs = [fmt % (k, logs[k]) for k in names]
+            return ", ".join(strs)
+
+        loss_names = "loss policy_loss score0_loss score1_loss".split()
+        val_loss_names = "val_loss val_policy_loss val_score0_loss val_score1_loss".split()
+
+        log.info(str_by_name(loss_names, 4))
+        log.info(str_by_name(val_loss_names, 4))
+
+        # accuracy:
+        for output in "policy score0 score1".split():
+            acc = []
+            val_acc = []
+            for k in self.params['metrics']:
+                if output not in k or "acc" not in k:
+                    continue
+                if "score" in output and "top" in k:
+                    continue
+
+                if 'val' in k:
+                    val_acc.append(k)
+                else:
+                    acc.append(k)
+
+            log.info("%s : %s" % (output, str_by_name(acc)))
+            log.info("%s : %s" % (output, str_by_name(val_acc)))
+
+class MyProgbarLogger(keras.callbacks.Callback):
+    ''' simple progress bar.  default was breaking with too much metrics '''
+    def on_train_begin(self, logs=None):
+        self.epochs = self.params['epochs']
+
+    def on_epoch_begin(self, epoch, logs=None):
+        print('Epoch %d/%d' % (epoch + 1, self.epochs))
+
+        self.target = self.params['samples']
+
+        from keras.utils.generic_utils import Progbar
+        self.progbar = Progbar(target=self.target)
+        self.seen = 0
+
+    def on_batch_begin(self, batch, logs=None):
+        if self.seen < self.target:
+            self.log_values = []
+            self.progbar.update(self.seen, self.log_values)
+
+    def on_batch_end(self, batch, logs=None):
+        self.seen += logs.get('size')
+
+        for k in logs:
+            if "loss" in k and "val" not in k:
+                self.log_values.append((k, logs[k]))
+
+        self.progbar.update(self.seen, self.log_values)
+

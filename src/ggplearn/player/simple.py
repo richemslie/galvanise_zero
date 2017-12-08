@@ -1,36 +1,41 @@
 import os
 import numpy as np
+
 from keras.models import model_from_json
-from ggplearn import process_games
+
 from ggplib.player.base import MatchPlayer
 from ggplib.util import log
+
 from ggplearn.utils.bt import pretty_print_board
+from ggplearn import net_config
 
 models_path = os.path.join(os.environ["GGPLEARN_PATH"], "src", "ggplearn", "models")
+
 
 class NNPlayerOneShot(MatchPlayer):
 
     def __init__(self, postfix):
+        MatchPlayer.__init__(self, "NNPlayerOneShot-" + postfix)
         self.postfix = postfix
-        MatchPlayer.__init__(self, "NNPlayerOneShot-" + self.postfix)
+        self.nn_config = None
 
     def on_meta_gaming(self, finish_time):
         log.info("NNPlayerOneShot, match id: %s" % self.match.match_id)
 
-        sm = self.match.sm
         game_info = self.match.game_info
 
-        self.nn_config = process_games.get_bases_config(game_info.game)
-        self.base_infos = process_games.create_base_infos(self.nn_config, game_info.model)
+        if self.nn_config is None:
+            self.nn_config = net_config.get_bases_config(game_info.game)
+            self.base_infos = net_config.create_base_infos(self.nn_config, game_info.model)
 
-        # load neural network model and weights
-        model_filename = os.path.join(models_path, "model_nn_%s_%s.json" % (game_info.game, self.postfix))
-        weights_filename = os.path.join(models_path, "weights_nn_%s_%s.h5" % (game_info.game, self.postfix))
+            # load neural network model and weights
+            model_filename = os.path.join(models_path, "model_nn_%s_%s.json" % (game_info.game, self.postfix))
+            weights_filename = os.path.join(models_path, "weights_nn_%s_%s.h5" % (game_info.game, self.postfix))
 
-        with open(model_filename, "r") as f:
-            self.nn_model = model_from_json(f.read())
+            with open(model_filename, "r") as f:
+                self.nn_model = model_from_json(f.read())
 
-        self.nn_model.load_weights(weights_filename)
+            self.nn_model.load_weights(weights_filename)
 
     def on_next_move(self, finish_time):
         sm = self.match.sm
@@ -50,9 +55,20 @@ class NNPlayerOneShot(MatchPlayer):
         bs = self.match.get_current_state()
         state = [bs.get(i) for i in range(bs.len())]
 
-        X_0 = process_games.state_to_channels(state, self.match.our_role_index, self.nn_config, self.base_infos)
-        X_0 = X_0.reshape(1, self.nn_config.num_rows, self.nn_config.num_cols, self.nn_config.num_channels)
-        X_1 = np.array([[v for v, base_info in zip(state, self.base_infos) if base_info.channel is None]])
+        X_0 = net_config.state_to_channels(state,
+                                           self.match.our_role_index,
+                                           self.nn_config,
+                                           self.base_infos)
+
+        X_0 = X_0.reshape(1,
+                          self.nn_config.num_rows,
+                          self.nn_config.num_cols,
+                          self.nn_config.num_channels)
+
+        X_1 = np.array([[v for v, base_info in zip(state,
+                                                   self.base_infos)
+                         if base_info.channel is None]])
+
         result = self.nn_model.predict([X_0, X_1], batch_size=1)
 
         x = [result[i][0] for i in range(3)]
@@ -63,7 +79,7 @@ class NNPlayerOneShot(MatchPlayer):
         else:
             start_pos = 0
 
-        actions = self.match.game_info.model.actions[1]
+        actions = self.match.game_info.model.actions[self.match.our_role_index]
 
         best = -1
         best_idx = None
@@ -101,9 +117,7 @@ class NNPlayerOneShot(MatchPlayer):
                 print move, "%.2f" % pvalue
             print
 
-
         if best is not None:
-            s = 2 if self.match.our_role_index else 0
             print "============="
             print "Priors %.3f / %.3f" % tuple(scores[0])
             print "Finals %.3f / %.3f" % tuple(scores[1])
