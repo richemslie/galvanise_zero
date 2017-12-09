@@ -1,3 +1,19 @@
+'''
+Doesn't actually self play.
+Similar to fast n slow, approximates playing a full game and sampling one state/move.
+This should give similar results and be a ton faster.
+
+All stages use monte carlo player.
+
+1.  Run a game using just the policy net and Dirichlet noise (with mc player and iterations == 1).
+2.  Sample a single unique state from that game.
+3.  Run monte carlo with 800 iterations on that state.  Record new policy.
+4.  Play game to the end using a low number of iterations.  Record final score.
+5.  Goto 1
+
+'''
+
+
 import os
 import random
 import tempfile
