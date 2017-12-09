@@ -14,9 +14,9 @@ models_path = os.path.join(os.environ["GGPLEARN_PATH"], "src", "ggplearn", "mode
 
 class NNPlayerOneShot(MatchPlayer):
 
-    def __init__(self, postfix):
-        MatchPlayer.__init__(self, "NNPlayerOneShot-" + postfix)
-        self.postfix = postfix
+    def __init__(self, generation):
+        MatchPlayer.__init__(self, "NNPlayerOneShot-" + generation)
+        self.generation = generation
         self.nn_config = None
 
     def on_meta_gaming(self, finish_time):
@@ -29,8 +29,8 @@ class NNPlayerOneShot(MatchPlayer):
             self.base_infos = net_config.create_base_infos(self.nn_config, game_info.model)
 
             # load neural network model and weights
-            model_filename = os.path.join(models_path, "model_nn_%s_%s.json" % (game_info.game, self.postfix))
-            weights_filename = os.path.join(models_path, "weights_nn_%s_%s.h5" % (game_info.game, self.postfix))
+            model_filename = os.path.join(models_path, "model_nn_%s_%s.json" % (game_info.game, self.generation))
+            weights_filename = os.path.join(models_path, "weights_nn_%s_%s.h5" % (game_info.game, self.generation))
 
             with open(model_filename, "r") as f:
                 self.nn_model = model_from_json(f.read())
@@ -46,9 +46,9 @@ class NNPlayerOneShot(MatchPlayer):
         if ls.get_count() == 1:
             return ls.get_legal(0)
 
-        print len(self.postfix) * "="
-        print self.postfix
-        print len(self.postfix) * "="
+        print len(self.generation) * "="
+        print self.generation
+        print len(self.generation) * "="
 
         legals = set([ls.get_legal(i) for i in range(ls.get_count())])
 
@@ -71,8 +71,8 @@ class NNPlayerOneShot(MatchPlayer):
 
         result = self.nn_model.predict([X_0, X_1], batch_size=1)
 
-        x = [result[i][0] for i in range(3)]
-        policy, scores = x[0], x[1:]
+        x = [result[i][0] for i in range(2)]
+        policy, scores = x[0], x[1]
 
         if self.match.our_role_index == 1:
             start_pos = len(self.match.game_info.model.actions[0])
@@ -119,8 +119,7 @@ class NNPlayerOneShot(MatchPlayer):
 
         if best is not None:
             print "============="
-            print "Priors %.3f / %.3f" % tuple(scores[0])
-            print "Finals %.3f / %.3f" % tuple(scores[1])
+            print "Finals %.3f / %.3f" % tuple(scores)
             print "Choice is %s" % best_move
             print "============="
             return best_idx
@@ -140,15 +139,15 @@ def main():
     from ggplearn.utils.keras import use_one_cpu_please
 
     port = int(sys.argv[1])
-    model_postfix = sys.argv[2]
+    generation = sys.argv[2]
 
-    player_name = NNPlayerOneShot.__class__.__name__ + "_" + model_postfix
+    player_name = NNPlayerOneShot.__class__.__name__ + "_" + generation
     interface.initialise_k273(1, log_name_base=player_name)
     log.initialise()
 
     use_one_cpu_please()
 
-    player = NNPlayerOneShot(model_postfix)
+    player = NNPlayerOneShot(generation)
 
     ggp = GGPServer()
     ggp.set_player(player)

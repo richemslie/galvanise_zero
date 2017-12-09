@@ -2,7 +2,6 @@ from ggplib.player import get
 from ggplib.player.gamemaster import GameMaster
 from ggplib.db.helper import get_gdl_for_game
 from ggplearn.player.simple import NNPlayerOneShot
-from ggplearn.player.expander import NNExpander
 from ggplearn.player.mc import NNMonteCarlo
 
 
@@ -99,11 +98,23 @@ def test_montecarlo():
     gm = GameMaster(get_gdl_for_game("breakthrough"))
 
     # add two players
-    white = NNMonteCarlo("asdd")
-    black = NNPlayerOneShot("asdd")
+    white = NNMonteCarlo("gen1")
+    white.NUM_OF_PLAYOUTS_PER_ITERATION = 1
+
+    black = NNPlayerOneShot("gen1")
 
     gm.add_player(black, "white")
     gm.add_player(white, "black")
 
-    gm.start(meta_time=30, move_time=15)
-    gm.play_to_end()
+    acc_black_score = 0
+    acc_red_score = 0
+    for i in range(10):
+        gm.reset()
+        gm.start(meta_time=30, move_time=15)
+        gm.play_to_end()
+
+        acc_black_score += gm.scores["black"]
+        acc_red_score += gm.scores["white"]
+
+    print "white_score", gm.players_map["white"].name, acc_red_score
+    print "black_score", gm.players_map["black"].name, acc_black_score
