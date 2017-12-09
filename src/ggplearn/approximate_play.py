@@ -56,7 +56,7 @@ class Runner(object):
             player.NUM_OF_PLAYOUTS_PER_ITERATION = 1
             player.NUM_OF_PLAYOUTS_PER_ITERATION_NOOP = 1
             player.EXPERIMENTAL_MINMAX = False
-            player.DIRICHLET_NOISE_ALPHA = 0.03
+            player.DIRICHLET_NOISE_ALPHA = 0.05
             player.CPUCT_CONSTANT = 4.0
 
         self.gm.reset()
