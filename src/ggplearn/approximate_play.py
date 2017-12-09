@@ -53,11 +53,11 @@ class Runner(object):
 
     def play_one_game(self):
         for player, _ in self.gm.players:
-            player.NUM_OF_PLAYOUTS_PER_ITERATION = 1
-            player.NUM_OF_PLAYOUTS_PER_ITERATION_NOOP = 1
+            player.NUM_OF_PLAYOUTS_PER_ITERATION = 42
+            player.NUM_OF_PLAYOUTS_PER_ITERATION_NOOP = 42
             player.EXPERIMENTAL_MINMAX = False
-            player.DIRICHLET_NOISE_ALPHA = 0.08
-            player.CPUCT_CONSTANT = 4.0
+            player.DIRICHLET_NOISE_ALPHA = 0.07
+            player.CPUCT_CONSTANT = 3.0
 
         self.gm.reset()
 
@@ -78,6 +78,7 @@ class Runner(object):
             player.NUM_OF_PLAYOUTS_PER_ITERATION = 800
             player.NUM_OF_PLAYOUTS_PER_ITERATION_NOOP = 1
             player.DIRICHLET_NOISE_ALPHA = -1
+            player.CPUCT_CONSTANT = 4.0
 
         for i, v in enumerate(state):
             self.basestate.set(i, v)
@@ -120,6 +121,7 @@ class Runner(object):
             player.NUM_OF_PLAYOUTS_PER_ITERATION = 42
             player.NUM_OF_PLAYOUTS_PER_ITERATION_NOOP = 1
             player.DIRICHLET_NOISE_ALPHA = -1
+            player.CPUCT_CONSTANT = 4.0
 
         # self.last_move was set in do_policy()
         self.gm.play_to_end(self.last_move)
