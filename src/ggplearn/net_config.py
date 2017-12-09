@@ -203,7 +203,6 @@ def create_base_infos(config, sm_model):
     for b_info in base_infos:
         if b_info.channel is None:
             config.number_of_non_cord_states += 1
-        print b_info.gdl_str, b_info.channel, b_info.cord_idx
     log.info("Number of number_of_non_cord_states %d" % config.number_of_non_cord_states)
     return base_infos
 
@@ -227,6 +226,7 @@ def state_to_channels(basestate, lead_role_index, config, base_infos):
     # everything to 1.
     # XXX this needs to be control states...
 
+    # XXX this was just for amazones... WIP/HACK
     if config.control_base_term is not None:
         for idx, b_info in enumerate(base_infos):
             if b_info.terms[0] == config.control_base_term:
