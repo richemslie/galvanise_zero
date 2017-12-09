@@ -25,6 +25,7 @@ def Conv2D_WithBN(*args, **kwds):
         return l3
     return f
 
+
 def IdentityBlock(*args, **kwds):
     assert "padding" not in kwds
     kwds["padding"] = "same"
@@ -95,28 +96,21 @@ def get_network_model(config, number_of_outputs):
     # the policy
     output_policy = klayers.Dense(number_of_outputs, activation="softmax", name="policy")(dropout_layer)
 
-    # two scores for each player.  the score of the node (acts as a prior).  the final score of the
-    # game (back propagated)
-    scores_prelude0 = klayers.Dense(32, activation="relu")(mass_dropout_layer)
-    scores_prelude0 = klayers.Dropout(0.5)(scores_prelude0)
-
-    scores_prelude1 = klayers.Dense(32, activation="relu")(mass_dropout_layer)
-    scores_prelude1 = klayers.Dropout(0.5)(scores_prelude1)
-
-    # best
-    output_score0 = klayers.Dense(2, activation="sigmoid", name="score0")(scores_prelude0)
+    scores_prelude = klayers.Dense(32, activation="relu")(mass_dropout_layer)
+    scores_prelude = klayers.Dropout(0.5)(scores_prelude)
 
     # final
-    output_score1 = klayers.Dense(2, activation="sigmoid", name="score1")(scores_prelude1)
+    output_score = klayers.Dense(2, activation="sigmoid", name="score")(scores_prelude)
 
-    model = models.Model(inputs=[inputs_board, inputs_other], outputs=[output_policy, output_score0, output_score1])
+    model = models.Model(inputs=[inputs_board, inputs_other], outputs=[output_policy, output_score])
 
-    # XXX kind of want loss_weights to change over time - pretty easy, see https://github.com/fchollet/keras/issues/2595
-    # XXX try different optimizers...
-    model.compile(loss=['categorical_crossentropy', 'mean_squared_error', 'mean_squared_error'],
-                  optimizer='adam', loss_weights=[1.0, 1.0, 0.5], metrics=["acc", top_2_acc, top_3_acc])
+    # slightly less loss on score until it stops overfitting (which is mostly because of lack of
+    # data)
+    model.compile(loss=['categorical_crossentropy', 'mean_squared_error'],
+                  optimizer='adam', loss_weights=[1.0, 0.75], metrics=["acc", top_2_acc, top_3_acc])
 
     return model
+
 
 ###############################################################################
 
@@ -134,14 +128,14 @@ class MyCallback(keras.callbacks.Callback):
             strs = [fmt % (k, logs[k]) for k in names]
             return ", ".join(strs)
 
-        loss_names = "loss policy_loss score0_loss score1_loss".split()
-        val_loss_names = "val_loss val_policy_loss val_score0_loss val_score1_loss".split()
+        loss_names = "loss policy_loss score_loss".split()
+        val_loss_names = "val_loss val_policy_loss val_score_loss".split()
 
         log.info(str_by_name(loss_names, 4))
         log.info(str_by_name(val_loss_names, 4))
 
         # accuracy:
-        for output in "policy score0 score1".split():
+        for output in "policy score".split():
             acc = []
             val_acc = []
             for k in self.params['metrics']:
@@ -157,6 +151,7 @@ class MyCallback(keras.callbacks.Callback):
 
             log.info("%s : %s" % (output, str_by_name(acc)))
             log.info("%s : %s" % (output, str_by_name(val_acc)))
+
 
 class MyProgbarLogger(keras.callbacks.Callback):
     ''' simple progress bar.  default was breaking with too much metrics '''
@@ -185,4 +180,3 @@ class MyProgbarLogger(keras.callbacks.Callback):
                 self.log_values.append((k, logs[k]))
 
         self.progbar.update(self.seen, self.log_values)
-
