@@ -13,7 +13,6 @@ from ggplearn import net_config
 
 VERBOSE = True
 
-
 class Child(object):
     def __init__(self, parent, move, legal):
         self.parent = parent
@@ -124,11 +123,12 @@ models_path = os.path.join(os.environ["GGPLEARN_PATH"], "src", "ggplearn", "mode
 class NNMonteCarlo(MatchPlayer):
     player_name = "MC"
 
-    NUM_OF_PLAYOUTS_PER_ITERATION = 42
-    NUM_OF_PLAYOUTS_PER_ITERATION_NOOP = 1
-    EXPERIMENTAL_MINMAX = False
+    NUM_OF_PLAYOUTS_PER_ITERATION = 400
+    NUM_OF_PLAYOUTS_PER_ITERATION_NOOP = 400
+    EXPERIMENTAL_SEEDED_MINIMAX = None
+    EXPERIMENTAL_SHARPEN = False
 
-    CPUCT_CONSTANT = 4.0
+    CPUCT_CONSTANT = 3.0
 
     # only added to child policy pct (less than 0 is off)
     DIRICHLET_NOISE_ALPHA = 0.02
@@ -278,12 +278,12 @@ class NNMonteCarlo(MatchPlayer):
 
             node.mcts_visits += 1
 
-            if self.EXPERIMENTAL_MINMAX:
-                if not node.is_terminal and node.mcts_visits % 5 == 0:
-                    best = node.sorted_children()[0].to_node
-                    # average scores
-                    for i, s in enumerate(best.mcts_score):
-                        node.mcts_score[i] = 0.8 * node.mcts_score[i] + 0.2 * s
+            if self.EXPERIMENTAL_SEEDED_MINIMAX:
+                # seeding as per sancho
+                if not node.is_terminal and node.mcts_visits < self.EXPERIMENTAL_SEEDED_MINIMAX:
+                    scores = scores[:]
+                    for i, s in enumerate(node.final_scores):
+                        scores[i] = 0.8 * s + 0.2 * scores[i]
 
     def select_child(self, node, depth):
         # get best
@@ -315,7 +315,12 @@ class NNMonteCarlo(MatchPlayer):
                 noise_pct = 0.25
                 child_pct = (1 - noise_pct) * child_pct + noise_pct * dirichlet_noise[idx][0]
 
-            puct_score = self.CPUCT_CONSTANT * child_pct * math.sqrt(node.mcts_visits) / (child_visits + 1)
+            if self.EXPERIMENTAL_SHARPEN:
+                dull = len(node.children) / 4.0
+            else:
+                dull = 1
+
+            puct_score = self.CPUCT_CONSTANT * child_pct * math.sqrt(node.mcts_visits) / (dull * child_visits + 1)
             score = node_score + puct_score
 
             # use for debug/display
@@ -485,13 +490,10 @@ class NNMonteCarlo(MatchPlayer):
 
 ###############################################################################
 
-class NNMonteCarlo2(NNMonteCarlo):
-    player_name = "MC2"
-    EXPERIMENTAL_MINMAX = True
-
-
-PLAYER = NNMonteCarlo2
-
+class NNMonteCarloSeedMM(NNMonteCarlo):
+    player_name = "MCSeeded"
+    EXPERIMENTAL_SEEDED_MINIMAX = 42
+    CPUCT_CONSTANT = 3.0
 
 def main():
     import sys
@@ -508,7 +510,10 @@ def main():
     interface.initialise_k273(1, log_name_base="mcplayer")
     log.initialise()
 
-    player = PLAYER(generation)
+    if len(sys.argv) > 3 and sys.argv[3] == "-t":
+        player = NNMonteCarloSeedMM(generation)
+    else:
+        player = NNMonteCarlo(generation)
 
     # this still uses more than once cpu :(
     import tensorflow as tf
