@@ -54,8 +54,9 @@ class Runner(object):
     def play_one_game(self):
         for player, _ in self.gm.players:
             player.NUM_OF_PLAYOUTS_PER_ITERATION = 42
-            player.NUM_OF_PLAYOUTS_PER_ITERATION_NOOP = 42
+            player.NUM_OF_PLAYOUTS_PER_ITERATION_NOOP = 1
             player.EXPERIMENTAL_MINMAX = False
+            player.EXPERIMENTAL_SHARPEN = False
             player.DIRICHLET_NOISE_ALPHA = 0.07
             player.CPUCT_CONSTANT = 3.0
 
@@ -75,7 +76,7 @@ class Runner(object):
 
     def do_policy(self, state):
         for player, _ in self.gm.players:
-            player.NUM_OF_PLAYOUTS_PER_ITERATION = 800
+            player.NUM_OF_PLAYOUTS_PER_ITERATION = 1000
             player.NUM_OF_PLAYOUTS_PER_ITERATION_NOOP = 1
             player.DIRICHLET_NOISE_ALPHA = -1
             player.CPUCT_CONSTANT = 4.0
@@ -118,7 +119,7 @@ class Runner(object):
 
     def playout_state(self):
         for player, _ in self.gm.players:
-            player.NUM_OF_PLAYOUTS_PER_ITERATION = 42
+            player.NUM_OF_PLAYOUTS_PER_ITERATION = 101
             player.NUM_OF_PLAYOUTS_PER_ITERATION_NOOP = 1
             player.DIRICHLET_NOISE_ALPHA = -1
             player.CPUCT_CONSTANT = 4.0
