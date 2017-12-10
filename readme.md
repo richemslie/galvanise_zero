@@ -50,16 +50,16 @@ the policy network has learned.  Admittedly not brilliant, but it has improved.
 
 Current status
 --------------
-Neural network is general to support many games.  There is a combination of
-[GDL](http://alloyggp.blogspot.co.uk/2012/12/the-game-description-language.html) 'base' states as
-inputs to the network.
+The inputs to the neural network are combination of planes and input nodes.  In GGP
+[GDL](http://alloyggp.blogspot.co.uk/2012/12/the-game-description-language.html) defines the 'base'
+states via prolog like rules.
 
-The coordinate looking base-states are turned into planes and fed into a residual part of the
-network.  The non-coordinate base-states go through a single fully connected layer.  GDL does
-specifiy whether they are coordinates or not, and for now these are hard coded.  It shouldn't be
-too hard to infer them.
+Base states that look as if they are coordinates in a 2D board are turned into planes and fed into
+a residual part of the network.  The non-coordinate base-states go through a single fully connected
+layer.  GDL does not specifiy whether these are coordinates or not, and for now these are hard
+coded.  It shouldn't be too hard to infer them - at least with non-contrived GDL.
 
-Both part os the network are combined and fed to two outputs heads: a single list of moves and the
+Both lines of the network are concatenated and fed to two outputs heads: a single list of moves and the
 final score of the game (similar to policy and score in AlphaZero).
 
 The trained data is initially sampled from self play of a dumb Monte Carlo search player.  Each
@@ -67,7 +67,8 @@ turn takes 0.25 seconds and it was enough to prime the network and learn the rul
 This differs from AlphaZero which skips right to the chase and starts from a completely random
 network.  One thing that seems apparent is that after 10 generations it still plays similar to this
 dumb player, and feels like it is caught in a local optima right from the get go.  Next time around
-I plan to start from a random neural network.
+I plan to start from a random neural network and set number of iterations to be very small - thus
+quickly learning the rules, without learning what a good move is.
 
 Subsequently the network is trained in generations.  A single sample is taken from a self play game
 using Monte Carlo playouts with the policy and score values, using PUCT and Dirichlet noise for
