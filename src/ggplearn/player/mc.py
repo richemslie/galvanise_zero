@@ -35,7 +35,7 @@ class Child(object):
             ri = self.parent.lead_role_index
             final_scores = n.final_scores[ri] or 0.0
             if n.is_terminal:
-                final_scores = n.terminal_scores[ri] / 100.0
+                final_scores = n.terminal_scores[ri] / 99.0
 
             return "%s %.2f%%   %.2f %s" % (self.move,
                                             self.p_visits_pct * 100,
@@ -123,15 +123,14 @@ models_path = os.path.join(os.environ["GGPLEARN_PATH"], "src", "ggplearn", "mode
 class NNMonteCarlo(MatchPlayer):
     player_name = "MC"
 
-    NUM_OF_PLAYOUTS_PER_ITERATION = 400
-    NUM_OF_PLAYOUTS_PER_ITERATION_NOOP = 400
-    EXPERIMENTAL_SEEDED_MINIMAX = None
-    EXPERIMENTAL_SHARPEN = False
+    NUM_OF_PLAYOUTS_PER_ITERATION = 250
+    NUM_OF_PLAYOUTS_PER_ITERATION_NOOP = 1
 
-    CPUCT_CONSTANT = 3.0
+    CPUCT_CONSTANT = 0.75
+    DEPTH_0_CPUCT_CONSTANT = 1.0
 
     # only added to child policy pct (less than 0 is off)
-    DIRICHLET_NOISE_ALPHA = 0.02
+    DIRICHLET_NOISE_ALPHA = 0.01
 
     def __init__(self, generation):
         identifier = "%s_%s_%s" % (self.player_name, self.NUM_OF_PLAYOUTS_PER_ITERATION, generation)
@@ -272,18 +271,12 @@ class NNMonteCarlo(MatchPlayer):
         # print self.count_bp, "back_propagate", [c.move for _, c, _ in path if c], scores
         self.count_bp += 1
 
-        for node, c, exploitation in reversed(path):
+        for depth, node, c, _ in reversed(path):
             for i, s in enumerate(scores):
                 node.mcts_score[i] = (node.mcts_visits * node.mcts_score[i] + s) / float(node.mcts_visits + 1)
 
             node.mcts_visits += 1
 
-            if self.EXPERIMENTAL_SEEDED_MINIMAX:
-                # seeding as per sancho
-                if not node.is_terminal and node.mcts_visits < self.EXPERIMENTAL_SEEDED_MINIMAX:
-                    scores = scores[:]
-                    for i, s in enumerate(node.final_scores):
-                        scores[i] = 0.8 * s + 0.2 * scores[i]
 
     def select_child(self, node, depth):
         # get best
@@ -296,6 +289,8 @@ class NNMonteCarlo(MatchPlayer):
         dirichlet_noise = None
         if self.DIRICHLET_NOISE_ALPHA > 0:
             dirichlet_noise = np.random.dirichlet((self.DIRICHLET_NOISE_ALPHA, 1.0), len(node.children))
+
+        cpuct_constant = self.DEPTH_0_CPUCT_CONSTANT if depth == 0 else self.CPUCT_CONSTANT
 
         for idx, child in enumerate(node.children):
             cn = child.to_node
@@ -315,12 +310,9 @@ class NNMonteCarlo(MatchPlayer):
                 noise_pct = 0.25
                 child_pct = (1 - noise_pct) * child_pct + noise_pct * dirichlet_noise[idx][0]
 
-            if self.EXPERIMENTAL_SHARPEN:
-                dull = len(node.children) / 4.0
-            else:
-                dull = 1
+            v = node.mcts_visits - child_visits
 
-            puct_score = self.CPUCT_CONSTANT * child_pct * math.sqrt(node.mcts_visits) / (dull * child_visits + 1)
+            puct_score = cpuct_constant * child_pct * math.sqrt(v) / (child_visits + 1)
             score = node_score + puct_score
 
             # use for debug/display
@@ -346,7 +338,7 @@ class NNMonteCarlo(MatchPlayer):
         scores = None
         while True:
             child, exploitation = self.select_child(current, depth)
-            path.append((current, child, exploitation))
+            path.append((depth, current, child, exploitation))
 
             if child.to_node is None:
                 self.expand_child(child)
@@ -358,17 +350,17 @@ class NNMonteCarlo(MatchPlayer):
                     scores = [s for s in child.to_node.final_scores]
 
                 else:
-                    scores = [s / 100.0 for s in child.to_node.terminal_scores]
+                    scores = [s / 99.0 for s in child.to_node.terminal_scores]
 
-                path.append((child.to_node, None, True))
+                path.append((depth + 1, child.to_node, None, True))
                 break
 
             current = child.to_node
 
             # already expanded terminal
             if current.is_terminal:
-                path.append((child.to_node, None, True))
-                scores = [s / 100.0 for s in child.to_node.terminal_scores]
+                path.append((depth + 1, child.to_node, None, True))
+                scores = [s / 99.0 for s in child.to_node.terminal_scores]
                 break
 
             depth += 1
@@ -443,10 +435,12 @@ class NNMonteCarlo(MatchPlayer):
 
         start_time = time.time()
         iterations = 0
+
         while True:
-            if time.time() + 1 > finish_time:
+            if time.time() > finish_time:
                 print "RAN OUT OF TIME"
                 break
+
             self.playout(self.root)
             iterations += 1
 
@@ -490,10 +484,9 @@ class NNMonteCarlo(MatchPlayer):
 
 ###############################################################################
 
-class NNMonteCarloSeedMM(NNMonteCarlo):
-    player_name = "MCSeeded"
-    EXPERIMENTAL_SEEDED_MINIMAX = 42
-    CPUCT_CONSTANT = 3.0
+class NNMonteCarloTest(NNMonteCarlo):
+    player_name = "test"
+
 
 def main():
     import sys
@@ -511,7 +504,7 @@ def main():
     log.initialise()
 
     if len(sys.argv) > 3 and sys.argv[3] == "-t":
-        player = NNMonteCarloSeedMM(generation)
+        player = NNMonteCarloTest(generation)
     else:
         player = NNMonteCarlo(generation)
 
