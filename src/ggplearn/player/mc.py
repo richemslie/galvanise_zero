@@ -123,14 +123,15 @@ models_path = os.path.join(os.environ["GGPLEARN_PATH"], "src", "ggplearn", "mode
 class NNMonteCarlo(MatchPlayer):
     player_name = "MC"
 
-    NUM_OF_PLAYOUTS_PER_ITERATION = 60
-    NUM_OF_PLAYOUTS_PER_ITERATION_NOOP = 1
+    NUM_OF_PLAYOUTS_PER_ITERATION = -1
+    NUM_OF_PLAYOUTS_PER_ITERATION_NOOP = -1
 
     CPUCT_CONSTANT = 0.75
     DEPTH_0_CPUCT_CONSTANT = 1.0
 
     # only added to child policy pct (less than 0 is off)
     DIRICHLET_NOISE_ALPHA = 0.01
+    DIRICHLET_NOISE_PCT = 0.25
 
     def __init__(self, generation):
         identifier = "%s_%s_%s" % (self.player_name, self.NUM_OF_PLAYOUTS_PER_ITERATION, generation)
@@ -307,7 +308,7 @@ class NNMonteCarlo(MatchPlayer):
 
             child_pct = child.p_visits_pct
             if self.DIRICHLET_NOISE_ALPHA > 0:
-                noise_pct = 0.25
+                noise_pct = self.DIRICHLET_NOISE_PCT
                 child_pct = (1 - noise_pct) * child_pct + noise_pct * dirichlet_noise[idx][0]
 
             v = node.mcts_visits - child_visits
@@ -398,7 +399,7 @@ class NNMonteCarlo(MatchPlayer):
                 return total
 
             if VERBOSE:
-                print "NEW ROOT:", new_root, visit_count(new_root)
+                print "ROOT FOUND:", new_root, visit_count(new_root)
 
     def dump_node(self, node, indent=0):
         indent_str = " " * indent
@@ -486,6 +487,9 @@ class NNMonteCarlo(MatchPlayer):
 
 class NNMonteCarloTest(NNMonteCarlo):
     player_name = "test"
+
+    CPUCT_CONSTANT = 1.0
+    DEPTH_0_CPUCT_CONSTANT = 1.5
 
 
 def main():

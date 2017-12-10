@@ -64,13 +64,14 @@ def gather_new_data(path, game, generation, all_states):
 
 def main(path):
     GAME = "breakthrough"
-    GENERATIONS_SO_FAR = 7
+    GENERATIONS_SO_FAR = 9
     ALL_GENERATIONS = ["gen%d" % i for i in range(GENERATIONS_SO_FAR)]
 
     # think i've been trying to get to this variable name: :)
     NEXT_GENERATION = "gen%d" % GENERATIONS_SO_FAR
 
-    MAX_SAMPLE_COUNT = 150000
+    # NOTE: so far it seems to best with all the data
+    MAX_SAMPLE_COUNT = 250000
     VALIDATION_SPLIT = 0.8
 
     log_name_base = "parsex__%s_" % GAME
@@ -95,7 +96,7 @@ def main(path):
             state = tuple(s["state"])
             policy_dist = s["policy_dist"]
 
-            # XXX fekked that up I think... will fix for next gen
+            # XXX I got these reversed... will fix for next time around
             final_scores = s["best_scores"]
 
             training_data.append(Sample(state, policy_dist, final_scores))
@@ -105,7 +106,7 @@ def main(path):
             state = tuple(s["state"])
             policy_dist = s["policy_dist"]
 
-            # XXX fekked that up I think... will fix for next gen
+            # XXX I got these reversed... will fix for next time around
             final_scores = s["best_scores"]
 
             validation_data.append(Sample(state, policy_dist, final_scores))
@@ -132,7 +133,7 @@ def main(path):
         validation_data += new_validation_data
 
 
-    if MAX_SAMPLE_COUNT and training_data + validation_data > MAX_SAMPLE_COUNT:
+    if MAX_SAMPLE_COUNT and len(training_data) + len(validation_data) > MAX_SAMPLE_COUNT:
         print "#training_data", len(training_data)
         print "#validation_data", len(validation_data)
         print
