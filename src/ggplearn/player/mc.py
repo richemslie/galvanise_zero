@@ -35,7 +35,7 @@ class Child(object):
             ri = self.parent.lead_role_index
             final_scores = n.final_scores[ri] or 0.0
             if n.is_terminal:
-                final_scores = n.terminal_scores[ri] / 99.0
+                final_scores = n.terminal_scores[ri] / 95.0
 
             return "%s %.2f%%   %.2f %s" % (self.move,
                                             self.p_visits_pct * 100,
@@ -123,7 +123,7 @@ models_path = os.path.join(os.environ["GGPLEARN_PATH"], "src", "ggplearn", "mode
 class NNMonteCarlo(MatchPlayer):
     player_name = "MC"
 
-    NUM_OF_PLAYOUTS_PER_ITERATION = 250
+    NUM_OF_PLAYOUTS_PER_ITERATION = 60
     NUM_OF_PLAYOUTS_PER_ITERATION_NOOP = 1
 
     CPUCT_CONSTANT = 0.75
@@ -350,7 +350,7 @@ class NNMonteCarlo(MatchPlayer):
                     scores = [s for s in child.to_node.final_scores]
 
                 else:
-                    scores = [s / 99.0 for s in child.to_node.terminal_scores]
+                    scores = [s / 95.0 for s in child.to_node.terminal_scores]
 
                 path.append((depth + 1, child.to_node, None, True))
                 break
@@ -360,7 +360,7 @@ class NNMonteCarlo(MatchPlayer):
             # already expanded terminal
             if current.is_terminal:
                 path.append((depth + 1, child.to_node, None, True))
-                scores = [s / 99.0 for s in child.to_node.terminal_scores]
+                scores = [s / 95.0 for s in child.to_node.terminal_scores]
                 break
 
             depth += 1
