@@ -1,12 +1,22 @@
 import sys
 from os.path import join as joinpath
 
+import numpy as np
 from ggplib.util import log
 from ggplib import interface
 
-from ggplearn.crunch import get_from_json, Sample, TrainerBase
+from ggplearn.crunch import get_from_json, Sample, SampleToNetwork
 
 DEBUG = False
+
+
+def shuffle_list(a_list):
+    # shuffle data
+    shuffle = np.arange(len(a_list))
+    np.random.shuffle(shuffle)
+
+    return [a_list[i] for i in shuffle]
+
 
 def gather_new_data(path, game, generation, all_states):
     print "------"
@@ -37,13 +47,13 @@ def gather_new_data(path, game, generation, all_states):
         num_samples = game_data["num_samples"]
         assert num_samples == len(game_data["samples"])
 
-        for s in game_data["samples"]:
-            state = tuple(s["state"])
-            policy_dist = [(d["legal"], d["new_prob"]) for d in s["policy_dists"]]
-            final_scores = [s["final_scores"][r] / 100.0 for r in "white black".split()]
+        for s_desc in game_data["samples"]:
+            state = tuple(s_desc["state"])
+            policy_dist = [(d["legal"], d["new_prob"]) for d in s_desc["policy_dists"]]
+            final_scores = [s_desc["final_scores"][r] / 100.0 for r in "white black".split()]
 
             if DEBUG and len(new_data) < 3:
-                print s
+                print s_desc
                 print state
                 print policy_dist
                 print final_scores
@@ -56,90 +66,138 @@ def gather_new_data(path, game, generation, all_states):
             all_states.add(state)
 
     if bad_files:
-        PDB
+        assert False, "basically start debugger"
 
     print "DUPES", dupes
     return new_data
 
 
-def main(path):
+class ParseConfig(object):
     GAME = "breakthrough"
     GENERATIONS_SO_FAR = 9
-    ALL_GENERATIONS = ["gen%d" % i for i in range(GENERATIONS_SO_FAR)]
 
-    # think i've been trying to get to this variable name: :)
-    NEXT_GENERATION = "gen%d" % GENERATIONS_SO_FAR
+    TINY_NETWORK = False
+    SMALL_NETWORK = True
+    A0_L2_REG = False
 
     # NOTE: so far it seems to best with all the data
-    MAX_SAMPLE_COUNT = 250000
+    MAX_SAMPLE_COUNT = 200000
     VALIDATION_SPLIT = 0.8
 
-    log_name_base = "parsex__%s_" % GAME
+    BATCH_SIZE = 512
+    EPOCHS = 42
+
+
+def main(path):
+    conf = ParseConfig()
+
+    assert int(conf.TINY_NETWORK) + (conf.SMALL_NETWORK) <= 1
+
+    # think i've been trying to get to this variable name: :)
+    next_generation = "gen%d" % conf.GENERATIONS_SO_FAR
+    if conf.TINY_NETWORK:
+        next_generation += "_tiny"
+
+    elif conf.SMALL_NETWORK:
+        next_generation += "_small"
+
+    if conf.A0_L2_REG:
+        next_generation += "_reg"
+
+    log_name_base = "parsex__%s_" % conf.GAME
     interface.initialise_k273(1, log_name_base=log_name_base)
     log.initialise()
+
+    stn = SampleToNetwork(conf.GAME, next_generation)
+    if conf.A0_L2_REG:
+        net = stn.create_network(small=conf.SMALL_NETWORK,
+                                 tiny=conf.TINY_NETWORK,
+                                 a0_reg=True, dropout=False)
+    else:
+        net = stn.create_network(small=conf.SMALL_NETWORK,
+                                 tiny=conf.TINY_NETWORK)
+
+    net.summary()
+
+    # start gathering data:
 
     training_data = []
     validation_data = []
 
-    for game_data, _ in get_from_json(path, includes=[GAME, "initial"], excludes=["samples"]):
-        assert game_data["game"] == GAME
+    # deprecated XXXX
+    # for game_data, _ in get_from_json(path, includes=[GAME, "initial"], excludes=["samples"]):
+    #     assert game_data["game"] == GAME
 
-        num_samples = game_data["num_samples"]
-        samples = game_data["samples"]
+    #     num_samples = game_data["num_samples"]
+    #     samples = game_data["samples"]
 
-        assert num_samples == len(samples)
-        assert game_data["num_training_samples"] + game_data["num_validation_samples"] == num_samples
+    #     assert num_samples == len(samples)
+    #     assert game_data["num_training_samples"] + game_data["num_validation_samples"] == num_samples
 
-        for i in range(game_data["num_training_samples"]):
-            s = samples[i]
+    #     for i in range(game_data["num_training_samples"]):
+    #         s = samples[i]
 
-            state = tuple(s["state"])
-            policy_dist = s["policy_dist"]
+    #         state = tuple(s["state"])
+    #         policy_dist = s["policy_dist"]
 
-            # XXX I got these reversed... will fix for next time around
-            final_scores = s["best_scores"]
+    #         # XXX I got these reversed... will fix for next time around
+    #         final_scores = s["best_scores"]
 
-            training_data.append(Sample(state, policy_dist, final_scores))
+    #         training_data.append(Sample(state, policy_dist, final_scores))
 
-        for i in range(game_data["num_validation_samples"]):
-            s = samples[i]
-            state = tuple(s["state"])
-            policy_dist = s["policy_dist"]
+    #     for i in range(game_data["num_validation_samples"]):
+    #         s = samples[i]
+    #         state = tuple(s["state"])
+    #         policy_dist = s["policy_dist"]
 
-            # XXX I got these reversed... will fix for next time around
-            final_scores = s["best_scores"]
+    #         # XXX I got these reversed... will fix for next time around
+    #         final_scores = s["best_scores"]
 
-            validation_data.append(Sample(state, policy_dist, final_scores))
+    #         validation_data.append(Sample(state, policy_dist, final_scores))
 
-    print "#training_data", len(training_data)
-    print "#validation_data", len(validation_data)
-    print
+    # print "#training_data", len(training_data)
+    # print "#validation_data", len(validation_data)
+    # print
 
-
-    all_states = set()
-    for gen in ALL_GENERATIONS:
-        generation_data = gather_new_data(path, GAME, gen, all_states)
-
-        split_index = int(len(generation_data) * VALIDATION_SPLIT)
-        new_training_data = generation_data[:split_index]
-        new_validation_data = generation_data[split_index:]
-
+    training_data = []
+    validation_data = []
+    validation_set = {}
+    all_generations = ["gen%d" % i for i in range(conf.GENERATIONS_SO_FAR)]
+    for gen in all_generations:
+        generation_data = gather_new_data(path, conf.GAME, gen, set())
         print "generation '%s' data : %d" % (gen, len(generation_data))
-        print "#training new data : %d" % len(new_training_data)
-        print "#validation new data : %d" % len(new_validation_data)
+
+        validation_count = int(len(generation_data) * (1 - conf.VALIDATION_SPLIT))
+
+        count_v, count_t = 0, 0
+        for s in generation_data:
+            if s.state in validation_set:
+                count_t += 1
+                training_data.append(s)
+                continue
+
+            if count_v == validation_count:
+                count_t += 1
+                training_data.append(s)
+                continue
+
+            validation_set[s.state] = s
+            count_v += 1
+
+        print "#training_data", count_t
+        print "#validation_data", count_v
         print
 
-        training_data += new_training_data
-        validation_data += new_validation_data
+    validation_data += validation_set.values()
 
-
-    if MAX_SAMPLE_COUNT and len(training_data) + len(validation_data) > MAX_SAMPLE_COUNT:
+    if (conf.MAX_SAMPLE_COUNT and
+        len(training_data) + len(validation_data) > conf.MAX_SAMPLE_COUNT):
         print "#training_data", len(training_data)
         print "#validation_data", len(validation_data)
         print
 
-        max_number_training_data = int(MAX_SAMPLE_COUNT * VALIDATION_SPLIT)
-        max_number_validation_data = MAX_SAMPLE_COUNT - max_number_training_data
+        max_number_training_data = int(conf.MAX_SAMPLE_COUNT * conf.VALIDATION_SPLIT)
+        max_number_validation_data = conf.MAX_SAMPLE_COUNT - max_number_training_data
 
         start_train = len(training_data) - max_number_training_data
         start_validation = len(validation_data) - max_number_validation_data
@@ -152,11 +210,14 @@ def main(path):
     print "# final validation_data", len(validation_data)
     print
 
-    tb = TrainerBase(GAME, NEXT_GENERATION)
-    tb.nn_summary()
-    tb.massage_data(training_data, validation_data)
-    tb.train()
-    tb.save()
+    shuffle_list(training_data)
+    shuffle_list(validation_data)
+
+    train_data = stn.massage_data(training_data, validation_data)
+
+    # yippee
+    net.train(train_data, batch_size=conf.BATCH_SIZE, epochs=conf.EPOCHS)
+    net.save()
 
 
 def main_wrap():

@@ -23,21 +23,21 @@ def get_from_json(path, includes=None, excludes=None):
     includes = includes or []
     excludes = excludes or []
     files = os.listdir(path)
-    for f in files:
-        if not f.endswith(".json"):
+    for the_file in files:
+        if not the_file.endswith(".json"):
             continue
 
-        if len([n for n in includes if n not in f]):
+        if len([ii for ii in includes if ii not in the_file]):
             continue
 
-        if len([n for n in excludes if n in f]):
+        if len([ii for ii in excludes if ii in the_file]):
             continue
 
-        for n in excludes:
-            if n in f:
+        for ii in excludes:
+            if ii in the_file:
                 continue
 
-        filename = os.path.join(path, f)
+        filename = os.path.join(path, the_file)
         buf = open(filename).read()
         yield json.loads(buf), filename
 
@@ -64,7 +64,7 @@ class Sample(object):
         self.generation = ""
         self.lead_role_index = -1
 
-    def policy_as_array(self, base_infos, sm_model):
+    def ensure_lead_role_index_set(self, base_infos):
         # XXX tmp - breakthrough specific
         if self.lead_role_index == -1:
             for idx, binfo in enumerate(base_infos):
@@ -77,8 +77,9 @@ class Sample(object):
                     else:
                         assert binfo.terms[1] == "black"
                         self.lead_role_index = 1
-
         assert self.lead_role_index >= 0
+
+    def policy_as_array(self, sm_model):
         index_start = 0 if self.lead_role_index == 0 else len(sm_model.actions[0])
         expected_actions_len = sum(len(actions) for actions in sm_model.actions)
         policy_outputs = np.zeros(expected_actions_len)
@@ -87,20 +88,17 @@ class Sample(object):
         return policy_outputs
 
     def to_desc(self):
-        d = OrderedDict()
-        d["state"] = self.state
-        d["depth"] = self.depth
-        d["generation"] = self.generation
-        d["lead_role_index"] = self.lead_role_index
-        d["policy_dist"] = self.policy_dist
-        d["final_scores"] = self.final_scores
-        return d
+        desc = OrderedDict()
+        desc["state"] = self.state
+        desc["depth"] = self.depth
+        desc["generation"] = self.generation
+        desc["lead_role_index"] = self.lead_role_index
+        desc["policy_dist"] = self.policy_dist
+        desc["final_scores"] = self.final_scores
+        return desc
 
 
-class TrainerBase(object):
-    BATCH_SIZE = 128
-    EPOCHS = 24
-
+class SampleToNetwork(object):
     def __init__(self, game_name, generation):
         self.game_name = game_name
         self.generation = generation
@@ -109,40 +107,33 @@ class TrainerBase(object):
         self.game_info = lookup.by_name(game_name)
 
         # the bases config (XXX idea is not to use hard coded stuff)
-        self.nn_config = net_config.get_bases_config(game_name)
-
-        # update the base_infos and config
-        self.base_infos = net_config.create_base_infos(self.nn_config,
-                                                       self.game_info.model)
-
-        self.number_of_outputs = sum(len(l) for l in self.game_info.model.actions)
-
-        # keras model
-        self.nn_model = net.get_network_model(self.nn_config,
-                                              self.number_of_outputs)
+        self.base_config = net_config.get_bases_config(game_name,
+                                                       self.game_info.model,
+                                                       self.generation)
 
         self.training_inputs, self.training_outputs = [], []
         self.training_inputs, self.training_outputs = [], []
+
+    def create_network(self, **kwds):
+        return self.base_config.create_network(**kwds)
 
     def sample_to_nn_style(self, sample, data):
         # transform samples -> numpy arrays as inputs/outputs to nn
 
+        sample.ensure_lead_role_index_set(self.base_config.base_infos)
+
         # input 1
-        x = net_config.state_to_channels(sample.state,
-                                         sample.lead_role_index,
-                                         self.nn_config,
-                                         self.base_infos)
+        planes = self.base_config.state_to_channels(sample.state, sample.lead_role_index)
+
         # input - planes
-        data[0].append(x)
+        data[0].append(planes)
 
         # input - non planes
-        x = [v for v, base_info in zip(sample.state, self.base_infos)
-             if base_info.channel is None]
-        data[1].append(x)
+        non_planes = self.base_config.get_non_cord_input(sample.state)
+        data[1].append(non_planes)
 
         # output - policy
-        data[2].append(sample.policy_as_array(self.base_infos,
-                                              self.game_info.model))
+        data[2].append(sample.policy_as_array(self.game_info.model))
 
         # output - best/final scores
         data[3].append(sample.final_scores)
@@ -157,48 +148,19 @@ class TrainerBase(object):
         for sample in validation_samples:
             self.sample_to_nn_style(sample, validation_data)
 
-        for i, data in enumerate(training_data):
-            a = np.array(data)
-            a.astype('float32')
-            training_data[i] = a
-            log.debug("Shape of training data %d: %s" % (i, a.shape))
+        for ii, data in enumerate(training_data):
+            arr = np.array(data)
+            arr.astype('float32')
+            training_data[ii] = arr
+            log.debug("Shape of training data %d: %s" % (ii, arr.shape))
 
-        for i, data in enumerate(validation_data):
-            a = np.array(data)
-            a.astype('float32')
-            validation_data[i] = a
-            log.debug("Shape of validation data %d: %s" % (i, a.shape))
+        for ii, data in enumerate(validation_data):
+            arr = np.array(data)
+            arr.astype('float32')
+            validation_data[ii] = arr
+            log.debug("Shape of validation data %d: %s" % (ii, arr.shape))
 
-        self.training_inputs = training_data[:2]
-        self.training_outputs = training_data[2:]
-
-        self.validation_inputs = validation_data[:2]
-        self.validation_outputs = validation_data[2:]
-
-    def nn_summary(self):
-        ' log keras nn summary '
-
-        # one way to get print_summary to output string!
-        lines = []
-        self.nn_model.summary(print_fn=lines.append)
-        for l in lines:
-            log.verbose(l)
-
-    def train(self):
-        self.nn_model.fit(self.training_inputs,
-                          self.training_outputs,
-                          verbose=0,
-                          batch_size=self.BATCH_SIZE,
-                          epochs=self.EPOCHS,
-                          validation_data=[self.validation_inputs, self.validation_outputs],
-                          callbacks=[net.MyProgbarLogger(), net.MyCallback()],
-                          shuffle=True)
-
-    def save(self):
-        # save model / weights
-        with open("models/model_nn_%s_%s.json" % (self.game_name, self.generation), "w") as f:
-            f.write(self.nn_model.to_json())
-
-        self.nn_model.save_weights("models/weights_nn_%s_%s.h5" % (self.game_name,
-                                                                   self.generation),
-                                   overwrite=True)
+        return net.TrainData(inputs=training_data[:2],
+                             outputs=training_data[2:],
+                             validation_inputs=validation_data[:2],
+                             validation_outputs=validation_data[2:])

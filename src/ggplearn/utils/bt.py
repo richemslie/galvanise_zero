@@ -1,9 +1,10 @@
 from ggplib.symbols import SymbolFactory
 
+
 def pretty_print_board(sm, state):
     lines = []
-    for i,v in enumerate(state):
-        if v:
+    for i, value in enumerate(state):
+        if value:
             lines.append(sm.get_gdl(i))
 
     sf = SymbolFactory()
@@ -22,19 +23,19 @@ def pretty_print_board(sm, state):
     line_len = 8 * 4 + 1
     lines.append("-" * line_len)
     for i in range(1, 9):
-        l = ["|"]
+        ll = ["|"]
         for j in range(1, 9):
             key = j, i
             if key in mapping:
                 if mapping[key] == "black":
-                    l.append(" b |")
+                    ll.append(" b |")
                 else:
                     assert mapping[key] == "white"
-                    l.append(" w |")
+                    ll.append(" w |")
             else:
-                l.append("   |")
+                ll.append("   |")
 
-        lines.append("".join(l))
+        lines.append("".join(ll))
         lines.append("-" * line_len)
     print "CONTROL", control
     print "\n".join(lines)

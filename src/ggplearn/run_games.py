@@ -1,3 +1,5 @@
+''' XXX deprecated - marked for deletion '''
+
 import os
 import math
 import random
@@ -69,12 +71,12 @@ class MCSPlayer2(MCSPlayer):
         candidates = []
         # ok - now we dump everything for debug, and return the best score
         for stat in sorted(self.root.values(), key=lambda x: x.get(self.match.our_role_index), reverse=True):
-            d = OrderedDict()
-            d['choice'] = stat.choice
-            d['move'] = stat.move
-            d['visits'] = stat.visits
-            d['score'] = stat.get(self.match.our_role_index)
-            candidates.append(d)
+            cand = OrderedDict()
+            cand['choice'] = stat.choice
+            cand['move'] = stat.move
+            cand['visits'] = stat.visits
+            cand['score'] = stat.get(self.match.our_role_index)
+            candidates.append(cand)
 
         return json.dumps(dict(candidates=candidates), indent=4)
 
@@ -111,8 +113,8 @@ def run_game(game_name):
         for player, role in gm.players:
             info = json.loads(player.before_apply_info())
             actions = []
-            for c in info["candidates"]:
-                actions.append([c['choice'], c['score'], c['visits']])
+            for cand in info["candidates"]:
+                actions.append([cand['choice'], cand['score'], cand['visits']])
             candidates[role] = actions
 
         depth += 1
@@ -129,7 +131,7 @@ def main(game_name):
     from ggplib import interface
     interface.initialise_k273(1)
 
-    # XXX reduce log 
+    # no logging initialised
     # import ggplib.util.log
     # ggplib.util.log.initialise()
 
@@ -141,10 +143,12 @@ def main(game_name):
     game_name = sys.argv[1]
     while True:
         games = []
-        for i in range(25):
+        for _ in range(25):
             games.append(run_game(game_name))
 
-        fd, path = tempfile.mkstemp(suffix='.json', prefix="mcs_%s_" % game_name, dir=".")
+        fd, _ = tempfile.mkstemp(suffix='.json',
+                                 prefix="mcs_%s_" % game_name,
+                                 dir=".")
 
         with os.fdopen(fd, 'w') as open_file:
             open_file.write(json.dumps(games))
@@ -160,6 +164,6 @@ if __name__ == "__main__":
 
     except Exception as exc:
         print exc
-        type, value, tb = sys.exc_info()
+        _, _, trace_back_for_pdb = sys.exc_info()
         traceback.print_exc()
-        pdb.post_mortem(tb)
+        pdb.post_mortem(trace_back_for_pdb)

@@ -1,4 +1,5 @@
-" XXX THIS NEEDS UPDATED.. XXX "
+"""
+XXX THIS NEEDS UPDATED... to the point it is soon to be deprecated and deleted XXX"""""
 
 import os
 import sys
@@ -19,10 +20,11 @@ from ggplearn import net_config
 
 json.encoder.FLOAT_REPR = lambda f: ("%.4f" % f)
 
+
 ###############################################################################
 # hyperparameters
 
-class TrainConfig:
+class TrainConfig(object):
     BATCH_SIZE = 128
     EPOCHS = 24
     VALIDATION_SPLIT = 0.2
@@ -30,6 +32,7 @@ class TrainConfig:
     DROP_MOVES_FROM_START_PCT = 0.9
     DROP_MOVES_AFTER_START_PCT = 0.6
     SAVE_DATA_BEFORE_TRAIN = True
+
 
 ###############################################################################
 
@@ -150,6 +153,7 @@ class Game:
 
         return actions, best_score, lead_role_index, cand_probs
 
+
 ###############################################################################
 
 def shuffle(*arrays):
@@ -165,6 +169,7 @@ def shuffle(*arrays):
         arrays[i] = arrays[i][shuffle]
 
     return arrays
+
 
 def training_data(data_path, base_infos, sm_model, config):
     games_processed = 0
@@ -318,7 +323,6 @@ def build_and_train_nn(data_path, game_name, postfix):
     my_cb = net.MyCallback()
     progbar = net.MyProgbarLogger()
 
-
     nn_model.fit(training_inputs, training_outputs,
                  verbose=0,
                  batch_size=TrainConfig.BATCH_SIZE,
@@ -331,6 +335,7 @@ def build_and_train_nn(data_path, game_name, postfix):
         f.write(nn_model.to_json())
 
     nn_model.save_weights("weights_nn_%s_%s.h5" % (game_name, postfix), overwrite=True)
+
 
 ###############################################################################
 
@@ -355,6 +360,7 @@ def main_wrap():
         type, value, tb = sys.exc_info()
         traceback.print_exc()
         pdb.post_mortem(tb)
+
 
 ###############################################################################
 

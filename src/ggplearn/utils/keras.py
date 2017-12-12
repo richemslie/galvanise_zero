@@ -1,5 +1,6 @@
 from __future__ import absolute_import
 
+
 def use_one_cpu_please():
     # this doesn't strictly use just one cpu... but seems it is the best one can do
     import tensorflow as tf

@@ -208,6 +208,7 @@ def main(game_name):
         runner.generate_samples(num_samples)
         runner.write_to_file()
 
+
 if __name__ == "__main__":
     import pdb
     import sys

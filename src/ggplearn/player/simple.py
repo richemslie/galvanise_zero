@@ -126,6 +126,7 @@ class NNPlayerOneShot(MatchPlayer):
 
         return ls.get_legal(0)
 
+
 ###############################################################################
 
 def main():
