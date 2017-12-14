@@ -7,8 +7,8 @@ def setup():
     from ggplib.util.init import setup_once
     setup_once()
 
-    from ggplearn.utils.keras import use_one_cpu_please
-    use_one_cpu_please()
+    from ggplearn.utils.keras import constrain_resources
+    constrain_resources()
 
     lookup.get_database()
 
@@ -92,3 +92,16 @@ def test_net_sizes_with_l2():
         print "tiny"
         nn = bases_config.create_network(tiny=True, a0_reg=True)
         nn.summary()
+
+def test_save_load_net():
+    game_info = lookup.by_name("breakthrough")
+
+    bases_config = net_config.get_bases_config(game_info.game,
+                                               game_info.model,
+                                               "test")
+    nn = bases_config.create_network(tiny=True)
+    nn.summary()
+
+    nn.save()
+    nn.load()
+    nn.save()

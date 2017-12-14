@@ -16,10 +16,6 @@
 
 bin/install
 
-*.json
-*.h5
-
 # spurious stuff in my repo XXX
 src/scripts
-src/ggplearn/data
-src/ggplearn/gather
+data

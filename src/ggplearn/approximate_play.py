@@ -15,6 +15,7 @@ All stages use monte carlo player.
 
 
 import os
+import time
 import random
 import tempfile
 
@@ -28,37 +29,50 @@ from ggplib.db.helper import get_gdl_for_game
 
 from ggplearn.player import mc
 
-# XXX monkey patch (cause I will likely forget to turn it off)
-mc.VERBOSE = False
 
-models_path = os.path.join(os.environ["GGPLEARN_PATH"], "src", "ggplearn", "models")
+class RunnerConf(Object):
+    game_name = "breakthrough"
+    policy_generation = "gen9_small"
+    score_generation = "gen9_tiny"
+    score_puct_player_conf = mc.PUCTPlayerConf()
+    policy_puct_player_conf = mc.PUCTPlayerConf()
 
 
 class Runner(object):
-    def __init__(self, game_name, with_generation):
-        self.game_name = game_name
-        self.with_generation = with_generation
+    def __init__(self, conf=None):
+        if conf is None:
+            conf = RunnerConf()
+        self.conf = conf
 
-        self.gm = GameMaster(get_gdl_for_game(game_name))
+        self.gm = GameMaster(get_gdl_for_game(self.confgame_name))
 
         for role in self.gm.sm.get_roles():
-            player = mc.NNMonteCarlo(with_generation)
+            player = mc.PUCTPlayer(self.conf.score_generation,
+                                   self.conf.score_puct_player_conf)
             self.gm.add_player(player, role)
+
+            c = self.conf.score_puct_player_conf
+            c.NUM_OF_PLAYOUTS_PER_ITERATION = 100
+            c.NUM_OF_PLAYOUTS_PER_ITERATION_NOOP = 1
+            c.VERBOSE = False
+
+        for role in self.gm_policy.sm.get_roles():
+            player = mc.PUCTPlayer(self.conf.policy_generation,
+                                   self.conf.policy_puct_player_conf)
+            self.gm.add_player(player, role)
+
+            c = self.conf.policy_puct_player_conf
+            c.NUM_OF_PLAYOUTS_PER_ITERATION = 400
+            c.NUM_OF_PLAYOUTS_PER_ITERATION_NOOP = 1
+            c.VERBOSE = False
 
         self.basestate = self.gm.sm.new_base_state()
 
     def get_bases(self):
         self.gm.sm.get_current_state(self.basestate)
-        return [self.basestate.get(i) for i in range(self.basestate.len())]
+        return self.basestate.to_list()
 
     def play_one_game(self):
-        for player, _ in self.gm.players:
-            player.NUM_OF_PLAYOUTS_PER_ITERATION = 42
-            player.NUM_OF_PLAYOUTS_PER_ITERATION_NOOP = 1
-            player.CPUCT_CONSTANT = 0.75
-            player.DEPTH_0_CPUCT_CONSTANT = 1.0
-            player.DIRICHLET_NOISE_ALPHA = 0.05
-
         self.gm.reset()
 
         self.gm.start(meta_time=30, move_time=5)
@@ -70,22 +84,19 @@ class Runner(object):
             last_move = self.gm.play_single_move(last_move=last_move)
             states.append(self.get_bases())
 
+        # pop the final state, as we don't want terminal states
+        states.pop()
+
+        # cleanup
         self.gm.play_to_end(last_move)
-        return states
+        return states, self.gm.scores
 
     def do_policy(self, state):
-        for player, _ in self.gm.players:
-            player.NUM_OF_PLAYOUTS_PER_ITERATION = 800
-            player.NUM_OF_PLAYOUTS_PER_ITERATION_NOOP = 1
-            player.CPUCT_CONSTANT = 0.75
-            player.DEPTH_0_CPUCT_CONSTANT = 1.0
-            player.DIRICHLET_NOISE_ALPHA = -1
-
         for i, v in enumerate(state):
             self.basestate.set(i, v)
 
         self.gm.reset()
-        self.gm.start(meta_time=30, move_time=30, initial_basestate=self.basestate)
+        self.gm.start(meta_time=30, move_time=10, initial_basestate=self.basestate)
 
         # self.last_move used in playout_state
         self.last_move = self.gm.play_single_move(None)
@@ -97,128 +108,45 @@ class Runner(object):
             root = self.gm.players[0][0].root
 
         children = root.sorted_children()
+        total_visits = float(sum(child.visits() for child in children))
+        return [(c.legal, c.visits() / total_visits)
+                for c in children]
 
-        def get_visits(c):
-            if c.to_node is None:
-                return 1.0
-            else:
-                return (c.to_node.mcts_visits + 1)
+    def mk_sample_desc(self, states, policy, final_score):
+        sample_desc = OrderedDict()
+        sample_desc["state"] = list(state)
+        sample_desc["final_score"] = final_score
 
-        total_visits = 1.0
-        for child in children:
-            total_visits += get_visits(child)
+        l = sample["policy_distribution"] = []
+        for legal, move_str, prob in policy_dist:
+            d = OrderedDict()
+            d["legal"] = int(legal)
+            d["probability"] = float(new_p)
+            l.append(d)
 
-        dist = [(c.legal,
-                 c.move,
-                 get_visits(c) / total_visits,
-                 c.p_visits_pct) for c in children]
+        return sample_desc
 
-        # XXX add temperature...
+    def generate_sample(self):
+        states, final_score = self.play_one_game()
 
-        return dist
+        # we don't sample last state as has no policy
+        random.shuffle(states)
 
-    def playout_state(self):
-        for player, _ in self.gm.players:
-            player.NUM_OF_PLAYOUTS_PER_ITERATION = 64
-            player.NUM_OF_PLAYOUTS_PER_ITERATION_NOOP = 1
-            player.CPUCT_CONSTANT = 0.75
-            player.DEPTH_0_CPUCT_CONSTANT = 1.0
-            player.DIRICHLET_NOISE_ALPHA = -1
+        while states:
+            state = tuple(states.pop())
 
-        # self.last_move was set in do_policy()
-        self.gm.play_to_end(self.last_move)
-        return self.gm.scores
+            if tuple(s) in self.unique_samples:
+                continue
 
-    def generate_samples(self, number_samples):
-        NUMBER_OF_SAMPLES_PER_GAME = 10
-        self.unique_samples = {}
-        while len(self.unique_samples) < number_samples:
-            states = self.play_one_game()
+            policy_dist = self.do_policy(state)
+            retun self.mk_sample_desc(states, policy, final_score)
 
-            # we don't sample first or last state
-            samples = random.sample(states[1:-1], NUMBER_OF_SAMPLES_PER_GAME)
-
-            # one sample per game
-            for s in samples:
-                s = tuple(s)
-                if tuple(s) in self.unique_samples:
-                    continue
-
-                policy_dist = self.do_policy(s)
-                final_scores = self.playout_state()
-                self.unique_samples[s] = (final_scores, policy_dist)
-                break
-
-    def write_to_file(self):
-        json.encoder.FLOAT_REPR = lambda f: ("%.4f" % f)
-
-        data = OrderedDict()
-        data["game"] = self.game_name
-        data["with_generation"] = self.with_generation
-
-        k = data["num_samples"] = len(self.unique_samples)
-
-        data["samples"] = []
-        for state, (final_scores, policy_dist) in self.unique_samples.items():
-
-            sample = OrderedDict()
-            sample["state"] = list(state)
-            sample["final_scores"] = final_scores
-
-            sample["policy_dists"] = []
-            for legal, move_str, new_p, old_p in policy_dist:
-                d = OrderedDict()
-                d["legal"] = int(legal)
-                d["new_prob"] = float(new_p)
-                d["old_prob"] = float(old_p)
-                sample["policy_dists"].append(d)
-
-            # finally append to samples
-            data["samples"].append(sample)
-
-        fd, path = tempfile.mkstemp(suffix='.json',
-                                    prefix="samples_%s_%d_" % (self.game_name, k),
-                                    dir=".")
-        with os.fdopen(fd, 'w') as open_file:
-            open_file.write(json.dumps(data, indent=4))
-
-
-def main(game_name):
-
-    from ggplib import interface
-    interface.initialise_k273(1)
-
-    # turn off logging to reduce log
-    # import ggplib.util.log
-    # ggplib.util.log.initialise()
-
-    # pre-initialise database - used in match for remapping
-    lookup.get_database()
-
-    from ggplearn.utils.keras import use_one_cpu_please
-    use_one_cpu_please()
-
-    game_name = sys.argv[1]
-    with_generation = sys.argv[2]
-    num_samples = int(sys.argv[3])
-
-    # runs forever
+def run(conf):
+    runner = Runner(conf)
     while True:
-        runner = Runner(game_name, with_generation)
-        runner.generate_samples(num_samples)
-        runner.write_to_file()
+        start = time.time()
+        s = runner.generate_sample(num_samples)
+        print "time taken to generate sample: %.2f" % (time.time() - start)
+        yield s
 
 
-if __name__ == "__main__":
-    import pdb
-    import sys
-    import traceback
-
-    try:
-        main(sys.argv[1])
-
-    except Exception as exc:
-        print exc
-        type, value, tb = sys.exc_info()
-        traceback.print_exc()
-        pdb.post_mortem(tb)
