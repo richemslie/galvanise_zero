@@ -70,8 +70,8 @@ from collections import Counter
 
 import numpy as np
 
-from ggplib.symbols import SymbolFactory
 from ggplib.util import log
+from ggplib.util.symbols import SymbolFactory
 
 
 class BaseInfo(object):
