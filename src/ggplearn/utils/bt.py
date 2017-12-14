@@ -1,4 +1,4 @@
-from ggplib.symbols import SymbolFactory
+from ggplib.util.symbols import SymbolFactory
 
 
 def pretty_print_board(sm, state):
