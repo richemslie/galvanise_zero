@@ -1,50 +1,40 @@
-
-import math
 import time
+from operator import itemgetter, attrgetter
+
+import attr
 
 import numpy as np
 
 from ggplib.util import log
 from ggplib.player.base import MatchPlayer
-from ggplib.play import play_runner
 
 from ggplearn.util.bt import pretty_print_board
 
-from ggplearn import net_config
+from ggplearn.nn import bases
 
 
 ###############################################################################
 
-def opp(role_index):
-    ' helper '
-    return 0 if role_index else 1
-
-
-###############################################################################
-
+@attr.s
 class PUCTPlayerConf(object):
-    NAME = "PUCTPlayer"
-    VERBOSE = True
+    name = attr.ib("PUCTPlayer")
+    verbose = attr.ib(True)
 
-    NUM_OF_PLAYOUTS_PER_ITERATION = 800
-    NUM_OF_PLAYOUTS_PER_ITERATION_NOOP = 1
-
-    CPUCT_CONSTANT = 0.75
-    DEPTH_0_CPUCT_CONSTANT = 0.75
+    num_of_playouts_per_iteration = attr.ib(800)
+    num_of_playouts_per_iteration_noop = attr.ib(1)
+    cpuct_constant_first_4 = attr.ib(0.75)
+    cpuct_constant_after_4 = attr.ib(0.75)
 
     # added to root child policy pct (less than 0 is off)
-    DIRICHLET_NOISE_ALPHA = 0.01
-    DIRICHLET_NOISE_PCT = 0.25
+    dirichlet_noise_alpha = attr.ib(0.1)
+    dirichlet_noise_pct = attr.ib(0.25)
 
     # MAYBE useful for when small number of iterations.  otherwise pretty much the same
-    EXPAND_ROOT = -1
-    EXPAND_EVERY_X = -1
-    MM = False
+    expand_root = attr.ib(-1)
 
+    choose = attr.ib("choose_top_visits")
 
-def sort_by_policy_key(c):
-    return c.policy_dist_pct
-
+    max_dump_depth = attr.ib(2)
 
 class Child(object):
     def __init__(self, parent, move, legal):
@@ -78,12 +68,14 @@ class Child(object):
             else:
                 score = n.final_score[ri] or 0.0
 
-            return "%s %.2f%%   %.2f %s" % (self.move,
+            return "%s %d %.2f%%   %.2f %s" % (self.move,
+                                            self.visits(),
                                             self.policy_dist_pct * 100,
                                             score,
                                             "T " if n.is_terminal else "* ")
         else:
-            return "%s %.2f%%   ---- ? " % (self.move,
+            return "%s %d %.2f%%   ---- ? " % (self.move,
+                                            self.visits(),
                                             self.policy_dist_pct * 100)
     __str__ = __repr__
 
@@ -136,9 +128,15 @@ class PUCTPlayer(MatchPlayer):
         self.generation = generation
         if conf is None:
             conf = PUCTPlayerConf()
+
         self.conf = conf
 
-        identifier = "%s_%s_%s" % (self.conf.NAME, self.conf.NUM_OF_PLAYOUTS_PER_ITERATION, generation)
+        if self.conf.verbose:
+            assert self.conf.num_of_playouts_per_iteration_noop > 0, "DONT KNOW WHY THIS DOESNT WORK, BUT XXX"
+
+        self.choose = getattr(self, self.conf.choose)
+
+        identifier = "%s_%s_%s" % (self.conf.name, self.conf.num_of_playouts_per_iteration, generation)
         MatchPlayer.__init__(self, identifier)
 
     def on_meta_gaming(self, finish_time):
@@ -152,10 +150,7 @@ class PUCTPlayer(MatchPlayer):
         # if latest is set will always get the latest
 
         if self.generation == 'latest' or self.nn is None:
-            self.base_config = net_config.get_bases_config(game_info.game,
-                                                           game_info.model,
-                                                           self.generation)
-
+            self.base_config = bases.get_config(game_info.game, game_info.model, self.generation)
             self.nn = self.base_config.create_network()
             self.nn.load()
 
@@ -171,6 +166,8 @@ class PUCTPlayer(MatchPlayer):
                 assert False, "did not find noop"
 
             self.role0_noop_legal, self.role1_noop_legal = map(get_noop_idx, game_info.model.actions)
+
+        self.our_noop_legal = self.role1_noop_legal if self.match.our_role_index == 1 else self.role0_noop_legal
 
         self.root = None
         self.nodes_to_predict = []
@@ -191,6 +188,9 @@ class PUCTPlayer(MatchPlayer):
         # normalise
         for c in node.children:
             c.policy_dist_pct /= total
+
+        # sort the children now rather than every iteration
+        node.children.sort(key=attrgetter("policy_dist_pct"), reverse=True)
 
     def do_predictions(self):
         actual_nodes_to_predict = []
@@ -274,62 +274,35 @@ class PUCTPlayer(MatchPlayer):
         if depth != 0:
             return None
 
-        if self.conf.DIRICHLET_NOISE_ALPHA < 0:
+        if self.conf.dirichlet_noise_alpha < 0:
             return None
 
-        return np.random.dirichlet([self.conf.DIRICHLET_NOISE_ALPHA] * len(node.children))
+        return np.random.dirichlet([self.conf.dirichlet_noise_alpha] * len(node.children))
 
-    def minimax_before(self, node):
-        # get all the children expanded
-        top_children = node.sorted_children()
-        if not top_children:
-            return
+    def cpuct_constant(self, node):
+        cpuct = self.conf.cpuct_constant_after_4
+        expanded = sum(1 for c in node.children if c.to_node is not None)
+        if expanded < 3:
+            cpuct = self.conf.cpuct_constant_first_4
 
-        top_children = [c for c in top_children
-                        if top_children[0].visits() == c.visits()]
-
-        best = None
-        best_score = -2
-        for c in top_children:
-            if not c.to_node:
-                continue
-
-            cn = c.to_node
-
-            if cn.mc_score[node.lead_role_index] > best_score:
-                best = cn
-                best_score = cn.mc_score[node.lead_role_index]
-
-        if best:
-            node.mc_score = best.mc_score[:]
+        return cpuct
 
     def select_child(self, node, depth):
-        if self.conf.MM and node.mc_visits > 20 and node.mc_visits % 4 == 0:
-            for child in node.children:
-                if child.visits() and child.to_node:
-                    if not child.to_node.is_terminal:
-                        self.minimax_before(child.to_node)
+
+        dirichlet_noise = self.dirichlet_noise(node, depth)
+        cpuct_constant = self.cpuct_constant(node)
 
         # get best
         best_child = None
         best_score = -1
 
-        dirichlet_noise = self.dirichlet_noise(node, depth)
-        cpuct_constant = self.conf.DEPTH_0_CPUCT_CONSTANT if depth == 0 else self.conf.CPUCT_CONSTANT
-
-        for idx, child in enumerate(sorted(node.children,
-                                           key=sort_by_policy_key, reverse=True)):
+        for idx, child in enumerate(node.children):
             cn = child.to_node
 
             child_visits = 0.0
 
             # prior... (alpha go zero said 0 but there score ranges from [-1,1]
             node_score = 0.0
-
-            # force expansion every 20...
-            if self.conf.EXPAND_EVERY_X > 0 and node.mc_visits % self.conf.EXPAND_EVERY_X == 0:
-                if cn is None:
-                    node_score = 1.0
 
             if cn is not None:
                 child_visits = float(cn.mc_visits)
@@ -342,13 +315,12 @@ class PUCTPlayer(MatchPlayer):
             child_pct = child.policy_dist_pct
 
             if dirichlet_noise is not None:
-                noise_pct = self.conf.DIRICHLET_NOISE_PCT
+                noise_pct = self.conf.dirichlet_noise_pct
                 child_pct = (1 - noise_pct) * child_pct + noise_pct * dirichlet_noise[idx]
 
-            k = cpuct_constant
             v = float(node.mc_visits + 1)
             cv = float(child_visits + 1)
-            puct_score = k * child_pct * (v ** 0.5) / cv
+            puct_score = cpuct_constant * child_pct * (v ** 0.5) / cv
 
             score = node_score + puct_score
 
@@ -398,14 +370,51 @@ class PUCTPlayer(MatchPlayer):
         self.back_propagate(path, scores)
         return depth
 
+    def playout_loop(self, node, finish_time, cb=None):
+        max_depth = -1
+        total_depth = 0
+        iterations = 0
+
+        start_time = time.time()
+
+        if self.root.lead_role_index != self.match.our_role_index:
+            max_iterations = self.conf.num_of_playouts_per_iteration_noop
+        else:
+            max_iterations = self.conf.num_of_playouts_per_iteration
+
+        while True:
+            if time.time() > finish_time:
+                log.info("RAN OUT OF TIME")
+                break
+
+            depth = self.playout(node)
+            max_depth = max(depth, max_depth)
+            total_depth += depth
+
+            iterations += 1
+
+            if max_iterations > 0 and iterations > max_iterations:
+                break
+
+            if cb and cb():
+                break
+
+        if self.conf.verbose:
+            log.info("Time taken for %s iteratons %.3f" % (iterations,
+                                                           time.time() - start_time))
+
+            log.debug("The average depth explored: %.2f, max depth: %d" % (total_depth / float(iterations),
+                                                                           max_depth))
+
     def on_apply_move(self, joint_move):
         # need to fish for it in children?
         if self.root is not None:
-            lead, other = self.root.lead_role_index, opp(self.root.lead_role_index)
+            lead = self.root.lead_role_index
+            other = 0 if lead else 1
             if other == 0:
                 assert joint_move.get(other) == self.role0_noop_legal
             else:
-                assert joint_move.get(other) == self.role0_noop_legal
+                assert joint_move.get(other) == self.role1_noop_legal
 
             played = joint_move.get(lead)
 
@@ -427,8 +436,8 @@ class PUCTPlayer(MatchPlayer):
                     total += visit_count(c.to_node)
                 return total
 
-            if self.conf.VERBOSE:
-                print "ROOT FOUND:", new_root, visit_count(new_root)
+            if self.conf.verbose:
+                log.verbose("ROOT FOUND: %s / %d" % (new_root, visit_count(new_root)))
 
     def dump_node(self, node, indent=0):
         indent_str = " " * indent
@@ -446,17 +455,32 @@ class PUCTPlayer(MatchPlayer):
                                               child.debug_puct_score,
                                               child.debug_node_score + child.debug_puct_score)
 
+    def noop(self):
+        if self.root.lead_role_index != self.match.our_role_index:
+            if self.match.our_role_index:
+                return self.role1_noop_legal
+            else:
+                return self.role0_noop_legal
+        return None
+
     def on_next_move(self, finish_time):
         self.count_bp = 0
         sm = self.match.sm
         sm.update_bases(self.match.get_current_state())
 
+        # break early as possible
+        if not self.conf.verbose and self.conf.num_of_playouts_per_iteration_noop == 0:
+            ri = self.match.our_role_index
+            ls = sm.get_legal_state(ri)
+            if ls.get_count() == 1 and ls.get_legal(0) == self.our_noop_legal:
+                return self.our_noop_legal
+
         start_time = time.time()
         if self.root is not None:
             assert self.root.state == self.match.get_current_state().to_list()
         else:
-            if self.conf.VERBOSE:
-                print 'creating root'
+            if self.conf.verbose:
+                log.info('creating root')
 
             self.root = self.create_node(self.match.get_current_state())
             assert not self.root.is_terminal
@@ -464,172 +488,155 @@ class PUCTPlayer(MatchPlayer):
             # predict root
             self.nodes_to_predict.append(self.root)
 
-        # expand and predict all children
-        if self.conf.EXPAND_ROOT > 0:
-            children = self.root.children[:]
-            children.sort(key=sort_by_policy_key, reverse=True)
-            for c in children[:self.conf.EXPAND_ROOT]:
+        self.do_predictions()
+
+        # expand and predict some of root children
+        if self.conf.expand_root > 0:
+            for c in self.root.children[:self.conf.expand_root]:
                 if c.to_node is None:
                     self.expand_child(c)
                     self.nodes_to_predict.append(c.to_node)
 
-        self.do_predictions()
+            self.do_predictions()
 
-        if self.conf.VERBOSE:
-            print "time taken for root", time.time() - start_time
+        if self.conf.verbose:
+            log.debug("time taken for root %.3f" % (time.time() - start_time))
 
-        max_depth = -1
-        total_depth = 0
-        iterations = 0
+        self.playout_loop(self.root, finish_time)
 
-        start_time = time.time()
-        while True:
-            if time.time() > finish_time:
-                print "RAN OUT OF TIME"
-                break
-
-            depth = self.playout(self.root)
-            max_depth = max(depth, max_depth)
-            total_depth += depth
-
-            iterations += 1
-
-            if self.root.lead_role_index != self.match.our_role_index:
-                if (self.conf.NUM_OF_PLAYOUTS_PER_ITERATION_NOOP > 0 and
-                    iterations == self.conf.NUM_OF_PLAYOUTS_PER_ITERATION_NOOP):
-                    # exit early
-                    break
-
-            if (self.conf.NUM_OF_PLAYOUTS_PER_ITERATION > 0 and
-                iterations == self.conf.NUM_OF_PLAYOUTS_PER_ITERATION):
-                # exit early
-                break
-
-        print "Time taken for %s iteratons %.1f" % (iterations,
-                                                    time.time() - start_time)
-        if self.conf.VERBOSE:
-            print "The average depth explored: %.2f, max depth: %d" % (total_depth / float(iterations),
-                                                                       max_depth)
-
+        # this saves time and time is of the essence for training
+        # becuase choice here is based on node.lead_role_index, not our_role_index
         choice = self.choose(finish_time)
 
-        if self.conf.VERBOSE:
+        if self.conf.verbose:
             current = self.root
+
             dump_depth = 0
             while current is not None:
+                if dump_depth == self.conf.max_dump_depth:
+                    break
+
                 self.dump_node(current, indent=dump_depth * 4)
                 if current.is_terminal:
                     break
+
                 current = current.sorted_children()[0].to_node
                 dump_depth += 1
 
-                if dump_depth == 4:
-                    break
 
-            self.dump_temperature(self.root)
+            for c, p in self.get_probabilities():
+                print c, "root prob: %.2f" % (p * 100)
+
+            for c, p in self.get_probabilities(0.2):
+                print c, "root prob: %.2f" % (p * 100)
 
             if self.match.game_info.game == "breakthrough":
                 pretty_print_board(sm, self.root.state)
                 print
 
-        if self.root.lead_role_index != self.match.our_role_index:
-            if self.match.our_role_index:
-                return self.role1_noop_legal
-            else:
-                return self.role0_noop_legal
+        noop_res = self.noop()
+        if noop_res is not None:
+            return noop_res
+        else:
+            return choice.legal
 
-        return choice.legal
+    def get_probabilities(self, temperature=1):
+        total_visits = float(sum(c.visits() for c in self.root.children))
 
-    def dump_temperature(self, node):
-        children = node.children[:]
-        children.sort(key=sort_by_policy_key, reverse=True)
+        temps = [((c.visits() + 1) / total_visits) ** temperature for c in self.root.children]
+        temps_tot = sum(temps)
 
-        total_visits = float(sum(c.visits() for c in children))
+        probs = [(c, t / temps_tot) for c, t in zip(self.root.children, temps)]
+        probs.sort(key=itemgetter(1), reverse=True)
 
-        TEMP = 2
-        probs = [(c.visits() / total_visits) ** TEMP for c in children]
-        probs_tot = sum(probs)
-        probs = [p / probs_tot for p in probs]
-        for p, c in zip(probs, children):
-            print c, "prob", p * 100
+        return probs
 
-    def choose_converge(self, finish_time):
+    def choose_converge_check(self):
         best_visit = self.root.sorted_children()[0]
         best_score = self.root.sorted_children(by_score=True)[0]
+        if best_visit == best_score:
+            if self.conf.verbose:
+                log.info("Converged - breaking")
+            return True
+        return False
+
+    def choose_converge(self, finish_time):
+        if self.root.lead_role_index != self.match.our_role_index:
+            return self.choose_top_visits(finish_time)
+
+        best_visit = self.root.sorted_children()[0]
+
+        score = best_visit.to_node.mc_score[self.root.lead_role_index]
+        if score > 0.9 or score < 0.1:
+            return best_visit
+
         best = best_visit
+        best_score = self.root.sorted_children(by_score=True)[0]
         if best_visit != best_score:
-            if self.conf.VERBOSE:
-                log.info("Conflicting between score and visits... visits : %s score : %s" % (best_visit, best_score))
+            if self.conf.verbose:
+                log.info("Conflicting between score and visits... visits : %s score : %s" % (best_visit,
+                                                                                             best_score))
 
-            # we should run a few more iterations (say 5) and if the majority as best score, we
-            # should return score (assuming it will converge/catchup/overtake)
-            # alternatively we could just look at debug scores from a select
-
-            for i in range(int(self.conf.NUM_OF_PLAYOUTS_PER_ITERATION / 2)):
-                if time.time() > finish_time:
-                    break
-
-                self.playout(self.root)
-
-                best_visit = self.root.sorted_children()[0]
-                best_score = self.root.sorted_children(by_score=True)[0]
-
-                if best_visit == best_score:
-                    log.warning("Converged")
-                    break
+            store_current_alpha = self.conf.dirichlet_noise_alpha
+            self.conf.dirichlet_noise_alpha = -1
+            self.playout_loop(self.root, finish_time, self.choose_converge_check)
+            self.conf.dirichlet_noise_alpha = store_current_alpha
 
             best_visit = self.root.sorted_children()[0]
-            if self.conf.VERBOSE:
+
+            if self.conf.verbose:
                 best_score = self.root.sorted_children(by_score=True)[0]
                 if best_visit != best_score:
-                    log.info("Failed to converge - switching to best score")
+                    log.info("Failed to converge")
 
             if best != best_visit:
-                log.warning("best visits now: %s -> %s" % (best, best_visit))
+                if self.conf.verbose:
+                    log.info("best visits now: %s -> %s" % (best, best_visit))
                 best = best_visit
 
-        if self.conf.VERBOSE:
-            print "BEST", best
-            print
+        if self.conf.verbose:
+            log.info("BEST %s" % best)
+
         return best
-
-    def choose_minmax(self, finish_time):
-        # perform a 2-ply minmax over top 8s
-
-        ri = self.root.lead_role_index
-        best_score = -2
-        best_child = None
-        for c in self.root.sorted_children()[:5]:
-            if best_child is None:
-                best_child = c
-
-            if not c.to_node:
-                continue
-
-            children = c.to_node.sorted_children()
-            if children:
-                c2 = children[0]
-                print "minmaxed for %s : %s" % (c, c2)
-                if c2.to_node and c2.to_node.mc_score[ri] > best_score:
-                    print 'WTF', c2.to_node.mc_score[ri], best_score
-                    best_score = c2.to_node.mc_score[ri]
-                    best_child = c
-
-        print "best score minmax over top x", best_child
-        return best_child
 
     def choose_top_visits(self, finish_time):
         return self.root.sorted_children()[0]
 
-    choose = choose_top_visits
+    def choose_training(self, finish_time):
+        pass
 
 
 ##############################################################################
 
-class TestConfig(PUCTPlayerConf):
-    NAME = "test"
-    EXPAND_EVERY_X = 16
-    DIRICHLET_NOISE_ALPHA = 0.01
+# Settings for:
+def Xget_test_config():
+    test_config = PUCTPlayerConf()
+    test_config.name = "train policy"
+    test_config.verbose = False
+
+    test_config.num_of_playouts_per_iteration = 800
+    test_config.num_of_playouts_per_iteration_noop = 1
+
+    test_config.expand_root = 8
+    test_config.dirichlet_noise_alpha = -1
+    test_config.cpuct_constant_first_4 = 3.0
+    test_config.cpuct_constant_after_4 = 0.75
+    test_config.choose = "choose_converge"
+
+    return test_config
+
+
+def get_test_config():
+    return PUCTPlayerConf(name="score_puct__2",
+                          verbose=True,
+                          num_of_playouts_per_iteration=32,
+                          num_of_playouts_per_iteration_noop=1,
+                          expand_root=5,
+                          dirichlet_noise_alpha=0.1,
+                          cpuct_constant_first_4=3.0,
+                          cpuct_constant_after_4=0.75,
+                          choose="choose_top_visits",
+                          max_dump_depth=1)
 
 
 def main():
@@ -644,10 +651,11 @@ def main():
 
     conf = None
     if len(sys.argv) > 3 and sys.argv[3] == "-t":
-        conf = TestConfig()
+        conf = get_test_config()
 
     player = PUCTPlayer(generation, conf=conf)
     play_runner(player, port)
+
 
 if __name__ == "__main__":
     main()

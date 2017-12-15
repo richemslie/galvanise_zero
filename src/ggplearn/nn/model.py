@@ -81,12 +81,18 @@ def get_network_model(config, **kwds):
         def __getattr__(self, name):
             return self[name]
 
-    if kwds.get("tiny", False):
+    network_size = kwds.get("network_size", "normal")
+    if network_size == "tiny":
         params = AttrDict(CNN_FILTERS_SIZE=32,
                           RESIDUAL_BLOCKS=1,
                           MAX_HIDDEN_SIZE_NC=16)
 
-    elif kwds.get("small", False):
+    elif network_size == "smaller":
+        params = AttrDict(CNN_FILTERS_SIZE=48,
+                          RESIDUAL_BLOCKS=2,
+                          MAX_HIDDEN_SIZE_NC=64)
+
+    elif network_size == "small":
         params = AttrDict(CNN_FILTERS_SIZE=64,
                           RESIDUAL_BLOCKS=3,
                           MAX_HIDDEN_SIZE_NC=128)

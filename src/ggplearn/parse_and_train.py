@@ -5,7 +5,7 @@ import numpy as np
 from ggplib.util import log
 from ggplib import interface
 
-from ggplearn.crunch import get_from_json, Sample, SampleToNetwork
+from ggplearn.training.crunch import get_from_json, Sample, SampleToNetwork
 
 DEBUG = False
 
@@ -72,12 +72,12 @@ def gather_new_data(path, game, generation, all_states):
     return new_data
 
 
+
 class ParseConfig(object):
     GAME = "breakthrough"
     GENERATIONS_SO_FAR = 9
 
-    TINY_NETWORK = False
-    SMALL_NETWORK = True
+    NETWORK_SIZE = "smaller"
     A0_L2_REG = False
 
     # NOTE: so far it seems to best with all the data
@@ -90,19 +90,15 @@ class ParseConfig(object):
 
 def main(path):
     conf = ParseConfig()
-
-    assert int(conf.TINY_NETWORK) + (conf.SMALL_NETWORK) <= 1
+    assert conf.NETWORK_SIZE in "tiny smaller small normal".split()
 
     # think i've been trying to get to this variable name: :)
     next_generation = "gen%d" % conf.GENERATIONS_SO_FAR
-    if conf.TINY_NETWORK:
-        next_generation += "_tiny"
 
-    elif conf.SMALL_NETWORK:
-        next_generation += "_small"
-
-    if conf.A0_L2_REG:
-        next_generation += "_reg"
+    if conf.NETWORK_SIZE != "normal":
+        next_generation += "_" + conf.NETWORK_SIZE
+    else:
+        next_generation
 
     log_name_base = "parsex__%s_" % conf.GAME
     interface.initialise_k273(1, log_name_base=log_name_base)
@@ -110,12 +106,10 @@ def main(path):
 
     stn = SampleToNetwork(conf.GAME, next_generation)
     if conf.A0_L2_REG:
-        net = stn.create_network(small=conf.SMALL_NETWORK,
-                                 tiny=conf.TINY_NETWORK,
+        net = stn.create_network(network_size=conf.NETWORK_SIZE,
                                  a0_reg=True, dropout=False)
     else:
-        net = stn.create_network(small=conf.SMALL_NETWORK,
-                                 tiny=conf.TINY_NETWORK)
+        net = stn.create_network(network_size=conf.NETWORK_SIZE,)
 
     net.summary()
 

@@ -1,152 +1,116 @@
-'''
-Doesn't actually self play.
-Similar to fast n slow, approximates playing a full game and sampling one state/move.
-This should give similar results and be a ton faster.
-
-All stages use monte carlo player.
-
-1.  Run a game using just the policy net and Dirichlet noise (with mc player and iterations == 1).
-2.  Sample a single unique state from that game.
-3.  Run monte carlo with 800 iterations on that state.  Record new policy.
-4.  Play game to the end using a low number of iterations.  Record final score.
-5.  Goto 1
-
-'''
-
-
-import os
 import time
 import random
-import tempfile
 
-from collections import OrderedDict
-
-import json
+import attr
 
 from ggplib.player.gamemaster import GameMaster
-from ggplib.db import lookup
 from ggplib.db.helper import get_gdl_for_game
 
 from ggplearn.player import mc
 
 
-class RunnerConf(Object):
-    game_name = "breakthrough"
-    policy_generation = "gen9_small"
-    score_generation = "gen9_tiny"
-    score_puct_player_conf = mc.PUCTPlayerConf()
-    policy_puct_player_conf = mc.PUCTPlayerConf()
+@attr.s
+class Sample(object):
+    state = attr.ib()
+    policy = attr.ib()
+    final_score = attr.ib()
+    lead_role_index = attr.ib()
+
+
+@attr.s
+class RunnerConf(object):
+    game_name = attr.ib("breakthrough")
+    policy_generation = attr.ib("gen0_small")
+    score_generation = attr.ib("gen0_smaller")
+    score_puct_player_conf = attr.ib(None)
+    policy_puct_player_conf = attr.ib(None)
 
 
 class Runner(object):
-    def __init__(self, conf=None):
-        if conf is None:
-            conf = RunnerConf()
+    def __init__(self, conf):
         self.conf = conf
 
-        self.gm = GameMaster(get_gdl_for_game(self.confgame_name))
+        # create two game masters, one for the score playout, and one for the policy evaluation
+        self.gm_score = GameMaster(get_gdl_for_game(self.conf.game_name))
+        self.gm_policy = GameMaster(get_gdl_for_game(self.conf.game_name))
 
-        for role in self.gm.sm.get_roles():
+        # add players to gamemasteres
+        for role in self.gm_score.sm.get_roles():
             player = mc.PUCTPlayer(self.conf.score_generation,
                                    self.conf.score_puct_player_conf)
-            self.gm.add_player(player, role)
-
-            c = self.conf.score_puct_player_conf
-            c.NUM_OF_PLAYOUTS_PER_ITERATION = 100
-            c.NUM_OF_PLAYOUTS_PER_ITERATION_NOOP = 1
-            c.VERBOSE = False
+            self.gm_score.add_player(player, role)
 
         for role in self.gm_policy.sm.get_roles():
             player = mc.PUCTPlayer(self.conf.policy_generation,
                                    self.conf.policy_puct_player_conf)
-            self.gm.add_player(player, role)
+            self.gm_policy.add_player(player, role)
 
-            c = self.conf.policy_puct_player_conf
-            c.NUM_OF_PLAYOUTS_PER_ITERATION = 400
-            c.NUM_OF_PLAYOUTS_PER_ITERATION_NOOP = 1
-            c.VERBOSE = False
+        # cache a local statemachine basestate (doesn't matter which gm it comes from)
+        self.basestate = self.gm_policy.sm.new_base_state()
 
-        self.basestate = self.gm.sm.new_base_state()
+        # we want unique samples per generation
+        self.unique_samples = set()
+
+        self.reset_debug()
+
+    def reset_debug(self):
+        # debug times
+        self.acc_time_for_play_one_game = 0
+        self.acc_time_for_do_policy = 0
 
     def get_bases(self):
-        self.gm.sm.get_current_state(self.basestate)
+        self.gm_score.sm.get_current_state(self.basestate)
         return self.basestate.to_list()
 
     def play_one_game(self):
-        self.gm.reset()
+        self.gm_score.reset()
 
-        self.gm.start(meta_time=30, move_time=5)
+        self.gm_score.start(meta_time=20, move_time=10)
 
         states = [self.get_bases()]
 
         last_move = None
-        while not self.gm.finished():
-            last_move = self.gm.play_single_move(last_move=last_move)
+        while not self.gm_score.finished():
+            last_move = self.gm_score.play_single_move(last_move=last_move)
             states.append(self.get_bases())
 
         # pop the final state, as we don't want terminal states
         states.pop()
 
         # cleanup
-        self.gm.play_to_end(last_move)
-        return states, self.gm.scores
+        self.gm_score.play_to_end(last_move)
+        return states, self.gm_score.scores
 
     def do_policy(self, state):
         for i, v in enumerate(state):
             self.basestate.set(i, v)
 
-        self.gm.reset()
-        self.gm.start(meta_time=30, move_time=10, initial_basestate=self.basestate)
+        self.gm_policy.reset()
+        self.gm_policy.start(meta_time=30, move_time=10, initial_basestate=self.basestate)
 
         # self.last_move used in playout_state
-        self.last_move = self.gm.play_single_move(None)
+        self.last_move = self.gm_policy.play_single_move(None)
 
-        # fish for root
-        if self.last_move[0] == "noop":
-            root = self.gm.players[1][0].root
-        else:
-            root = self.gm.players[0][0].root
-
-        children = root.sorted_children()
-        total_visits = float(sum(child.visits() for child in children))
-        return [(c.legal, c.visits() / total_visits)
-                for c in children]
-
-    def mk_sample_desc(self, states, policy, final_score):
-        sample_desc = OrderedDict()
-        sample_desc["state"] = list(state)
-        sample_desc["final_score"] = final_score
-
-        l = sample["policy_distribution"] = []
-        for legal, move_str, prob in policy_dist:
-            d = OrderedDict()
-            d["legal"] = int(legal)
-            d["probability"] = float(new_p)
-            l.append(d)
-
-        return sample_desc
+        # fish for root (XXX for game specific, XXX for horrible fishing)
+        lead_role_index = 1 if self.last_move[0] == "noop" else 0
+        player = self.gm_policy.get_player(lead_role_index)
+        dist = [(c.legal, p) for c, p in player.get_probabilities(1.5)]
+        return dist, lead_role_index
 
     def generate_sample(self):
+        start_time = time.time()
         states, final_score = self.play_one_game()
-
+        self.acc_time_for_play_one_game += time.time() - start_time
         # we don't sample last state as has no policy
         random.shuffle(states)
 
         while states:
             state = tuple(states.pop())
 
-            if tuple(s) in self.unique_samples:
+            if tuple(state) in self.unique_samples:
                 continue
 
-            policy_dist = self.do_policy(state)
-            retun self.mk_sample_desc(states, policy, final_score)
-
-def run(conf):
-    runner = Runner(conf)
-    while True:
-        start = time.time()
-        s = runner.generate_sample(num_samples)
-        print "time taken to generate sample: %.2f" % (time.time() - start)
-        yield s
-
-
+            start_time = time.time()
+            policy_dist, lead_role_index = self.do_policy(state)
+            self.acc_time_for_do_policy += time.time() - start_time
+            return Sample(state, policy_dist, final_score, lead_role_index)

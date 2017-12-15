@@ -5,7 +5,7 @@ from ggplib.util import log
 
 from ggplearn.util.bt import pretty_print_board
 
-from ggplearn import net_config
+from ggplearn.nn import bases
 
 models_path = os.path.join(os.environ["GGPLEARN_PATH"], "src", "ggplearn", "models")
 
@@ -27,10 +27,7 @@ class NNPlayerOneShot(MatchPlayer):
         # if latest is set will always get the latest
 
         if self.generation == 'latest' or self.nn is None:
-            self.base_config = net_config.get_bases_config(game_info.game,
-                                                           game_info.model,
-                                                           self.generation)
-
+            self.base_config = bases.get_config(game_info.game, game_info.model, self.generation)
             self.nn = self.base_config.create_network()
             self.nn.load()
 

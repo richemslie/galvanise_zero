@@ -11,8 +11,7 @@ from ggplib.util import log
 
 from ggplib.db import lookup
 
-from ggplearn import net
-from ggplearn import net_config
+from ggplearn.nn import model, bases
 
 json.encoder.FLOAT_REPR = lambda f: ("%.4f" % f)
 
@@ -107,9 +106,9 @@ class SampleToNetwork(object):
         self.game_info = lookup.by_name(game_name)
 
         # the bases config (XXX idea is not to use hard coded stuff)
-        self.base_config = net_config.get_bases_config(game_name,
-                                                       self.game_info.model,
-                                                       self.generation)
+        self.base_config = bases.get_config(game_name,
+                                            self.game_info.model,
+                                            self.generation)
 
         self.training_inputs, self.training_outputs = [], []
         self.training_inputs, self.training_outputs = [], []
@@ -160,7 +159,7 @@ class SampleToNetwork(object):
             validation_data[ii] = arr
             log.debug("Shape of validation data %d: %s" % (ii, arr.shape))
 
-        return net.TrainData(inputs=training_data[:2],
-                             outputs=training_data[2:],
-                             validation_inputs=validation_data[:2],
-                             validation_outputs=validation_data[2:])
+        return model.TrainData(inputs=training_data[:2],
+                               outputs=training_data[2:],
+                               validation_inputs=validation_data[:2],
+                               validation_outputs=validation_data[2:])
