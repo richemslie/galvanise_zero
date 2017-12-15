@@ -16,6 +16,8 @@ av time for play one game: 8.82
 
 import time
 
+import attr
+
 from ggplearn.training.approximate_play import RunnerConf, Runner
 from ggplearn.player import mc
 
@@ -44,6 +46,7 @@ def go_test():
                                                      cpuct_constant_first_4=3.0,
                                                      cpuct_constant_after_4=0.75,
                                                      choose="choose_converge")
+
 
     runner = Runner(conf)
     number_of_samples = 5
