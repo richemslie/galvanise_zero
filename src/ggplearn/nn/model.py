@@ -106,14 +106,12 @@ def get_network_model(config, **kwds):
 
     # fancy l2 regularizer stuff I will understand one day
     ######################################################
-
     reg_params = {}
     if params.ALPHAZERO_REGULARISATION:
         reg_params["kernel_regularizer"] = l2(1e-4)
 
     # inputs:
     #########
-
     inputs_board = klayers.Input(shape=(config.num_rows,
                                         config.num_cols,
                                         config.num_channels))
@@ -123,7 +121,6 @@ def get_network_model(config, **kwds):
 
     # CNN/Resnet on cords
     #####################
-
     layer = Conv2DBlock(params.CNN_FILTERS_SIZE, 3,
                         padding='same',
                         activation='relu', **reg_params)(inputs_board)
@@ -151,16 +148,12 @@ def get_network_model(config, **kwds):
 
     # output: policy
     ################
-    # 2 * 8 * 8 -> role_count * xcord * ycord
     prelude_policy = klayers.concatenate([res_policy_out, nc_layer], axis=-1)
-
     output_policy = klayers.Dense(config.policy_dist_count,
                                   activation="softmax", name="policy", **reg_params)(prelude_policy)
 
     # output: score
     ###############
-    # 32 is arbirtrary (maybe drop it entirely?)
-
     prelude_scores = klayers.concatenate([res_score_out, nc_layer], axis=-1)
     prelude_scores = klayers.Dense(32, activation="relu", **reg_params)(prelude_scores)
 
