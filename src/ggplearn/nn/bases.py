@@ -112,8 +112,8 @@ class BasesConfig(object):
         self.final_score_count = len(sm_model.roles)
 
     def create_network(self, **kwds):
-        from ggplearn import net
-        return net.NeuralNetwork(self, net.get_network_model(self, **kwds))
+        from ggplearn.nn import model as kmodel
+        return kmodel.NeuralNetwork(self, kmodel.get_network_model(self, **kwds))
 
     @property
     def num_rows(self):
@@ -153,6 +153,9 @@ class BasesConfig(object):
             b_info.channel = self.pieces.index(piece)
             b_info.x_idx = self.x_cords.index(x_cord)
             b_info.y_idx = self.y_cords.index(y_cord)
+
+            # for debug
+            count[b_info.channel] += 1
 
         for i, piece in enumerate(self.pieces):
             log.info("found %s states for channel %s" % (count[i], piece))
@@ -265,7 +268,7 @@ class Hex(BasesConfig):
 
 ###############################################################################
 
-def get_bases_config(game, sm_model, generation="latest"):
+def get_config(game, sm_model, generation="latest"):
     classes = [v for _, v in globals().items() if isinstance(v, type) and issubclass(v, BasesConfig)]
     for clz in classes:
         if clz.game == game:
