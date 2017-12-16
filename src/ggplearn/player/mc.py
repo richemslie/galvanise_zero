@@ -1,3 +1,4 @@
+import math
 import time
 import random
 from operator import itemgetter, attrgetter
@@ -601,16 +602,19 @@ class PUCTPlayer(MatchPlayer):
         return self.root.sorted_children()[0]
 
     def choose_temperature(self, finish_time):
+        depth = max(1, self.game_depth)
+
         temp = 1.0
-        random_expected = random.random() * 0.25
+        random_range = (0.65 - 0.15) / math.sqrt(depth) + 0.1
 
         temperature_depth_end = 20
         if self.game_depth < temperature_depth_end:
-            temp = 0.1 + 0.9 * (0.85 ** (20 - self.game_depth))
-            random_expected = random.random() * 0.5
+            temp = 0.1 + 0.9 * (0.85 ** (20 - depth))
 
         if self.conf.verbose:
-            log.info("temperature is %.3f" % temp)
+            log.info("depth %d, temperature is %.3f, random range %.3f" % (depth, temp, random_range))
+
+        random_expected = random.random() * random_range
 
         total_seen = 0
         res = None
@@ -638,7 +642,7 @@ def get_test_config():
                           dirichlet_noise_alpha=0.5,
                           cpuct_constant_first_4=0.75,
                           cpuct_constant_after_4=0.75,
-                          choose="choose_temperature",
+                          choose="choose_top_visits",
                           max_dump_depth=2)
 
 
