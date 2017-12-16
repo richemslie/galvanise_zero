@@ -112,8 +112,12 @@ class BasesConfig(object):
         self.final_score_count = len(sm_model.roles)
 
     def create_network(self, **kwds):
-        from ggplearn.nn import model as kmodel
-        return kmodel.NeuralNetwork(self, kmodel.get_network_model(self, **kwds))
+        from ggplearn.nn.network import NeuralNetwork
+        from ggplearn.nn.model import get_network_model
+        return NeuralNetwork(self, get_network_model(self, **kwds))
+
+    def update_generation(self, new_generation):
+        self.generation = new_generation
 
     @property
     def num_rows(self):

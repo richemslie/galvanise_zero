@@ -119,3 +119,35 @@ def test_attrs_recursive():
     k = attrutil.json_to_attr(json_str)
     assert k.x.what == 'o'
     assert k.z.what.x.what == 'a'
+
+
+@attr.s
+class Sample(object):
+    name = attr.ib()
+    data = attr.ib(attr.Factory(list))
+
+@attr.s
+class Samples(object):
+    k = attr.ib()
+    samples = attr.ib(attr.Factory(list))
+
+
+def test_attrs_listof():
+    s0 = Sample('s0', [1, 2, 3, 4, 5])
+    s1 = Sample('s1', [5, 4, 3, 2, 1])
+
+    samples = Samples(42, [s0, s1])
+
+    d = attrutil.asdict_plus(samples)
+    pprint(d)
+
+
+    r = attrutil.fromdict_plus(d)
+
+    pprint(r)
+
+    assert isinstance(r, Samples)
+    assert len(r.samples) == 2
+    assert r.samples[0].name == "s0"
+    assert r.samples[1].data[1] == 4
+

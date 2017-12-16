@@ -3,10 +3,6 @@
 
 import os
 
-from collections import namedtuple
-
-import numpy as np
-
 from keras import layers as klayers
 from keras import metrics, models
 from keras.regularizers import l2
@@ -15,16 +11,6 @@ from keras.optimizers import SGD
 import keras.backend as K
 
 from ggplib.util import log
-
-
-def model_path(game, generation):
-    filename = "%s_%s.json" % (game, generation)
-    return os.path.join(os.environ["GGPLEARN_PATH"], "data", "models", filename)
-
-
-def weights_path(game, generation):
-    filename = "%s_%s.h5" % (game, generation)
-    return os.path.join(os.environ["GGPLEARN_PATH"], "data", "weights", filename)
 
 
 def top_2_acc(y_true, y_pred):
@@ -162,21 +148,8 @@ def get_network_model(config, **kwds):
 
     # model
     #######
-    model = models.Model(inputs=[inputs_board, inputs_other], outputs=[output_policy, output_score])
-
-    # loss is much less on score.  It overfits really fast.
-    if params.ALPHAZERO_REGULARISATION:
-        optimizer = SGD(lr=1e-2, momentum=0.9)
-        loss = [objective_function_for_policy, "mean_squared_error"]
-    else:
-        loss = ['categorical_crossentropy', 'mean_squared_error']
-        optimizer = "adam"
-
-    model.compile(loss=loss, optimizer=optimizer,
-                  loss_weights=[1.0, 0.01],
-                  metrics=["acc", top_2_acc, top_3_acc])
-
-    return model
+    return  models.Model(inputs=[inputs_board, inputs_other],
+                         outputs=[output_policy, output_score])
 
 
 ###############################################################################
@@ -247,74 +220,3 @@ class MyProgbarLogger(keras.callbacks.Callback):
                 self.log_values.append((k, logs[k]))
 
         self.progbar.update(self.seen, self.log_values)
-
-
-TrainData = namedtuple('TrainData', "inputs outputs validation_inputs validation_outputs".split())
-
-
-class NeuralNetwork(object):
-
-    def __init__(self, bases_config, model=None):
-        self.bases_config = bases_config
-        self.model = model
-
-    def summary(self):
-        ' log keras nn summary '
-
-        # one way to get print_summary to output string!
-        lines = []
-        self.model.summary(print_fn=lines.append)
-        for l in lines:
-            log.verbose(l)
-
-    def predict_n(self, states, lead_role_indexes):
-        num_states = len(states)
-
-        X_0 = [self.bases_config.state_to_channels(s, ri) for s, ri in zip(states,
-                                                                           lead_role_indexes)]
-
-        X_0 = np.array(X_0)
-        X_1 = np.array([self.bases_config.get_non_cord_input(s) for s in states])
-
-        Y = self.model.predict([X_0, X_1], batch_size=num_states)
-        assert len(Y) == 2
-
-        result = []
-        for i in range(num_states):
-            policy, scores = Y[0][i], Y[1][i]
-            result.append((policy, scores))
-
-        return result
-
-    def predict_1(self, state, lead_role_index):
-        return self.predict_n([state], [lead_role_index])[0]
-
-    def train(self, train_data, batch_size=512, epochs=24):
-        validation_data = [train_data.validation_inputs, train_data.validation_outputs]
-
-        self.model.fit(train_data.inputs,
-                       train_data.outputs,
-                       verbose=0,
-                       batch_size=batch_size,
-                       epochs=epochs,
-                       validation_data=validation_data,
-                       callbacks=[MyProgbarLogger(), MyCallback()],
-                       shuffle=True)
-
-    def save(self):
-        # save model / weights
-        with open(model_path(self.bases_config.game,
-                             self.bases_config.generation), "w") as f:
-            f.write(self.model.to_json())
-
-        self.model.save_weights(weights_path(self.bases_config.game,
-                                             self.bases_config.generation),
-                                overwrite=True)
-
-    def load(self):
-        # save model / weights
-        f = model_path(self.bases_config.game, self.bases_config.generation)
-        self.model = models.model_from_json(open(f).read())
-
-        self.model.load_weights(weights_path(self.bases_config.game,
-                                             self.bases_config.generation))

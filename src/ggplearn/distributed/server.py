@@ -1,4 +1,5 @@
 import os
+import sys
 
 import time
 
@@ -10,14 +11,20 @@ from twisted.internet import reactor
 from ggplib.util import log
 from ggplib.db import lookup
 
-from ggplearn.util import broker, attrutil
+from ggplearn.util import attrutil
 from ggplearn.util.broker import Broker, ServerFactory
 
 from ggplearn.distributed import msgs
 
-from ggplearn.nn import bases
+from ggplearn.nn import network
 
 from ggplearn.player import mc
+
+
+def critical_error(msg):
+    log.critical(msg)
+    reactor.stop()
+    sys.exit(1)
 
 
 def runner_conf_default_puct():
@@ -25,8 +32,7 @@ def runner_conf_default_puct():
     conf = RunnerConf()
     conf.score_puct_player_conf = mc.PUCTPlayerConf(name="score_puct",
                                                     verbose=False,
-                                                    num_of_playouts_per_iteration=4,
-                                                    # num_of_playouts_per_iteration=32,
+                                                    num_of_playouts_per_iteration=32,
                                                     num_of_playouts_per_iteration_noop=0,
                                                     expand_root=5,
                                                     dirichlet_noise_alpha=0.1,
@@ -36,7 +42,7 @@ def runner_conf_default_puct():
 
     conf.policy_puct_player_conf = mc.PUCTPlayerConf(name="policy_puct",
                                                      verbose=False,
-                                                     num_of_playouts_per_iteration=42,
+                                                     num_of_playouts_per_iteration=200,
                                                      # num_of_playouts_per_iteration=800,
                                                      num_of_playouts_per_iteration_noop=0,
                                                      expand_root=5,
@@ -53,18 +59,23 @@ class ServerConfig(object):
 
     game = attr.ib("breakthrough")
 
-    current_step = attr.ib(0)
+    current_step = attr.ib(1)
     policy_network_size = attr.ib("small")
     score_network_size = attr.ib("smaller")
 
     generation_prefix = attr.ib("v2_")
-    store_path = attr.ib("v2")
+    store_path = attr.ib("somewhere")
 
     policy_player_conf = attr.ib(default=attr.Factory(mc.PUCTPlayerConf))
     score_player_conf = attr.ib(default=attr.Factory(mc.PUCTPlayerConf))
 
-    generation_size = attr.ib(42)
+    generation_size = attr.ib(1024)
     max_growth_while_training = attr.ib(0.2)
+
+    validation_split = attr.ib(0.8)
+    batch_size = attr.ib(32)
+    epochs = attr.ib(10)
+    max_sample_count = attr.ib(250000)
 
 
 class WorkerInfo(object):
@@ -73,16 +84,17 @@ class WorkerInfo(object):
         self.valid = True
         self.create_time = create_time
         self.worker_type = None
-        self.copy_cmd = None
         self.reset()
 
     def reset(self):
-        self.configured = False
+        if self.worker_type == "approx_self_play":
+            self.configured = False
 
-        # sent out up to this amount
-        self.unique_state_index = 0
+            # sent out up to this amount
+            self.unique_state_index = 0
 
     def get_and_update(self, unique_states):
+        assert self.worker_type == "approx_self_play"
         assert self.configured
         new_states = unique_states[self.unique_state_index:]
         self.unique_state_index += len(new_states)
@@ -93,8 +105,15 @@ class WorkerInfo(object):
 
 
 class ServerBroker(Broker):
-    def __init__(self, conf):
+    def __init__(self, conf_filename):
         Broker.__init__(self)
+
+        self.conf_filename = conf_filename
+        if os.path.exists(conf_filename):
+            conf = attrutil.json_to_attr(open(conf_filename).read())
+            assert isinstance(conf, ServerConfig)
+        else:
+            conf = ServerConfig()
 
         self.conf = conf
 
@@ -102,44 +121,48 @@ class ServerBroker(Broker):
 
         self.workers = {}
         self.free_players = []
+        self.the_nn_trainer = None
 
         self.accumulated_samples = []
         self.unique_states_set = set()
         self.unique_states = []
 
+        # when a generation object is around, we are in the processing of training
         self.generation = None
 
         self.register(msgs.Pong, self.on_pong)
         self.register(msgs.HelloResponse, self.on_hello_response)
+
+        self.register(msgs.SelfPlayResponse, self.on_selfplay_response)
         self.register(msgs.Ok, self.on_ok)
         self.register(msgs.RequestSampleResponse, self.on_sample_response)
 
-        if self.conf.current_step == 0:
-            self.create_networks()
+        self.networks_reqd_trained = 0
 
-    def create_networks(self):
-        print self.get_policy_generation(self.conf.current_step)
-        print self.get_score_generation(self.conf.current_step)
+        self.check_nn_generations_exist()
 
-        assert self.conf.current_step == 0
-        policy_gen = self.get_policy_generation(self.conf.current_step)
-        bases_config = bases.get_config(self.game_info.game,
-                                        self.game_info.model,
-                                        generation=policy_gen)
-
-        policy_nn = bases_config.create_network(a0_reg=False, dropout=True,
-                                                network_size=self.conf.policy_network_size)
-        policy_nn.save()
-
+    def check_nn_generations_exist(self):
         score_gen = self.get_score_generation(self.conf.current_step)
-        bases_config = bases.get_config(self.game_info.game,
-                                        self.game_info.model,
-                                        generation=score_gen)
-        score_nn = bases_config.create_network(a0_reg=False, dropout=True,
-                                               network_size=self.conf.score_network_size)
-        score_nn.save()
+        policy_gen = self.get_policy_generation(self.conf.current_step)
+        log.debug("current policy gen %s" % score_gen)
+        log.debug("current score gen %s" % policy_gen)
 
-        # create networks
+        # create them (will overwrite even exist)
+        policy_gen = self.get_policy_generation(self.conf.current_step)
+        score_gen = self.get_score_generation(self.conf.current_step)
+
+        for g in (policy_gen, score_gen):
+            net = network.create(g, self.game_info, load=False)
+            if not net.can_load():
+                # will create a randon network
+                if self.conf.current_step == 0:
+                    net.save()
+                else:
+                    critical_error("Did not find network %s.  exiting." % g)
+
+    def get_master_by_ip(self):
+        ''' spin through self play workers, and gets the first worker for a new ip.  returns list '''
+        pass
 
     def get_policy_generation(self, step):
         return "%sgen_%s_%s" % (self.conf.generation_prefix,
@@ -162,17 +185,11 @@ class ServerBroker(Broker):
         return len(self.accumulated_samples) < (self.conf.generation_size +
                                                 self.conf.generation_size * self.conf.max_growth_while_training)
 
-    def get_copy_cmds(self):
-        all_copy_cmds = set()
-        for info in self.workers.values():
-            if info.copy_cmd:
-                all_copy_cmds.add(info.copy_cmd)
-        return all_copy_cmds
-
     def new_worker(self, worker):
         self.workers[worker] = WorkerInfo(worker, time.time())
         log.debug("New worker %s" % worker)
         worker.send_msg(msgs.Ping())
+        worker.send_msg(msgs.Hello())
 
     def remove_worker(self, worker):
         if worker not in self.workers:
@@ -182,17 +199,28 @@ class ServerBroker(Broker):
 
     def on_pong(self, worker, msg):
         info = self.workers[worker]
+
         log.info("worker %s, ping/pong time %.3f msecs" % (worker,
                                                            (time.time() - info.create_time) * 1000))
-        worker.send_msg(msgs.Hello())
 
     def on_hello_response(self, worker, msg):
         info = self.workers[worker]
-        if msg.worker_type == "player":
-            info.worker_type = msg.worker_type
-            info.copy_cmd = msg.copy_cmd
-        else:
-            raise Exception("TODO")
+        info.worker_type = msg.worker_type
+
+        if "approx_self_play":
+            policy_gen = self.get_policy_generation(self.conf.current_step)
+            score_gen = self.get_score_generation(self.conf.current_step)
+            worker.send_msg(msgs.SelfPlayQuery(self.conf.game, policy_gen, score_gen))
+
+    def send_generation_to_worker(self, worker):
+        XXX
+
+    def on_selfplay_response(self, worker, msg):
+        info = self.workers[worker]
+        info.reset()
+
+        if msg.send_generation:
+            self.send_generation_to_worker(worker)
 
         # ok we need to configure player
         self.free_players.append(info)
@@ -202,8 +230,13 @@ class ServerBroker(Broker):
         info = self.workers[worker]
         if msg.message == "configured":
             info.configured = True
-        self.free_players.append(info)
-        reactor.callLater(0, self.schedule_players)
+            self.free_players.append(info)
+            reactor.callLater(0, self.schedule_players)
+
+        if msg.message == "network_trained":
+            self.networks_reqd_trained -= 1
+            if self.networks_reqd_trained == 0:
+                self.roll_generation()
 
     def on_sample_response(self, worker, msg):
         # need to check it isn't a duplicate and drop if so XXX
@@ -242,12 +275,48 @@ class ServerBroker(Broker):
             open_file.write(attrutil.attr_to_json(gen, indent=4))
 
         self.generation = gen
+        if self.the_nn_trainer is None:
+            critical_error("There is no nn trainer to create network - exiting")
+
+        m = msgs.TrainNNRequest()
+        m.game = self.conf.game
+        m.generation_prefix = self.conf.generation_prefix
+        m.store_path = self.conf.generation_prefix
+        m.use_previous = True
+        m.next_step = self.conf.current_step + 1
+        m.validation_split = self.conf.validation_split
+        m.batch_size = self.conf.batch_size
+        m.epochs = self.conf.epochs
+        m.max_sample_count = self.m.max_sample_count
+
+        # send out message
+        if self.conf.policy_network_size != self.conf.score_network_size:
+            for network_size in (self.conf.policy_network_size, self.conf.score_network_size):
+                m.network_size = network_size
+                self.the_nn_trainer.send_msg(m)
+                self.networks_reqd_trained += 1
+        else:
+            m.network_size = self.conf.policy_network_size
+            self.the_nn_trainer.send_msg(m)
+            self.networks_reqd_trained += 1
 
     def roll_generation(self):
-        # do lots of stuff
-        # like copy networks
-        # reconfigure
-        pass
+        # training is done
+        self.conf.current_step += 1
+        self.check_nn_generations_exist()
+
+        # reconfigure player workers
+        for p in self.workers:
+            p.configured.reset()
+
+        # rotate these
+        self.accumulated_samples[self.generation_size:]
+        self.unique_states = self.unique_states[self.generation_size:]
+        self.unique_states_set = set(self.unique_states)
+
+        # store the server config
+        with open(self.conf_filename, 'w') as open_file:
+            open_file.write(attrutil.attr_to_json(self.conf, indent=4))
 
     def schedule_players(self):
         if not self.free_players:
@@ -285,13 +354,12 @@ class ServerBroker(Broker):
         if len(self.accumulated_samples) > self.conf.generation_size:
             self.new_generation()
 
+        if self.the_nn_trainer is None:
+            log.warning("There is no nn trainer - please start")
+
 
 def start_server_factory(conf=None):
-    if conf is None:
-        conf = ServerConfig()
-
-    broker = ServerBroker(conf)
-
+    broker = ServerBroker(sys.argv[1])
     reactor.listenTCP(conf.port, ServerFactory(broker))
     reactor.run()
 

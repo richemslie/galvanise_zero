@@ -1,7 +1,26 @@
 import attr
 
-from collections import OrderedDict
 from ggplearn.training import approximate_play as ap
+
+
+@attr.s
+class Sample(object):
+    # 3 previous states, if any
+    prev_state2 = attr.ib()
+    prev_state1 = attr.ib()
+    prev_state0 = attr.ib()
+
+    # state policy trained on
+    state = attr.ib()
+
+    # polict distribution
+    policy = attr.ib()
+
+    final_score = attr.ib()
+    depth = attr.ib()
+    game_length = attr.ib()
+    lead_role_index = attr.ib()
+
 
 @attr.s
 class Generation(object):
@@ -16,6 +35,7 @@ class Generation(object):
 class Ping(object):
     pass
 
+
 @attr.s
 class Pong(object):
     pass
@@ -25,10 +45,28 @@ class Pong(object):
 class Hello(object):
     pass
 
+
 @attr.s
 class HelloResponse(object):
     worker_type = attr.ib()
-    copy_cmd = attr.ib()
+
+
+@attr.s
+class SelfPlayQuery(object):
+    game = attr.ib("breakthrough")
+    policy_generation = attr.ib("gen0")
+    score_generation = attr.ib("gen0")
+
+
+@attr.s
+class SelfPlayResponse(object):
+    send_generation = attr.ib(False)
+
+@attr.s
+class SendGenerationFiles(object):
+    model_data = attr.ib()
+    weight_data = attr.ib()
+    generations = attr.ib("gen0")
 
 
 @attr.s
@@ -48,19 +86,24 @@ class RequestSample(object):
 
 @attr.s
 class RequestSampleResponse(object):
-    sample = attr.ib(default=attr.Factory(ap.Sample))
+    sample = attr.ib(default=attr.Factory(Sample))
     duplicates_seen = attr.ib(0)
 
 
 @attr.s
-class RequestFitting(object):
+class TrainNNRequest(object):
     game = attr.ib("breakthrough")
+
+    network_size = attr.ib("small")
+    generation_prefix = attr.ib("v2_")
+    store_path = attr.ib("somewhere")
+
+    # uses previous netwrok
+    use_previous = attr.ib("42")
+    next_step = attr.ib("42")
+
     validation_split = attr.ib(0.8)
     batch_size = attr.ib(32)
     epochs = attr.ib(10)
-    network_size = attr.ib("tiny")
-    generation = attr.ib(default=attr.Factory(Generation))
 
-@attr.s
-class RequestFittingResponse(object):
-    pass
+    max_sample_count = attr.ib(250000)

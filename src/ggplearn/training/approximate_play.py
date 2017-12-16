@@ -3,6 +3,8 @@ import random
 
 import attr
 
+from ggplib.util import log
+
 from ggplib.player.gamemaster import GameMaster
 from ggplib.db.helper import get_gdl_for_game
 
@@ -10,29 +12,23 @@ from ggplearn.player import mc
 
 
 @attr.s
-class Sample(object):
-    state = attr.ib()
-    policy = attr.ib()
-    final_score = attr.ib()
-    lead_role_index = attr.ib()
-
-
-@attr.s
 class RunnerConf(object):
-    game_name = attr.ib("breakthrough")
+    game = attr.ib("breakthrough")
     policy_generation = attr.ib("gen0_small")
     score_generation = attr.ib("gen0_smaller")
-    score_puct_player_conf = attr.ib(None)
-    policy_puct_player_conf = attr.ib(None)
+    temperature = attr.ib(1.5)
+    score_puct_player_conf = attr.ib(default=attr.Factory(mc.PUCTPlayerConf))
+    policy_puct_player_conf = attr.ib(default=attr.Factory(mc.PUCTPlayerConf))
 
 
 class Runner(object):
     def __init__(self, conf):
+        assert isinstance(conf, RunnerConf)
         self.conf = conf
 
         # create two game masters, one for the score playout, and one for the policy evaluation
-        self.gm_score = GameMaster(get_gdl_for_game(self.conf.game_name))
-        self.gm_policy = GameMaster(get_gdl_for_game(self.conf.game_name))
+        self.gm_score = GameMaster(get_gdl_for_game(self.conf.game))
+        self.gm_policy = GameMaster(get_gdl_for_game(self.conf.game))
 
         # add players to gamemasteres
         for role in self.gm_score.sm.get_roles():
@@ -48,9 +44,8 @@ class Runner(object):
         # cache a local statemachine basestate (doesn't matter which gm it comes from)
         self.basestate = self.gm_policy.sm.new_base_state()
 
-        # we want unique samples per generation
-        self.unique_samples = set()
-
+        # we want unique samples per generation, so store a unique_set here
+        self.unique_states = set()
         self.reset_debug()
 
     def reset_debug(self):
@@ -58,24 +53,26 @@ class Runner(object):
         self.acc_time_for_play_one_game = 0
         self.acc_time_for_do_policy = 0
 
+    def add_to_unique_states(self, state):
+        self.unique_states.add(state)
+
     def get_bases(self):
         self.gm_score.sm.get_current_state(self.basestate)
-        return self.basestate.to_list()
+        return tuple(self.basestate.to_list())
 
     def play_one_game(self):
         self.gm_score.reset()
 
         self.gm_score.start(meta_time=20, move_time=10)
 
-        states = [self.get_bases()]
+        states = [(0, self.get_bases())]
 
         last_move = None
+        depth = 1
         while not self.gm_score.finished():
             last_move = self.gm_score.play_single_move(last_move=last_move)
-            states.append(self.get_bases())
-
-        # pop the final state, as we don't want terminal states
-        states.pop()
+            states.append((depth, self.get_bases()))
+            depth += 1
 
         # cleanup
         self.gm_score.play_to_end(last_move)
@@ -91,26 +88,65 @@ class Runner(object):
         # self.last_move used in playout_state
         self.last_move = self.gm_policy.play_single_move(None)
 
-        # fish for root (XXX for game specific, XXX for horrible fishing)
+        # fish for root (XXX for game specific)
         lead_role_index = 1 if self.last_move[0] == "noop" else 0
+
         player = self.gm_policy.get_player(lead_role_index)
-        dist = [(c.legal, p) for c, p in player.get_probabilities(1.5)]
+        dist = [(c.legal, p) for c, p in player.get_probabilities(self.conf.temperature)]
+
         return dist, lead_role_index
 
     def generate_sample(self):
+        from ggplearn.distributed import msgs
+
+        # debug
+        score_player = self.gm_score.get_player(0)
+        policy_player = self.gm_policy.get_player(0)
+        log.debug("generate_sample() gens score: %s, policy: %s" % (score_player.generation,
+                                                                    policy_player.generation))
+        log.debug("iterations score: %s, policy: %s" % (score_player.conf.num_of_playouts_per_iteration,
+                                                        policy_player.conf.num_of_playouts_per_iteration))
+
+        log.debug("unique_states: %s" % len(self.unique_states))
+
         start_time = time.time()
         states, final_score = self.play_one_game()
+        game_length = len(states)
+
+        log.debug("Done play_one_game(), game_length %d" % game_length)
+
         self.acc_time_for_play_one_game += time.time() - start_time
-        # we don't sample last state as has no policy
-        random.shuffle(states)
 
-        while states:
-            state = tuple(states.pop())
+        # pop the final state, as we don't want terminal states
+        shuffle_states = states[:]
+        shuffle_states.pop()
+        random.shuffle(shuffle_states)
 
-            if tuple(state) in self.unique_samples:
+        duplicate_count = 0
+
+        while shuffle_states:
+            depth, state = shuffle_states.pop()
+
+            if state in self.unique_states:
+                duplicate_count += 1
                 continue
 
             start_time = time.time()
             policy_dist, lead_role_index = self.do_policy(state)
+            log.debug("Done do_policy()")
+
             self.acc_time_for_do_policy += time.time() - start_time
-            return Sample(state, policy_dist, final_score, lead_role_index)
+
+            prev2 = state[depth - 3] if depth >= 3 else None
+            prev1 = state[depth - 2] if depth >= 2 else None
+            prev0 = state[depth - 1] if depth >= 1 else None
+
+            sample = msgs.Sample(prev2, prev1, prev0,
+                                 state, policy_dist, final_score,
+                                 depth, game_length, lead_role_index)
+
+            return sample, duplicate_count
+
+
+        log.warning("Ran out of states, lots of duplicates.  Please do something about this, shouldn't be playing with lots of duplicates.  Hack for now is to rerun.")
+        return self.generate_sample()
