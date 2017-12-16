@@ -23,7 +23,7 @@ class Sample(object):
         # this is also 2 player specfic
         assert len(final_score) == 2
         assert isinstance(final_score, dict)
-        final_score = final_score['white'], final_score['black']
+        final_score = final_score['white'] / 100.0, final_score['black'] / 100.0
 
         for pair in policy_dist:
             assert len(pair) == 2
@@ -32,23 +32,6 @@ class Sample(object):
         self.policy_dist = policy_dist
         self.final_score = final_score
         self.lead_role_index = lead_role_index
-
-    def check_lead_role_index(self, base_infos):
-        # XXX tmp, should just remove this if it works.  Or move it to base_infos.
-
-        for idx, binfo in enumerate(base_infos):
-            if not self.state[idx]:
-                continue
-
-            if binfo.terms[0] == "control":
-                if binfo.terms[1] == "white":
-                    lead_role_index = 0
-                else:
-                    assert binfo.terms[1] == "black"
-                    lead_role_index = 1
-                break
-
-        assert self.lead_role_index == lead_role_index
 
     def policy_as_array(self, sm_model):
         index_start = 0 if self.lead_role_index == 0 else len(sm_model.actions[0])
@@ -83,8 +66,6 @@ class SamplesHolder(object):
     def sample_to_nn_style(self, sample, data):
 
         # transform samples -> numpy arrays as inputs/outputs to nn
-
-        sample.check_lead_role_index(self.base_config.base_infos)
 
         # input 1
         planes = self.base_config.state_to_channels(sample.state, sample.lead_role_index)
@@ -124,6 +105,12 @@ class SamplesHolder(object):
             validation_data[ii] = arr
             log.debug("Shape of validation data %d: %s" % (ii, arr.shape))
 
+        # good always a good idea to print some outputs
+        print training_data[0][-120]
+        print training_data[1][-120]
+        print training_data[2][-120]
+        print training_data[3][-120]
+
         return network.TrainData(inputs=training_data[:2],
                                  outputs=training_data[2:],
                                  validation_inputs=validation_data[:2],
@@ -140,6 +127,8 @@ def get_data(store_path, last_step):
 
 def parse_and_train(conf):
     assert isinstance(conf, msgs.TrainNNRequest)
+
+    attrutil.pprint(conf)
 
     # lookup via game_name (this gets statemachine & statemachine model)
     game_info = lookup.by_name(conf.game)
@@ -170,6 +159,11 @@ def parse_and_train(conf):
     samples_holder = SamplesHolder(game_info, base_config)
 
     for gen_data in get_data(conf.store_path, conf.next_step - 1):
+        print "with policy gen", gen_data.with_policy_generation
+        print "with score gen", gen_data.with_score_generation
+        print "number of samples", gen_data.num_samples
+        assert gen_data.num_samples == len(gen_data.samples)
+
         assert gen_data.game == conf.game
         train_count = int(gen_data.num_samples * conf.validation_split)
 
@@ -197,15 +191,16 @@ def go():
     conf.store_path = os.path.join(os.environ["GGPLEARN_PATH"], "data", "breakthrough", "v2")
 
     # uses previous network
-    conf.use_previous = True
+    conf.use_previous = False
     conf.next_step = 1
 
     conf.validation_split = 0.8
     conf.batch_size = 32
-    conf.epochs = 4
+    conf.epochs = 5
     conf.max_sample_count = 100000
 
     parse_and_train(conf)
+
 
 def main_wrap(fn):
     import pdb

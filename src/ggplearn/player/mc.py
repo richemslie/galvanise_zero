@@ -1,4 +1,5 @@
 import time
+import random
 from operator import itemgetter, attrgetter
 
 import attr
@@ -36,6 +37,7 @@ class PUCTPlayerConf(object):
 
     max_dump_depth = attr.ib(2)
 
+
 class Child(object):
     def __init__(self, parent, move, legal):
         self.parent = parent
@@ -69,14 +71,14 @@ class Child(object):
                 score = n.final_score[ri] or 0.0
 
             return "%s %d %.2f%%   %.2f %s" % (self.move,
-                                            self.visits(),
-                                            self.policy_dist_pct * 100,
-                                            score,
-                                            "T " if n.is_terminal else "* ")
+                                               self.visits(),
+                                               self.policy_dist_pct * 100,
+                                               score,
+                                               "T " if n.is_terminal else "* ")
         else:
             return "%s %d %.2f%%   ---- ? " % (self.move,
-                                            self.visits(),
-                                            self.policy_dist_pct * 100)
+                                               self.visits(),
+                                               self.policy_dist_pct * 100)
     __str__ = __repr__
 
 
@@ -143,6 +145,7 @@ class PUCTPlayer(MatchPlayer):
         self.root = None
         log.info("PUCTPlayer, match id: %s" % self.match.match_id)
 
+        self.game_depth = 0
         sm = self.match.sm
         game_info = self.match.game_info
 
@@ -407,6 +410,8 @@ class PUCTPlayer(MatchPlayer):
                                                                            max_depth))
 
     def on_apply_move(self, joint_move):
+        self.game_depth += 1
+
         # need to fish for it in children?
         if self.root is not None:
             lead = self.root.lead_role_index
@@ -523,13 +528,6 @@ class PUCTPlayer(MatchPlayer):
                 current = current.sorted_children()[0].to_node
                 dump_depth += 1
 
-
-            for c, p in self.get_probabilities():
-                print c, "root prob: %.2f" % (p * 100)
-
-            for c, p in self.get_probabilities(0.2):
-                print c, "root prob: %.2f" % (p * 100)
-
             if self.match.game_info.game == "breakthrough":
                 pretty_print_board(sm, self.root.state)
                 print
@@ -602,41 +600,46 @@ class PUCTPlayer(MatchPlayer):
     def choose_top_visits(self, finish_time):
         return self.root.sorted_children()[0]
 
-    def choose_training(self, finish_time):
-        pass
+    def choose_temperature(self, finish_time):
+        temp = 1.0
+        random_expected = random.random() * 0.25
+
+        temperature_depth_end = 20
+        if self.game_depth < temperature_depth_end:
+            temp = 0.1 + 0.9 * (0.85 ** (20 - self.game_depth))
+            random_expected = random.random() * 0.5
+
+        if self.conf.verbose:
+            log.info("temperature is %.3f" % temp)
+
+        total_seen = 0
+        res = None
+        for c, p in self.get_probabilities(temp):
+            if self.conf.verbose:
+                print c, 100 * p
+            total_seen += p
+            if res is None and total_seen > random_expected:
+                res = c, p
+                if self.conf.verbose:
+                    print ":::::::::: GOT"
+
+        assert res
+        return res[0]
 
 
 ##############################################################################
 
-# Settings for:
-def Xget_test_config():
-    test_config = PUCTPlayerConf()
-    test_config.name = "train policy"
-    test_config.verbose = False
-
-    test_config.num_of_playouts_per_iteration = 800
-    test_config.num_of_playouts_per_iteration_noop = 1
-
-    test_config.expand_root = 8
-    test_config.dirichlet_noise_alpha = -1
-    test_config.cpuct_constant_first_4 = 3.0
-    test_config.cpuct_constant_after_4 = 0.75
-    test_config.choose = "choose_converge"
-
-    return test_config
-
-
 def get_test_config():
-    return PUCTPlayerConf(name="score_puct__2",
+    return PUCTPlayerConf(name="xx",
                           verbose=True,
                           num_of_playouts_per_iteration=32,
                           num_of_playouts_per_iteration_noop=1,
-                          expand_root=5,
-                          dirichlet_noise_alpha=0.1,
-                          cpuct_constant_first_4=3.0,
+                          expand_root=16,
+                          dirichlet_noise_alpha=0.5,
+                          cpuct_constant_first_4=0.75,
                           cpuct_constant_after_4=0.75,
-                          choose="choose_top_visits",
-                          max_dump_depth=1)
+                          choose="choose_temperature",
+                          max_dump_depth=2)
 
 
 def main():

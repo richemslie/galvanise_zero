@@ -1,6 +1,5 @@
 ''' XXX move out of this repo '''
 
-import json
 import zlib
 import codecs
 import random
@@ -189,7 +188,7 @@ class WorkerFactory(protocol.ReconnectingClientFactory):
         self.broker = broker
 
     def buildProtocol(self, addr):
-        log.debug("Connetion made to: %s" % addr)
+        log.debug("Connection made to: %s" % addr)
         return WorkerClient(self.broker)
 
 
@@ -224,5 +223,5 @@ class ServerFactory(protocol.Factory):
         self.broker = broker
 
     def buildProtocol(self, addr):
-        log.debug("Connetion made from: %s" % addr)
+        log.debug("Connection made from: %s" % addr)
         return ServerClient(self.broker)

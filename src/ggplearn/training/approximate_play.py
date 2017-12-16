@@ -1,29 +1,23 @@
 import time
 import random
 
-import attr
-
 from ggplib.util import log
 
 from ggplib.player.gamemaster import GameMaster
 from ggplib.db.helper import get_gdl_for_game
 
+from ggplearn.util import attrutil
+from ggplearn.distributed import msgs
+
 from ggplearn.player import mc
-
-
-@attr.s
-class RunnerConf(object):
-    game = attr.ib("breakthrough")
-    policy_generation = attr.ib("gen0_small")
-    score_generation = attr.ib("gen0_smaller")
-    temperature = attr.ib(1.5)
-    score_puct_player_conf = attr.ib(default=attr.Factory(mc.PUCTPlayerConf))
-    policy_puct_player_conf = attr.ib(default=attr.Factory(mc.PUCTPlayerConf))
 
 
 class Runner(object):
     def __init__(self, conf):
-        assert isinstance(conf, RunnerConf)
+        assert isinstance(conf, msgs.ConfigureApproxTrainer)
+
+        attrutil.pprint(conf)
+
         self.conf = conf
 
         # create two game masters, one for the score playout, and one for the policy evaluation
@@ -93,12 +87,10 @@ class Runner(object):
 
         player = self.gm_policy.get_player(lead_role_index)
         dist = [(c.legal, p) for c, p in player.get_probabilities(self.conf.temperature)]
-
+        print dist
         return dist, lead_role_index
 
     def generate_sample(self):
-        from ggplearn.distributed import msgs
-
         # debug
         score_player = self.gm_score.get_player(0)
         policy_player = self.gm_policy.get_player(0)
@@ -147,6 +139,6 @@ class Runner(object):
 
             return sample, duplicate_count
 
-
-        log.warning("Ran out of states, lots of duplicates.  Please do something about this, shouldn't be playing with lots of duplicates.  Hack for now is to rerun.")
+        log.warning("Ran out of states, lots of duplicates.  Please do something about this, "
+                    "shouldn't be playing with lots of duplicates.  Hack for now is to rerun.")
         return self.generate_sample()

@@ -1,3 +1,4 @@
+import sys
 import attr
 
 from twisted.internet import reactor
@@ -16,10 +17,8 @@ class WorkerConf(object):
     connect_ip_addr = attr.ib("127.0.0.1")
     connect_port = attr.ib(9000)
 
-    # server will call this on each generation (only once - as this string may not be unique per
-    # worker) if empty, server doesn't do anything.  eg
-    # copy_cmd = attr.ib("cp %s /dev/null")
-    copy_cmd = attr.ib("")
+    # only the master will ask for files
+    master = False
 
 
 class WorkerBroker(Broker):
@@ -38,6 +37,9 @@ class WorkerBroker(Broker):
         self.register(msgs.RequestSample, self.on_request_sample)
 
         self.approx_player = None
+
+        # set by server
+        self.game = None
         self.game_info = None
 
     def on_ping(self, server, msg):
@@ -48,20 +50,27 @@ class WorkerBroker(Broker):
 
     def on_self_play_query(self, server, msg):
         # check we have current generation
+        self.game = msg.game
         self.game_info = lookup.by_name(msg.game)
         m = msgs.SelfPlayResponse(False)
         for g in (msg.policy_generation, msg.score_generation):
             if not network.create(g, self.game_info).can_load():
                 log.warning("did not find generation %s" % g)
-                m.send_generation = True
+                if self.conf.master:
+                    m.send_generation = True
                 break
         return m
 
     def on_send_generation_files(self, server, msg):
-        XXX
+        log.warning("got generation files (model/weights)... for gen %s" % msg.generation)
+        with open(network.model_path(self.game, msg.generation), "w") as f:
+            f.write(msg.model_data)
+
+        with open(network.weights_path(self.game, msg.generation), "w") as f:
+            f.write(msg.model_data)
 
     def on_configure(self, server, msg):
-        self.approx_player = ap.Runner(msg.conf)
+        self.approx_player = ap.Runner(msg)
         return msgs.Ok("configured")
 
     def on_request_sample(self, server, msg):
@@ -78,9 +87,20 @@ class WorkerBroker(Broker):
 
 ###############################################################################
 
-def start_worker_factory(conf=None):
-    if conf is None:
-        conf = WorkerConf()
+def start_worker_factory():
+    from ggplib.util.init import setup_once
+    setup_once("approx_self_play")
+
+    from ggplearn.util.keras import constrain_resources
+    constrain_resources()
+
+    conf = WorkerConf()
+
+    try:
+        if sys.argv[1] == "-m":
+            conf.master = True
+    except IndexError:
+        pass
 
     broker = WorkerBroker(conf)
     reactor.connectTCP(conf.connect_ip_addr,
@@ -90,10 +110,4 @@ def start_worker_factory(conf=None):
 
 
 if __name__ == "__main__":
-    from ggplib.util.init import setup_once
-    setup_once("approx_self_play")
-
-    from ggplearn.util.keras import constrain_resources
-    constrain_resources()
-
     start_worker_factory()

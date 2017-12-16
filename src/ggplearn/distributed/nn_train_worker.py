@@ -34,7 +34,7 @@ class WorkerBroker(Broker):
     def on_hello(self, server, msg):
         return msgs.HelloResponse(worker_type=self.worker_type)
 
-    def on_train_request(self, msg):
+    def on_train_request(self, server, msg):
         log.warning("request to train %s" % msg)
         nn_train.parse_and_train(msg)
         return msgs.Ok("network_trained")

@@ -4,6 +4,7 @@ import attr
 
 import numpy as np
 from keras import models
+from keras.optimizers import SGD
 
 from ggplib.util import log
 
@@ -69,9 +70,9 @@ class NeuralNetwork(object):
 
     def compile(self):
         # loss is much less on score.  It overfits really fast.
-        if False: # params.ALPHAZERO_REGULARISATION
+        if False:  # params.ALPHAZERO_REGULARISATION
             optimizer = SGD(lr=1e-2, momentum=0.9)
-            loss = [objective_function_for_policy, "mean_squared_error"]
+            loss = [model.objective_function_for_policy, "mean_squared_error"]
         else:
             loss = ['categorical_crossentropy', 'mean_squared_error']
             optimizer = "adam"

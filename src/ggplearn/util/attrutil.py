@@ -5,6 +5,7 @@ import sys
 import attr
 import json
 
+
 class AttrDict(dict):
     def __init__(self, *args, **kwds):
         dict.__init__(self, *args, **kwds)
@@ -38,10 +39,8 @@ class AttrDict(dict):
 
         dict.__setitem__(self, k, v)
 
-
     def _do_list(self, k, v):
         assert isinstance(v, (list, tuple))
-        v_type = type(v)
 
         # anything to do?
         if not any(attr.has(i) for i in v):
@@ -49,7 +48,7 @@ class AttrDict(dict):
             return
 
         # check all the same type or not mixed
-        if sum(type(i)==type(v[0]) for i in v) != len(v):
+        if sum(issubclass(type(i), type(v[0])) for i in v) != len(v):
             raise Exception("Bad list %s" % v)
 
         self._add_clz_info_list(k, v[0])
@@ -97,6 +96,7 @@ def _fromdict_plus(d):
 
     return d
 
+
 def fromdict_plus(d):
     res = _fromdict_plus(d)
     assert 'obj' in res
@@ -105,9 +105,16 @@ def fromdict_plus(d):
 
 
 def attr_to_json(obj, **kwds):
+    assert attr.has(obj)
     return json.dumps(asdict_plus(obj), **kwds)
 
 
 def json_to_attr(buf, **kwds):
     d = json.loads(buf, **kwds)
     return fromdict_plus(d)
+
+
+def pprint(obj):
+    assert attr.has(obj)
+    from pprint import pprint
+    pprint(attr.asdict(obj))

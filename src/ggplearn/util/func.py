@@ -1,15 +1,15 @@
 ''' XXX move out of this repo '''
 
+import os
+import json
+
+
 def chunks(l, n):
     for i in range(0, len(l), n):
         yield l[i:i + n]
 
-json.encoder.FLOAT_REPR = lambda f: ("%.4f" % f)
-
 
 def get_from_json(path, includes=None, excludes=None):
-    # XXX fn is a bit too generic to be here '
-
     includes = includes or []
     excludes = excludes or []
     files = os.listdir(path)

@@ -1,6 +1,6 @@
 import attr
 
-from ggplearn.training import approximate_play as ap
+from ggplearn.player import mc
 
 
 @attr.s
@@ -62,11 +62,12 @@ class SelfPlayQuery(object):
 class SelfPlayResponse(object):
     send_generation = attr.ib(False)
 
+
 @attr.s
 class SendGenerationFiles(object):
     model_data = attr.ib()
     weight_data = attr.ib()
-    generations = attr.ib("gen0")
+    generation = attr.ib("gen0")
 
 
 @attr.s
@@ -76,7 +77,12 @@ class Ok(object):
 
 @attr.s
 class ConfigureApproxTrainer(object):
-    conf = attr.ib(default=attr.Factory(ap.RunnerConf))
+    game = attr.ib("breakthrough")
+    policy_generation = attr.ib("gen0_small")
+    score_generation = attr.ib("gen0_smaller")
+    temperature = attr.ib(1.0)
+    score_puct_player_conf = attr.ib(default=attr.Factory(mc.PUCTPlayerConf))
+    policy_puct_player_conf = attr.ib(default=attr.Factory(mc.PUCTPlayerConf))
 
 
 @attr.s

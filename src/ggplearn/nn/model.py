@@ -1,13 +1,10 @@
 ''' Regularisation tricks (tyvm) credit to :https://github.com/mokemokechicken/reversi-alpha-zero
 '''
 
-import os
-
 from keras import layers as klayers
 from keras import metrics, models
 from keras.regularizers import l2
 import keras.callbacks
-from keras.optimizers import SGD
 import keras.backend as K
 
 from ggplib.util import log
@@ -148,8 +145,8 @@ def get_network_model(config, **kwds):
 
     # model
     #######
-    return  models.Model(inputs=[inputs_board, inputs_other],
-                         outputs=[output_policy, output_score])
+    return models.Model(inputs=[inputs_board, inputs_other],
+                        outputs=[output_policy, output_score])
 
 
 ###############################################################################
