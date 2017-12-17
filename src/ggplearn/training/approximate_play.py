@@ -1,8 +1,6 @@
 import time
 import random
 
-import numpy as np
-
 from ggplib.util import log
 
 from ggplib.player.gamemaster import GameMaster
@@ -88,12 +86,8 @@ class Runner(object):
         lead_role_index = 1 if self.last_move[0] == "noop" else 0
 
         player = self.gm_policy.get_player(lead_role_index)
-
-        # distx = [(c.move, p) for c, p in player.get_probabilities(self.conf.temperature)]
-        # import pprint
-        # print.pprint(distx)
-
         dist = [(c.legal, p) for c, p in player.get_probabilities(self.conf.temperature)]
+        print dist
         return dist, lead_role_index
 
     def generate_sample(self):
@@ -115,11 +109,10 @@ class Runner(object):
 
         self.acc_time_for_play_one_game += time.time() - start_time
 
+        # pop the final state, as we don't want terminal states
         shuffle_states = states[:]
-
-        # pop the final state, as we don't want terminal states.  But keep in states intact
         shuffle_states.pop()
-        np.random.shuffle(shuffle_states)
+        random.shuffle(shuffle_states)
 
         duplicate_count = 0
 
@@ -132,13 +125,13 @@ class Runner(object):
 
             start_time = time.time()
             policy_dist, lead_role_index = self.do_policy(state)
-
             log.debug("Done do_policy()")
+
             self.acc_time_for_do_policy += time.time() - start_time
 
-            prev2 = None  # states[depth - 3] if depth >= 3 else None
-            prev1 = None  # states[depth - 2] if depth >= 2 else None
-            prev0 = None  # states[depth - 1] if depth >= 1 else None
+            prev2 = state[depth - 3] if depth >= 3 else None
+            prev1 = state[depth - 2] if depth >= 2 else None
+            prev0 = state[depth - 1] if depth >= 1 else None
 
             sample = msgs.Sample(prev2, prev1, prev0,
                                  state, policy_dist, final_score,
