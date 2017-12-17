@@ -9,7 +9,7 @@ from ggplearn.util import attrutil
 
 from ggplearn.nn import bases, network
 
-from ggplearn.distributed import msgs
+from ggplearn import msgdefs
 
 
 class Sample(object):
@@ -35,10 +35,15 @@ class Sample(object):
 
     def policy_as_array(self, sm_model):
         index_start = 0 if self.lead_role_index == 0 else len(sm_model.actions[0])
+        actions = sm_model.actions[self.lead_role_index]
         expected_actions_len = sum(len(actions) for actions in sm_model.actions)
         policy_outputs = np.zeros(expected_actions_len)
         for idx, prob in self.policy_dist:
+            action = actions[idx]
+            if "1)" in action:
+                print action, prob
             policy_outputs[idx + index_start] = prob
+
         return policy_outputs
 
 
@@ -50,7 +55,7 @@ class SamplesHolder(object):
         self.validation_samples = []
 
     def add(self, sample, validation=False):
-        assert isinstance(sample, msgs.Sample)
+        assert isinstance(sample, msgdefs.Sample)
 
         # convert to a local sample
         s = Sample(sample.state,
@@ -126,7 +131,7 @@ def get_data(store_path, last_step):
 
 
 def parse_and_train(conf):
-    assert isinstance(conf, msgs.TrainNNRequest)
+    assert isinstance(conf, msgdefs.TrainNNRequest)
 
     attrutil.pprint(conf)
 
@@ -212,7 +217,7 @@ def go():
     from ggplib.util.init import setup_once
     setup_once()
 
-    conf = msgs.TrainNNRequest()
+    conf = msgdefs.TrainNNRequest()
     conf.game = "breakthrough"
 
     conf.network_size = "smaller"
@@ -221,7 +226,7 @@ def go():
 
     # uses previous network
     conf.use_previous = True
-    conf.next_step = 52
+    conf.next_step = 62
 
     conf.validation_split = 0.8
     conf.batch_size = 64

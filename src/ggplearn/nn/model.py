@@ -210,14 +210,14 @@ class MyCallback(keras.callbacks.Callback):
                 self.best = self.model.get_weights()
                 self.best_val_policy_acc = val_policy_acc
 
-        if epoch >= 2:
-            if (self.retrain_best is None or
-                (policy_acc + 0.01 < val_policy_acc and val_policy_acc > self.retrain_best_val_policy_acc)):
+            if epoch >= 2:
+                if (self.retrain_best is None or
+                    (policy_acc < val_policy_acc and val_policy_acc > self.retrain_best_val_policy_acc)):
 
-                # store retraining weights
-                log.debug("Setting retraining_weights to val_policy_acc %.4f" % val_policy_acc)
-                self.retrain_best = self.model.get_weights()
-                self.retrain_best_val_policy_acc = val_policy_acc
+                    # store retraining weights
+                    log.debug("Setting retraining_weights to val_policy_acc %.4f" % val_policy_acc)
+                    self.retrain_best = self.model.get_weights()
+                    self.retrain_best_val_policy_acc = val_policy_acc
 
     def on_train_end(self, logs=None):
         if self.best:

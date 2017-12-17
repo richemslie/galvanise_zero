@@ -1,5 +1,4 @@
 import time
-import random
 
 import numpy as np
 
@@ -9,22 +8,23 @@ from ggplib.player.gamemaster import GameMaster
 from ggplib.db.helper import get_gdl_for_game
 
 from ggplearn.util import attrutil
-from ggplearn.distributed import msgs
 
+from ggplearn import msgdefs
 from ggplearn.player import mc
 
 
 class Runner(object):
     def __init__(self, conf):
-        assert isinstance(conf, msgs.ConfigureApproxTrainer)
+        assert isinstance(conf, msgdefs.ConfigureApproxTrainer)
 
         attrutil.pprint(conf)
 
         self.conf = conf
 
         # create two game masters, one for the score playout, and one for the policy evaluation
-        self.gm_score = GameMaster(get_gdl_for_game(self.conf.game))
+        self.gm = GameMaster(get_gdl_for_game(self.conf.game))
         self.gm_policy = GameMaster(get_gdl_for_game(self.conf.game))
+        self.gm_score = GameMaster(get_gdl_for_game(self.conf.game))
 
         # add players to gamemasteres
         for role in self.gm_score.sm.get_roles():
@@ -140,9 +140,9 @@ class Runner(object):
             prev1 = None  # states[depth - 2] if depth >= 2 else None
             prev0 = None  # states[depth - 1] if depth >= 1 else None
 
-            sample = msgs.Sample(prev2, prev1, prev0,
-                                 state, policy_dist, final_score,
-                                 depth, game_length, lead_role_index)
+            sample = msgdefs.Sample(prev2, prev1, prev0,
+                                    state, policy_dist, final_score,
+                                    depth, game_length, lead_role_index)
 
             return sample, duplicate_count
 

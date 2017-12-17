@@ -47,4 +47,3 @@ class RunCmds(object):
             reactor.callLater(0.1, self.check_running_processes)
         else:
             self.cb_on_completion()
-

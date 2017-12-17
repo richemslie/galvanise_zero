@@ -1,7 +1,5 @@
 import os
 
-import attr
-
 import numpy as np
 from keras import models
 from keras.optimizers import SGD
@@ -19,16 +17,6 @@ def model_path(game, generation):
 def weights_path(game, generation):
     filename = "%s_%s.h5" % (game, generation)
     return os.path.join(os.environ["GGPLEARN_PATH"], "data", "weights", filename)
-
-
-@attr.s
-class TrainData(object):
-    inputs = attr.ib()
-    outputs = attr.ib()
-    validation_inputs = attr.ib()
-    validation_outputs = attr.ib()
-    batch_size = attr.ib(512)
-    epochs = attr.ib(24)
 
 
 class NeuralNetwork(object):

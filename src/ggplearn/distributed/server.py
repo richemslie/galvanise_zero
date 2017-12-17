@@ -3,7 +3,6 @@ import sys
 import time
 import shutil
 
-import attr
 import json
 
 from twisted.internet import reactor
@@ -14,13 +13,8 @@ from ggplib.db import lookup
 from ggplearn.util import attrutil, runprocs
 from ggplearn.util.broker import Broker, ServerFactory
 
-from ggplearn.distributed import msgs
-
+from ggplearn import msgdefs
 from ggplearn.nn import network
-
-from ggplearn.player import mc
-
-from subprocess import Popen, PIPE
 
 
 def critical_error(msg):
@@ -29,36 +23,8 @@ def critical_error(msg):
     sys.exit(1)
 
 
-@attr.s
-class ServerConfig(object):
-    port = attr.ib(9000)
-
-    game = attr.ib("breakthrough")
-
-    current_step = attr.ib(0)
-    policy_network_size = attr.ib("small")
-    score_network_size = attr.ib("smaller")
-
-    generation_prefix = attr.ib("v2_")
-    store_path = attr.ib("somewhere")
-
-    policy_player_conf = attr.ib(default=attr.Factory(mc.PUCTPlayerConf))
-    score_player_conf = attr.ib(default=attr.Factory(mc.PUCTPlayerConf))
-
-    generation_size = attr.ib(1024)
-    max_growth_while_training = attr.ib(0.2)
-
-    validation_split = attr.ib(0.8)
-    batch_size = attr.ib(32)
-    epochs = attr.ib(10)
-    max_sample_count = attr.ib(250000)
-
-    # run system commands after (copy files to machines etc)
-    run_post_training_cmds = attr.ib(default=attr.Factory(list))
-
-
 def default_conf():
-    conf = ServerConfig()
+    conf = msgdefs.ServerConfig()
 
     conf.port = 9000
     conf.game = "breakthrough"
@@ -70,26 +36,26 @@ def default_conf():
     conf.generation_prefix = "v2_"
     conf.store_path = os.path.join(os.environ["GGPLEARN_PATH"], "data", "breakthrough", "v2")
 
-    conf.score_player_conf = mc.PUCTPlayerConf(name="score_puct",
-                                               verbose=False,
-                                               num_of_playouts_per_iteration=32,
-                                               num_of_playouts_per_iteration_noop=0,
-                                               expand_root=5,
-                                               dirichlet_noise_alpha=0.1,
-                                               cpuct_constant_first_4=0.75,
-                                               cpuct_constant_after_4=0.75,
-                                               choose="choose_converge")
+    conf.score_player_conf = msgdefs.PUCTPlayerConf(name="score_puct",
+                                                    verbose=False,
+                                                    num_of_playouts_per_iteration=32,
+                                                    num_of_playouts_per_iteration_noop=0,
+                                                    expand_root=5,
+                                                    dirichlet_noise_alpha=0.1,
+                                                    cpuct_constant_first_4=0.75,
+                                                    cpuct_constant_after_4=0.75,
+                                                    choose="choose_converge")
 
-    conf.policy_player_conf = mc.PUCTPlayerConf(name="policy_puct",
-                                                verbose=False,
-                                                num_of_playouts_per_iteration=200,
-                                                # num_of_playouts_per_iteration=800,
-                                                num_of_playouts_per_iteration_noop=0,
-                                                expand_root=5,
-                                                dirichlet_noise_alpha=-1,
-                                                cpuct_constant_first_4=3.0,
-                                                cpuct_constant_after_4=0.75,
-                                                choose="choose_converge")
+    conf.policy_player_conf = msgdefs.PUCTPlayerConf(name="policy_puct",
+                                                     verbose=False,
+                                                     num_of_playouts_per_iteration=200,
+                                                     # num_of_playouts_per_iteration=800,
+                                                     num_of_playouts_per_iteration_noop=0,
+                                                     expand_root=5,
+                                                     dirichlet_noise_alpha=-1,
+                                                     cpuct_constant_first_4=3.0,
+                                                     cpuct_constant_after_4=0.75,
+                                                     choose="choose_converge")
     conf.generation_size = 32
     conf.max_growth_while_training = 0.2
 
@@ -97,8 +63,6 @@ def default_conf():
     conf.batch_size = 32
     conf.epochs = 4
     conf.max_sample_count = 100000
-
-    roll_generation_cmds = []
 
     return conf
 
@@ -136,7 +100,7 @@ class ServerBroker(Broker):
         self.conf_filename = conf_filename
         if os.path.exists(conf_filename):
             conf = attrutil.json_to_attr(open(conf_filename).read())
-            assert isinstance(conf, ServerConfig)
+            assert isinstance(conf, msgdefs.ServerConfig)
         else:
             conf = default_conf()
 
@@ -158,12 +122,11 @@ class ServerBroker(Broker):
         self.generation = None
         self.cmd_running = None
 
-        self.register(msgs.Pong, self.on_pong)
-        self.register(msgs.HelloResponse, self.on_hello_response)
+        self.register(msgdefs.Pong, self.on_pong)
+        self.register(msgdefs.HelloResponse, self.on_hello_response)
 
-        self.register(msgs.SelfPlayResponse, self.on_self_play_response)
-        self.register(msgs.Ok, self.on_ok)
-        self.register(msgs.RequestSampleResponse, self.on_sample_response)
+        self.register(msgdefs.Ok, self.on_ok)
+        self.register(msgdefs.RequestSampleResponse, self.on_sample_response)
 
         self.networks_reqd_trained = 0
 
@@ -223,8 +186,8 @@ class ServerBroker(Broker):
     def new_worker(self, worker):
         self.workers[worker] = WorkerInfo(worker, time.time())
         log.debug("New worker %s" % worker)
-        worker.send_msg(msgs.Ping())
-        worker.send_msg(msgs.Hello())
+        worker.send_msg(msgdefs.Ping())
+        worker.send_msg(msgdefs.Hello())
 
     def remove_worker(self, worker):
         if worker not in self.workers:
@@ -245,9 +208,12 @@ class ServerBroker(Broker):
         info.worker_type = msg.worker_type
 
         if info.worker_type == "approx_self_play":
-            policy_gen = self.get_policy_generation(self.conf.current_step)
-            score_gen = self.get_score_generation(self.conf.current_step)
-            worker.send_msg(msgs.SelfPlayQuery(self.conf.game, policy_gen, score_gen))
+            info.reset()
+
+            self.free_players.append(info)
+
+            # configure player will happen in schedule_players
+            reactor.callLater(0, self.schedule_players)
 
         elif info.worker_type == "nn_train":
             # protection against > 1 the_nn_trainer
@@ -259,14 +225,6 @@ class ServerBroker(Broker):
         else:
             log.error("Who are you? %s" % (info.worker_type))
             raise Exception("Who are you?")
-
-    def on_self_play_response(self, worker, msg):
-        info = self.workers[worker]
-        info.reset()
-
-        # ok we need to configure player
-        self.free_players.append(info)
-        reactor.callLater(0, self.schedule_players)
 
     def on_ok(self, worker, msg):
         info = self.workers[worker]
@@ -320,7 +278,7 @@ class ServerBroker(Broker):
 
         log.info("new_generation()")
 
-        gen = msgs.Generation()
+        gen = msgdefs.Generation()
         gen.game = self.conf.game
         gen.with_score_generation = self.get_score_generation(self.conf.current_step)
         gen.with_policy_generation = self.get_policy_generation(self.conf.current_step)
@@ -340,7 +298,7 @@ class ServerBroker(Broker):
             critical_error("There is no nn trainer to create network - exiting")
 
         log.info("create TrainNNRequest()")
-        m = msgs.TrainNNRequest()
+        m = msgdefs.TrainNNRequest()
         m.game = self.conf.game
         m.generation_prefix = self.conf.generation_prefix
         m.store_path = self.conf.store_path
@@ -373,13 +331,8 @@ class ServerBroker(Broker):
         self.check_nn_generations_exist()
 
         # reconfigure player workers
-        policy_gen = self.get_policy_generation(self.conf.current_step)
-        score_gen = self.get_score_generation(self.conf.current_step)
         for worker, info in self.workers.items():
             info.reset()
-
-        # clear the free players
-        # self.free_players = []
 
         self.create_approx_config()
 
@@ -398,13 +351,14 @@ class ServerBroker(Broker):
         log.warning("roll_generation() complete.  We have %s samples leftover" % len(self.accumulated_samples))
 
     def create_approx_config(self):
-        c = self.approx_play_config = msgs.ConfigureApproxTrainer()
-        c.game = self.conf.game
-        c.policy_generation = self.get_policy_generation(self.conf.current_step)
-        c.score_generation = self.get_score_generation(self.conf.current_step)
-        c.temperature = 1.0
-        c.score_puct_player_conf = self.conf.score_player_conf
-        c.policy_puct_player_conf = self.conf.policy_player_conf
+        conf = msgdefs.ConfigureApproxTrainer()
+        conf.game = self.conf.game
+        conf.policy_generation = self.get_policy_generation(self.conf.current_step)
+        conf.score_generation = self.get_score_generation(self.conf.current_step)
+        conf.temperature = 1.0
+        conf.score_puct_player_conf = self.conf.score_player_conf
+        conf.policy_puct_player_conf = self.conf.policy_player_conf
+        self.approx_play_config = conf
 
     def schedule_players(self):
         if not self.free_players:
@@ -421,7 +375,7 @@ class ServerBroker(Broker):
             else:
                 if self.need_more_samples():
                     updates = worker_info.get_and_update(self.unique_states)
-                    m = msgs.RequestSample(updates)
+                    m = msgdefs.RequestSample(updates)
                     log.debug("sending request with %s updates" % len(updates))
                     worker_info.worker.send_msg(m)
                 else:

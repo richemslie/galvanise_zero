@@ -3,8 +3,6 @@ import time
 import random
 from operator import itemgetter, attrgetter
 
-import attr
-
 import numpy as np
 
 from ggplib.util import log
@@ -12,32 +10,12 @@ from ggplib.player.base import MatchPlayer
 
 from ggplearn.util.bt import pretty_print_board
 
+from ggplearn import msgdefs
+
 from ggplearn.nn import bases
 
 
 ###############################################################################
-
-@attr.s
-class PUCTPlayerConf(object):
-    name = attr.ib("PUCTPlayer")
-    verbose = attr.ib(True)
-
-    num_of_playouts_per_iteration = attr.ib(800)
-    num_of_playouts_per_iteration_noop = attr.ib(1)
-    cpuct_constant_first_4 = attr.ib(0.75)
-    cpuct_constant_after_4 = attr.ib(0.75)
-
-    # added to root child policy pct (less than 0 is off)
-    dirichlet_noise_alpha = attr.ib(0.1)
-    dirichlet_noise_pct = attr.ib(0.25)
-
-    # MAYBE useful for when small number of iterations.  otherwise pretty much the same
-    expand_root = attr.ib(-1)
-
-    choose = attr.ib("choose_top_visits")
-
-    max_dump_depth = attr.ib(2)
-
 
 class Child(object):
     def __init__(self, parent, move, legal):
@@ -130,7 +108,7 @@ class PUCTPlayer(MatchPlayer):
         self.root = None
         self.generation = generation
         if conf is None:
-            conf = PUCTPlayerConf()
+            conf = msgdefs.PUCTPlayerConf()
 
         self.conf = conf
 
@@ -515,6 +493,9 @@ class PUCTPlayer(MatchPlayer):
         choice = self.choose(finish_time)
 
         if self.conf.verbose:
+            for c, v in self.get_probabilities():
+                print c, v
+
             current = self.root
 
             dump_depth = 0
@@ -602,16 +583,11 @@ class PUCTPlayer(MatchPlayer):
         return self.root.sorted_children()[0]
 
     def choose_temperature(self, finish_time):
-        depth = max(1, self.game_depth)
-        if depth > 16:
-            return self.choose_top_visits(finish_time)
+        temperature_depth_end = 20
+        depth = min(temperature_depth_end, self.game_depth + 1)
 
-        temp = 1.0
-        random_range = 0.5 / math.sqrt(depth + 2) + 0.1
-
-        temperature_depth_end = 16
-        if self.game_depth < temperature_depth_end:
-            temp = 0.5 + 0.5 * (0.85 ** (temperature_depth_end - depth))
+        random_range = 0.5 / math.sqrt(depth) + 0.1
+        temp = 0.35 + 0.65 * (0.9 ** (temperature_depth_end - depth))
 
         if self.conf.verbose:
             log.info("depth %d, temperature is %.3f, random range %.3f" % (depth, temp, random_range))
@@ -636,28 +612,29 @@ class PUCTPlayer(MatchPlayer):
 ##############################################################################
 
 def get_test_config():
-    return PUCTPlayerConf(name="xx",
-                          verbose=True,
-                          num_of_playouts_per_iteration=32,
-                          num_of_playouts_per_iteration_noop=1,
-                          expand_root=100,
-                          dirichlet_noise_alpha=0.5,
-                          cpuct_constant_first_4=0.75,
-                          cpuct_constant_after_4=0.75,
-                          choose="choose_temperature",
-                          max_dump_depth=2)
+    return msgdefs.PUCTPlayerConf(name="xx",
+                                  verbose=True,
+                                  num_of_playouts_per_iteration=32,
+                                  num_of_playouts_per_iteration_noop=1,
+                                  expand_root=100,
+                                  dirichlet_noise_alpha=0.5,
+                                  cpuct_constant_first_4=0.75,
+                                  cpuct_constant_after_4=0.75,
+                                  choose="choose_temperature",
+                                  max_dump_depth=2)
 
-def get_test_config():
-    return PUCTPlayerConf(name="xx",
-                          verbose=True,
-                          num_of_playouts_per_iteration=200,
-                          num_of_playouts_per_iteration_noop=1,
-                          expand_root=100,
-                          dirichlet_noise_alpha=0.1,
-                          cpuct_constant_first_4=0.75,
-                          cpuct_constant_after_4=0.75,
-                          choose="choose_converge",
-                          max_dump_depth=2)
+
+def xget_test_config():
+    return msgdefs.PUCTPlayerConf(name="xx",
+                                  verbose=True,
+                                  num_of_playouts_per_iteration=400,
+                                  num_of_playouts_per_iteration_noop=1,
+                                  expand_root=100,
+                                  dirichlet_noise_alpha=0.1,
+                                  cpuct_constant_first_4=0.75,
+                                  cpuct_constant_after_4=0.75,
+                                  choose="choose_converge",
+                                  max_dump_depth=2)
 
 
 def main():
