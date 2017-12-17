@@ -1,5 +1,6 @@
-import attr
 from pprint import pprint
+
+import attr
 
 from ggplearn.util import attrutil, func, broker, runprocs
 
@@ -22,19 +23,21 @@ def test_challenge():
     assert len(m) == 128
 
 
+@attr.s
+class DummyMsg(object):
+    what = attr.ib()
+
+
+class BrokerX(broker.Broker):
+    the_client = None
+    got = None
+
+    def on_call_me(self, client, msg):
+        self.the_client = client
+        self.got = msg.what
+
+
 def test_broker():
-    @attr.s
-    class DummyMsg(object):
-        what = attr.ib()
-
-    class BrokerX(broker.Broker):
-        the_client = None
-        got = None
-
-        def on_call_me(self, client, msg):
-            self.the_client = client
-            self.got = msg.what
-
     b = BrokerX()
 
     b.register(DummyMsg, b.on_call_me)
@@ -43,11 +46,6 @@ def test_broker():
 
     assert b.the_client == 42
     assert b.got == "hello"
-
-
-@attr.s
-class DummyMsg(object):
-    what = attr.ib()
 
 
 def test_client():
@@ -126,6 +124,7 @@ class Sample(object):
     name = attr.ib()
     data = attr.ib(attr.Factory(list))
 
+
 @attr.s
 class Samples(object):
     k = attr.ib()
@@ -140,7 +139,6 @@ def test_attrs_listof():
 
     d = attrutil.asdict_plus(samples)
     pprint(d)
-
 
     r = attrutil.fromdict_plus(d)
 
@@ -162,8 +160,7 @@ def test_runcmds():
         reactor.stop()
 
     cmds = ["ls -l", "sleep 3", "python2 -c 'import sys; print >>sys.stderr, 123'"]
-    cmds = runprocs.RunCmds(cmds, cb_on_completion=done)
+    run_cmds = runprocs.RunCmds(cmds, cb_on_completion=done)
 
-    reactor.callLater(0.1, cmds.spawn)
+    reactor.callLater(0.1, run_cmds.spawn)
     reactor.run()
-

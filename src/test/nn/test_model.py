@@ -93,6 +93,7 @@ def test_net_sizes_with_l2():
         nn = bases_config.create_network(tiny=True, a0_reg=True)
         nn.summary()
 
+
 def test_save_load_net():
     game_info = lookup.by_name("breakthrough")
 
