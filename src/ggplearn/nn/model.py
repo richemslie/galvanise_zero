@@ -154,11 +154,18 @@ def get_network_model(config, **kwds):
 class MyCallback(keras.callbacks.Callback):
     ''' custom callbac to do nice logging '''
     def on_train_begin(self, logs=None):
+        self.best = None
+        self.best_val_policy_acc = -1
+
+        self.retrain_best = None
+        self.retrain_best_val_policy_acc = -1
+
         self.epochs = self.params['epochs']
 
     def on_epoch_end(self, epoch, logs=None):
         assert logs
-        log.debug("Epoch %s/%s" % (epoch + 1, self.epochs))
+        epoch += 1
+        log.debug("Epoch %s/%s" % (epoch, self.epochs))
 
         def str_by_name(names, dp=3):
             fmt = "%%s = %%.%df" % dp
@@ -188,6 +195,34 @@ class MyCallback(keras.callbacks.Callback):
 
             log.info("%s : %s" % (output, str_by_name(acc)))
             log.info("%s : %s" % (output, str_by_name(val_acc)))
+
+        self.store_and_stop(epoch, logs['policy_acc'], logs['val_policy_acc'])
+
+    def store_and_stop(self, epoch, policy_acc, val_policy_acc):
+        if epoch >= 4 and policy_acc - 0.02 > val_policy_acc:
+            log.info("Early stopping... since policy accuracy")
+            self.model.stop_training = True
+
+        else:
+            # store best weights as best val_policy_acc
+            if val_policy_acc > self.best_val_policy_acc:
+                log.debug("Setting best to last val_policy_acc %.4f" % val_policy_acc)
+                self.best = self.model.get_weights()
+                self.best_val_policy_acc = val_policy_acc
+
+        if epoch >= 2:
+            if (self.retrain_best is None or
+                (policy_acc + 0.01 < val_policy_acc and val_policy_acc > self.retrain_best_val_policy_acc)):
+
+                # store retraining weights
+                log.debug("Setting retraining_weights to val_policy_acc %.4f" % val_policy_acc)
+                self.retrain_best = self.model.get_weights()
+                self.retrain_best_val_policy_acc = val_policy_acc
+
+    def on_train_end(self, logs=None):
+        if self.best:
+            log.info("Switching to best weights with val_policy_acc %s" % self.best_val_policy_acc)
+            self.model.set_weights(self.best)
 
 
 class MyProgbarLogger(keras.callbacks.Callback):

@@ -84,14 +84,21 @@ class NeuralNetwork(object):
     def train(self, conf):
         validation_data = [conf.validation_inputs, conf.validation_outputs]
 
+        # XXX rename this - refactor - etc
+        my_cb = model.MyCallback()
         self.model.fit(conf.inputs,
                        conf.outputs,
                        verbose=0,
                        batch_size=conf.batch_size,
                        epochs=conf.epochs,
                        validation_data=validation_data,
-                       callbacks=[model.MyProgbarLogger(), model.MyCallback()],
+                       callbacks=[model.MyProgbarLogger(), my_cb],
                        shuffle=True)
+
+        return my_cb
+
+    def get_model(self):
+        return self.model
 
     def save(self):
         # save model / weights

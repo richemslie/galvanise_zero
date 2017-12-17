@@ -130,30 +130,45 @@ def parse_and_train(conf):
 
     attrutil.pprint(conf)
 
+    use_previous = conf.use_previous
+    if use_previous:
+        if conf.next_step % 5 == 0:
+            log.warning("Not using previous since time to cycle...")
+            use_previous = False
+
     # lookup via game_name (this gets statemachine & statemachine model)
     game_info = lookup.by_name(conf.game)
 
-    # XXX need function for this
-    prev_generation = "%sgen_%s_%s" % (conf.generation_prefix,
-                                       conf.network_size,
-                                       conf.next_step - 1)
+    prev_generation = "%sgen_%s_%s_prev" % (conf.generation_prefix,
+                                            conf.network_size,
+                                            conf.next_step - 1)
 
     next_generation = "%sgen_%s_%s" % (conf.generation_prefix,
                                        conf.network_size,
                                        conf.next_step)
 
-    if conf.use_previous:
+    nn = None
+    if use_previous:
         base_config = bases.get_config(conf.game,
                                        game_info.model,
                                        prev_generation)
         nn = base_config.create_network()
-        nn.load()
-        base_config.update_generation(next_generation)
-    else:
+        if nn.can_load():
+            log.info("Previous generation found.")
+
+            nn.load()
+            base_config.update_generation(next_generation)
+
+        else:
+            log.warning("No previous generation to use...")
+            nn = None
+
+    if nn is None:
         base_config = bases.get_config(conf.game,
                                        game_info.model,
                                        next_generation)
-        # more parameters?  XXX
+
+        # more parameters passthrough?  XXX
         nn = base_config.create_network(network_size=conf.network_size)
 
     samples_holder = SamplesHolder(game_info, base_config)
@@ -178,11 +193,25 @@ def parse_and_train(conf):
     train_conf.batch_size = conf.batch_size
 
     nn.compile()
-    nn.train(train_conf)
+    res = nn.train(train_conf)
+    nn.save()
+
+    ###############################################################################
+    # save a previous model for next time
+    for_next_generation = "%sgen_%s_%s_prev" % (conf.generation_prefix,
+                                                conf.network_size,
+                                                conf.next_step)
+    base_config.update_generation(for_next_generation)
+
+    log.info("Saving retraining network with val_policy_acc: %.4f" % res.retrain_best_val_policy_acc)
+    nn.get_model().set_weights(res.retrain_best)
     nn.save()
 
 
 def go():
+    from ggplib.util.init import setup_once
+    setup_once()
+
     conf = msgs.TrainNNRequest()
     conf.game = "breakthrough"
 
@@ -191,12 +220,12 @@ def go():
     conf.store_path = os.path.join(os.environ["GGPLEARN_PATH"], "data", "breakthrough", "v2")
 
     # uses previous network
-    conf.use_previous = False
-    conf.next_step = 1
+    conf.use_previous = True
+    conf.next_step = 52
 
     conf.validation_split = 0.8
-    conf.batch_size = 32
-    conf.epochs = 5
+    conf.batch_size = 64
+    conf.epochs = 16
     conf.max_sample_count = 100000
 
     parse_and_train(conf)
