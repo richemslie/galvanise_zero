@@ -1,7 +1,7 @@
 import attr
 from pprint import pprint
 
-from ggplearn.util import attrutil, func, broker
+from ggplearn.util import attrutil, func, broker, runprocs
 
 
 def test_chunks():
@@ -150,4 +150,20 @@ def test_attrs_listof():
     assert len(r.samples) == 2
     assert r.samples[0].name == "s0"
     assert r.samples[1].data[1] == 4
+
+
+def test_runcmds():
+    from twisted.internet import reactor
+    from ggplib.util.init import setup_once
+    setup_once()
+
+    def done():
+        print "SUCCESS"
+        reactor.stop()
+
+    cmds = ["ls -l", "sleep 3", "python2 -c 'import sys; print >>sys.stderr, 123'"]
+    cmds = runprocs.RunCmds(cmds, cb_on_completion=done)
+
+    reactor.callLater(0.1, cmds.spawn)
+    reactor.run()
 
