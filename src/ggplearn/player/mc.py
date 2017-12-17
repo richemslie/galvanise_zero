@@ -313,7 +313,7 @@ class PUCTPlayer(MatchPlayer):
                 node_score = cn.mc_score[node.lead_role_index]
 
                 # ensure terminals are enforced more than other nodes
-                if node.is_terminal:
+                if cn.is_terminal:
                     node_score * 1.02
 
             child_pct = child.policy_dist_pct
@@ -603,13 +603,15 @@ class PUCTPlayer(MatchPlayer):
 
     def choose_temperature(self, finish_time):
         depth = max(1, self.game_depth)
+        if depth > 16:
+            return self.choose_top_visits(finish_time)
 
         temp = 1.0
-        random_range = (0.65 - 0.15) / math.sqrt(depth) + 0.1
+        random_range = 0.5 / math.sqrt(depth + 2) + 0.1
 
-        temperature_depth_end = 20
+        temperature_depth_end = 16
         if self.game_depth < temperature_depth_end:
-            temp = 0.1 + 0.9 * (0.85 ** (20 - depth))
+            temp = 0.5 + 0.5 * (0.85 ** (temperature_depth_end - depth))
 
         if self.conf.verbose:
             log.info("depth %d, temperature is %.3f, random range %.3f" % (depth, temp, random_range))
@@ -638,11 +640,23 @@ def get_test_config():
                           verbose=True,
                           num_of_playouts_per_iteration=32,
                           num_of_playouts_per_iteration_noop=1,
-                          expand_root=16,
+                          expand_root=100,
                           dirichlet_noise_alpha=0.5,
                           cpuct_constant_first_4=0.75,
                           cpuct_constant_after_4=0.75,
-                          choose="choose_top_visits",
+                          choose="choose_temperature",
+                          max_dump_depth=2)
+
+def get_test_config():
+    return PUCTPlayerConf(name="xx",
+                          verbose=True,
+                          num_of_playouts_per_iteration=200,
+                          num_of_playouts_per_iteration_noop=1,
+                          expand_root=100,
+                          dirichlet_noise_alpha=0.1,
+                          cpuct_constant_first_4=0.75,
+                          cpuct_constant_after_4=0.75,
+                          choose="choose_converge",
                           max_dump_depth=2)
 
 
