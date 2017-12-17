@@ -125,11 +125,11 @@ def test_fast_plays():
     gm = GameMaster(get_gdl_for_game("breakthrough"))
 
     conf = PUCTPlayerConf()
-    conf.VERBOSE = False
-    conf.NUM_OF_PLAYOUTS_PER_ITERATION = 1
-    conf.NUM_OF_PLAYOUTS_PER_ITERATION_NOOP = 0
-    conf.DIRICHLET_NOISE_ALPHA = 1.0
-    conf.EXPAND_ROOT = -1
+    conf.verbose = false
+    conf.num_of_playouts_per_iteration = 1
+    conf.num_of_playouts_per_iteration_noop = 0
+    conf.dirichlet_noise_alpha = 1.0
+    conf.expand_root = -1
 
     # add two players
     nn0 = PUCTPlayer(generation="test", conf=conf)
@@ -151,3 +151,42 @@ def test_fast_plays():
     print "time taken", time.time() - s
     print "white_score", gm.players_map["white"].name, acc_red_score
     print "black_score", gm.players_map["black"].name, acc_black_score
+
+
+def test_not_taking_win():
+    gm = GameMaster(get_gdl_for_game("breakthrough"))
+
+    conf = PUCTPlayerConf()
+    conf.verbose = True
+    conf.num_of_playouts_per_iteration = 42
+    conf.num_of_playouts_per_iteration_noop = 1
+    conf.dirichlet_noise_alpha = 0.1
+    conf.expand_root = 100
+
+    # add two c++ players
+    nn0 = PUCTPlayer(generation="v2_gen_smaller_47", conf=conf)
+    nn1 = PUCTPlayer(generation="v2_gen_smaller_47", conf=conf)
+    gm.add_player(nn0, "white")
+    gm.add_player(nn1, "black")
+
+    str_state = """(true (control black)) (true (cellHolds 8 8 black)) (true (cellHolds 8 7 black)) (true (cellHolds 8 2 white)) (true (cellHolds 8 1 white)) (true (cellHolds 7 8 black)) (true (cellHolds 6 7 white)) (true (cellHolds 6 2 white)) (true (cellHolds 6 1 white)) (true (cellHolds 5 4 black)) (true (cellHolds 5 3 black)) (true (cellHolds 5 2 white)) (true (cellHolds 5 1 white)) (true (cellHolds 4 8 black)) (true (cellHolds 4 7 black)) (true (cellHolds 4 1 white)) (true (cellHolds 3 8 black)) (true (cellHolds 3 6 black)) (true (cellHolds 3 2 white)) (true (cellHolds 2 8 black)) (true (cellHolds 2 7 black)) (true (cellHolds 2 2 white)) (true (cellHolds 2 1 white)) (true (cellHolds 1 8 black)) (true (cellHolds 1 7 black)) (true (cellHolds 1 2 white)) (true (cellHolds 1 1 white)) """
+
+
+    gm.start(meta_time=30, move_time=2,
+             initial_basestate=gm.convert_to_base_state(str_state))
+
+    last_move = None
+    depth = 1
+    basestate = gm.sm.new_base_state()
+    while not gm.finished():
+        last_move = gm.play_single_move(last_move=last_move)
+
+        gm.sm.get_current_state(basestate)
+        from ggplearn.util.bt import pretty_print_board
+
+        print
+        print "gm state:"
+        pretty_print_board(gm.sm, basestate.to_list())
+
+        depth += 1
+

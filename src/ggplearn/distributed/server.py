@@ -1,7 +1,7 @@
 import os
 import sys
-
 import time
+import shutil
 
 import attr
 import json
@@ -11,7 +11,7 @@ from twisted.internet import reactor
 from ggplib.util import log
 from ggplib.db import lookup
 
-from ggplearn.util import attrutil
+from ggplearn.util import attrutil, runprocs
 from ggplearn.util.broker import Broker, ServerFactory
 
 from ggplearn.distributed import msgs
@@ -19,6 +19,8 @@ from ggplearn.distributed import msgs
 from ggplearn.nn import network
 
 from ggplearn.player import mc
+
+from subprocess import Popen, PIPE
 
 
 def critical_error(msg):
@@ -50,6 +52,9 @@ class ServerConfig(object):
     batch_size = attr.ib(32)
     epochs = attr.ib(10)
     max_sample_count = attr.ib(250000)
+
+    # run system commands after (copy files to machines etc)
+    run_post_training_cmds = attr.ib(default=attr.Factory(list))
 
 
 def default_conf():
@@ -92,6 +97,8 @@ def default_conf():
     conf.batch_size = 32
     conf.epochs = 4
     conf.max_sample_count = 100000
+
+    roll_generation_cmds = []
 
     return conf
 
@@ -149,6 +156,7 @@ class ServerBroker(Broker):
 
         # when a generation object is around, we are in the processing of training
         self.generation = None
+        self.cmd_running = None
 
         self.register(msgs.Pong, self.on_pong)
         self.register(msgs.HelloResponse, self.on_hello_response)
@@ -185,7 +193,12 @@ class ServerBroker(Broker):
                 else:
                     critical_error("Did not find network %s.  exiting." % g)
 
-    def save_our_config(self):
+    def save_our_config(self, rolled=False):
+        if rolled:
+            shutil.copy(self.conf_filename, self.conf_filename + "-%00d" % (self.conf.current_step - 1))
+        else:
+            shutil.copy(self.conf_filename, self.conf_filename + "-bak")
+
         with open(self.conf_filename, 'w') as open_file:
             open_file.write(attrutil.attr_to_json(self.conf, indent=4))
 
@@ -247,27 +260,9 @@ class ServerBroker(Broker):
             log.error("Who are you? %s" % (info.worker_type))
             raise Exception("Who are you?")
 
-    def send_generation_to_worker(self, worker):
-        score_gen = self.get_score_generation(self.conf.current_step)
-        policy_gen = self.get_policy_generation(self.conf.current_step)
-
-        if score_gen == policy_gen:
-            gens = [score_gen]
-        else:
-            gens = [score_gen, policy_gen]
-
-        for g in gens:
-            model_data = open(network.model_path(self.conf.game, g)).read()
-            weights_data = open(network.weights_path(self.conf.game, g)).read()
-            m = msgs.SendGenerationFiles(model_data, weights_data, g)
-            worker.send_msg(m)
-
     def on_self_play_response(self, worker, msg):
         info = self.workers[worker]
         info.reset()
-
-        if msg.send_generation:
-            self.send_generation_to_worker(worker)
 
         # ok we need to configure player
         self.free_players.append(info)
@@ -283,7 +278,18 @@ class ServerBroker(Broker):
         if msg.message == "network_trained":
             self.networks_reqd_trained -= 1
             if self.networks_reqd_trained == 0:
-                self.roll_generation()
+                if self.conf.run_post_training_cmds:
+                    self.cmds_running = runprocs.RunCmds(self.conf.run_post_training_cmds,
+                                                         cb_on_completion=self.finished_cmds_running,
+                                                         max_time=10.0)
+                    self.cmds_running.spawn()
+                else:
+                    self.roll_generation()
+
+    def finished_cmds_running(self):
+        self.cmds_running = None
+        log.info("commands done")
+        self.roll_generation()
 
     def on_sample_response(self, worker, msg):
         info = self.workers[worker]
@@ -339,7 +345,7 @@ class ServerBroker(Broker):
         m.generation_prefix = self.conf.generation_prefix
         m.store_path = self.conf.store_path
 
-        m.use_previous = False  # until we are big enough, what is the point?
+        m.use_previous = True  # until we are big enough, what is the point?
 
         m.next_step = self.conf.current_step + 1
         m.validation_split = self.conf.validation_split
@@ -371,9 +377,9 @@ class ServerBroker(Broker):
         score_gen = self.get_score_generation(self.conf.current_step)
         for worker, info in self.workers.items():
             info.reset()
-            # let the worker ask for files if they a remote
-            if info.worker_type == "approx_self_play":
-                worker.send_msg(msgs.SelfPlayQuery(self.conf.game, policy_gen, score_gen))
+
+        # clear the free players
+        # self.free_players = []
 
         self.create_approx_config()
 
@@ -386,7 +392,7 @@ class ServerBroker(Broker):
         assert len(self.unique_states) == len(self.unique_states_set)
 
         # store the server config
-        self.save_our_config()
+        self.save_our_config(rolled=True)
 
         self.generation = None
         log.warning("roll_generation() complete.  We have %s samples leftover" % len(self.accumulated_samples))
@@ -396,7 +402,7 @@ class ServerBroker(Broker):
         c.game = self.conf.game
         c.policy_generation = self.get_policy_generation(self.conf.current_step)
         c.score_generation = self.get_score_generation(self.conf.current_step)
-        c.temperature = 0.9
+        c.temperature = 1.0
         c.score_puct_player_conf = self.conf.score_player_conf
         c.policy_puct_player_conf = self.conf.policy_player_conf
 
@@ -418,9 +424,8 @@ class ServerBroker(Broker):
                     m = msgs.RequestSample(updates)
                     log.debug("sending request with %s updates" % len(updates))
                     worker_info.worker.send_msg(m)
-
                 else:
-                    log.warning("capicity full! %d" % len(self.accumulated_samples))
+                    log.warning("capacity full! %d" % len(self.accumulated_samples))
                     new_free_players.append(worker_info)
 
         self.free_players = new_free_players
