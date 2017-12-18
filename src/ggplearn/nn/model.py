@@ -1,21 +1,6 @@
-''' Regularisation tricks (tyvm) credit to :https://github.com/mokemokechicken/reversi-alpha-zero
-'''
-
 from keras import layers as klayers
-from keras import metrics, models
+from keras import models
 from keras.regularizers import l2
-import keras.callbacks
-import keras.backend as K
-
-from ggplib.util import log
-
-
-def top_2_acc(y_true, y_pred):
-    return metrics.top_k_categorical_accuracy(y_true, y_pred, k=2)
-
-
-def top_3_acc(y_true, y_pred):
-    return metrics.top_k_categorical_accuracy(y_true, y_pred, k=3)
 
 
 def Conv2DBlock(*args, **kwds):
@@ -54,10 +39,6 @@ def ResidualBlock(*args, **kwds):
     return block
 
 
-def objective_function_for_policy(y_true, y_pred):
-    return K.sum(-y_true * K.log(y_pred + K.epsilon()), axis=-1)
-
-
 def get_network_model(config, **kwds):
 
     class AttrDict(dict):
@@ -79,9 +60,13 @@ def get_network_model(config, **kwds):
         params = AttrDict(CNN_FILTERS_SIZE=64,
                           RESIDUAL_BLOCKS=3,
                           MAX_HIDDEN_SIZE_NC=128)
-    else:
+    elif network_size == "normal":
         params = AttrDict(CNN_FILTERS_SIZE=128,
                           RESIDUAL_BLOCKS=6,
+                          MAX_HIDDEN_SIZE_NC=256)
+    elif network_size == "big":
+        params = AttrDict(CNN_FILTERS_SIZE=192,
+                          RESIDUAL_BLOCKS=8,
                           MAX_HIDDEN_SIZE_NC=256)
 
     params.update(dict(ALPHAZERO_REGULARISATION=kwds.get("a0_reg", False)))
@@ -147,108 +132,3 @@ def get_network_model(config, **kwds):
     #######
     return models.Model(inputs=[inputs_board, inputs_other],
                         outputs=[output_policy, output_score])
-
-
-###############################################################################
-
-class MyCallback(keras.callbacks.Callback):
-    ''' custom callbac to do nice logging '''
-    def on_train_begin(self, logs=None):
-        self.best = None
-        self.best_val_policy_acc = -1
-
-        self.retrain_best = None
-        self.retrain_best_val_policy_acc = -1
-
-        self.epochs = self.params['epochs']
-
-    def on_epoch_end(self, epoch, logs=None):
-        assert logs
-        epoch += 1
-        log.debug("Epoch %s/%s" % (epoch, self.epochs))
-
-        def str_by_name(names, dp=3):
-            fmt = "%%s = %%.%df" % dp
-            strs = [fmt % (k, logs[k]) for k in names]
-            return ", ".join(strs)
-
-        loss_names = "loss policy_loss score_loss".split()
-        val_loss_names = "val_loss val_policy_loss val_score_loss".split()
-
-        log.info(str_by_name(loss_names, 4))
-        log.info(str_by_name(val_loss_names, 4))
-
-        # accuracy:
-        for output in "policy score".split():
-            acc = []
-            val_acc = []
-            for k in self.params['metrics']:
-                if output not in k or "acc" not in k:
-                    continue
-                if "score" in output and "top" in k:
-                    continue
-
-                if 'val' in k:
-                    val_acc.append(k)
-                else:
-                    acc.append(k)
-
-            log.info("%s : %s" % (output, str_by_name(acc)))
-            log.info("%s : %s" % (output, str_by_name(val_acc)))
-
-        self.store_and_stop(epoch, logs['policy_acc'], logs['val_policy_acc'])
-
-    def store_and_stop(self, epoch, policy_acc, val_policy_acc):
-        if epoch >= 4 and policy_acc - 0.02 > val_policy_acc:
-            log.info("Early stopping... since policy accuracy")
-            self.model.stop_training = True
-
-        else:
-            # store best weights as best val_policy_acc
-            if val_policy_acc > self.best_val_policy_acc:
-                log.debug("Setting best to last val_policy_acc %.4f" % val_policy_acc)
-                self.best = self.model.get_weights()
-                self.best_val_policy_acc = val_policy_acc
-
-            if epoch >= 2:
-                if (self.retrain_best is None or
-                    (policy_acc < val_policy_acc and val_policy_acc > self.retrain_best_val_policy_acc)):
-
-                    # store retraining weights
-                    log.debug("Setting retraining_weights to val_policy_acc %.4f" % val_policy_acc)
-                    self.retrain_best = self.model.get_weights()
-                    self.retrain_best_val_policy_acc = val_policy_acc
-
-    def on_train_end(self, logs=None):
-        if self.best:
-            log.info("Switching to best weights with val_policy_acc %s" % self.best_val_policy_acc)
-            self.model.set_weights(self.best)
-
-
-class MyProgbarLogger(keras.callbacks.Callback):
-    ''' simple progress bar.  default was breaking with too much metrics '''
-    def on_train_begin(self, logs=None):
-        self.epochs = self.params['epochs']
-
-    def on_epoch_begin(self, epoch, logs=None):
-        print('Epoch %d/%d' % (epoch + 1, self.epochs))
-
-        self.target = self.params['samples']
-
-        from keras.utils.generic_utils import Progbar
-        self.progbar = Progbar(target=self.target)
-        self.seen = 0
-
-    def on_batch_begin(self, batch, logs=None):
-        if self.seen < self.target:
-            self.log_values = []
-            self.progbar.update(self.seen, self.log_values)
-
-    def on_batch_end(self, batch, logs=None):
-        self.seen += logs.get('size')
-
-        for k in logs:
-            if "loss" in k and "val" not in k:
-                self.log_values.append((k, logs[k]))
-
-        self.progbar.update(self.seen, self.log_values)

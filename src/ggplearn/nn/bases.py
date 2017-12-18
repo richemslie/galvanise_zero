@@ -1,14 +1,14 @@
 
 '''
+
+    # leftover hacks here for amazonssuicide_10x10
+
         if self.extra_term:
             channel_count += 1
 
-leftover
-    # hacks here for amazonssuicide_10x10
     # control_base_term = None
     # extra_term = None
 
-        # # XXX hack in progress for amazons
         # channel_count += 1
         # if self.extra_term:
         #     count = 0
@@ -28,9 +28,6 @@ leftover
 
         # # here we add in who's turn it is, by adding a layer for each role and then setting
         # # everything to 1.
-        # # XXX this needs to be control states...
-
-        # # XXX this was just for amazones... WIP/HACK
         # if self.control_base_term is not None:
         #     for idx, b_info in enumerate(self.base_infos):
         #         if b_info.terms[0] == self.control_base_term:
