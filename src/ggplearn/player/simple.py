@@ -9,6 +9,9 @@ from ggplearn.nn import bases
 
 models_path = os.path.join(os.environ["GGPLEARN_PATH"], "src", "ggplearn", "models")
 
+# exponential_dist_scale = 0.15
+# np.random.exponential(0.15, 10)
+
 
 class NNPlayerOneShot(MatchPlayer):
 
@@ -16,7 +19,7 @@ class NNPlayerOneShot(MatchPlayer):
         MatchPlayer.__init__(self, "NNPlayerOneShot-" + generation)
         self.generation = generation
         self.nn = None
-        self.generation = generation
+        self.verbose = False
 
     def on_meta_gaming(self, finish_time):
         log.info("NNPlayerOneShot, match id: %s" % self.match.match_id)
@@ -27,8 +30,8 @@ class NNPlayerOneShot(MatchPlayer):
         # if latest is set will always get the latest
 
         if self.generation == 'latest' or self.nn is None:
-            self.base_config = bases.get_config(game_info.game, game_info.model, self.generation)
-            self.nn = self.base_config.create_network()
+            self.bases_config = bases.get_config(game_info.game, game_info.model, self.generation)
+            self.nn = self.bases_config.create_network()
             self.nn.load()
 
     def on_next_move(self, finish_time):
@@ -40,9 +43,10 @@ class NNPlayerOneShot(MatchPlayer):
         if ls.get_count() == 1:
             return ls.get_legal(0)
 
-        print len(self.generation) * "="
-        print self.generation
-        print len(self.generation) * "="
+        if self.verbose:
+            print len(self.generation) * "="
+            print self.generation
+            print len(self.generation) * "="
 
         legals = set(ls.to_list())
 
@@ -62,12 +66,13 @@ class NNPlayerOneShot(MatchPlayer):
         best_idx = None
         best_move = None
 
-        if self.match.game_info.game == "breakthrough":
-            pretty_print_board(sm, state)
-            print
+        if self.verbose:
+            if self.match.game_info.game == "breakthrough":
+                pretty_print_board(sm, state)
+                print
+            print "all states"
 
         weirds = []
-        print "all states"
         actions = list(enumerate(actions))
         actions.sort(key=lambda c: policy[start_pos + c[0]], reverse=True)
 
@@ -76,7 +81,8 @@ class NNPlayerOneShot(MatchPlayer):
             pvalue = policy[ridx] * 100
 
             if idx in legals:
-                print move, "%.2f" % pvalue
+                if self.verbose:
+                    print move, "%.2f" % pvalue
 
                 if pvalue > best:
                     best = pvalue
@@ -87,18 +93,21 @@ class NNPlayerOneShot(MatchPlayer):
                 if pvalue > 2:
                     weirds.append((move, pvalue))
 
-        print
-        if weirds:
-            print "WIERDS:"
-            for move, pvalue in weirds:
-                print move, "%.2f" % pvalue
+        if self.verbose:
             print
+            if weirds:
+                print "WIERDS:"
+                for move, pvalue in weirds:
+                    print move, "%.2f" % pvalue
+                print
 
         if best is not None:
-            print "============="
-            print "Finals %.3f / %.3f" % tuple(score)
-            print "Choice is %s" % best_move
-            print "============="
+            if self.verbose:
+                print "============="
+                print "Finals %.3f / %.3f" % tuple(score)
+                print "Choice is %s" % best_move
+                print "============="
+
             return best_idx
 
         return ls.get_legal(0)
