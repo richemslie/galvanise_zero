@@ -5,7 +5,7 @@ from ggplib.player.gamemaster import GameMaster
 from ggplib.db.helper import get_gdl_for_game
 
 from ggplearn import msgdefs
-from ggplearn.player.simple import NNPlayerOneShot
+from ggplearn.player.policyplayer import NNPlayerOneShot
 from ggplearn.player.mc import PUCTPlayer
 
 import py.test
@@ -157,6 +157,22 @@ def test_fast_plays():
     print "time taken", time.time() - s
     print "white_score", gm.players_map["white"].name, acc_red_score
     print "black_score", gm.players_map["black"].name, acc_black_score
+
+
+def test_speed_of_one_shot():
+    gm = GameMaster(get_gdl_for_game("breakthrough"))
+
+    black = NNPlayerOneShot("testgen_small_1")
+    white = NNPlayerOneShot("testgen_small_1")
+    gm.add_player(black, "black")
+    gm.add_player(white, "white")
+
+    s = time.time()
+    for _ in range(100):
+        gm.start(meta_time=30, move_time=15)
+        gm.play_to_end()
+        print gm.depth
+    print "average time taken", (time.time() - s) / 100.0
 
 
 def test_not_taking_win():
