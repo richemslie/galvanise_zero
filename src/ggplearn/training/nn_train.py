@@ -7,83 +7,68 @@ from ggplib.db import lookup
 
 from ggplearn.util import attrutil
 
-from ggplearn.nn import bases, network
+from ggplearn.nn import bases
 
 from ggplearn import msgdefs
 
 
-class Sample(object):
-    def __init__(self, state, policy_dist, final_score, lead_role_index):
-        state = tuple(state)
+def check_sample(sample, game_model):
+    assert len(sample.state) == len(game_model.bases)
+    assert len(sample.final_score) == len(game_model.roles)
 
-        # XXX ALL GAME SPECIFIC
-        # This is for breakthough
-        assert len(state) == 130
+    num_actions = sum(len(actions) for actions in game_model.actions)
+    for legal, p in sample.policy:
+        assert 0 <= legal < num_actions
+        assert -0.01 < p < 1.01
 
-        # this is also 2 player specfic
-        assert len(final_score) == 2
-        assert isinstance(final_score, dict)
-        final_score = final_score['white'] / 100.0, final_score['black'] / 100.0
-
-        for pair in policy_dist:
-            assert len(pair) == 2
-
-        self.state = state
-        self.policy_dist = policy_dist
-        self.final_score = final_score
-        self.lead_role_index = lead_role_index
-
-    def policy_as_array(self, sm_model):
-        index_start = 0 if self.lead_role_index == 0 else len(sm_model.actions[0])
-        actions = sm_model.actions[self.lead_role_index]
-        expected_actions_len = sum(len(actions) for actions in sm_model.actions)
-        policy_outputs = np.zeros(expected_actions_len)
-        for idx, prob in self.policy_dist:
-            action = actions[idx]
-            if "1)" in action:
-                print action, prob
-            policy_outputs[idx + index_start] = prob
-
-        return policy_outputs
+    assert 0 <= sample.lead_role_index <= len(game_model.roles)
 
 
 class SamplesHolder(object):
-    def __init__(self, game_info, base_config):
+    def __init__(self, game_info, bases_config):
+        assert len(game_info.model.roles) == 2, "only 2 roles supported for now"
+
         self.game_info = game_info
-        self.base_config = base_config
+        self.bases_config = bases_config
         self.train_samples = []
         self.validation_samples = []
+
+        self.policy_1_index_start = len(game_info.model.actions[0])
+        self.expected_policy_len = sum(len(actions) for actions in game_info.model.actions)
 
     def add(self, sample, validation=False):
         assert isinstance(sample, msgdefs.Sample)
 
-        # convert to a local sample
-        s = Sample(sample.state,
-                   sample.policy,
-                   sample.final_score,
-                   sample.lead_role_index)
-
         if validation:
-            self.validation_samples.append(s)
+            self.validation_samples.append(sample)
         else:
-            self.train_samples.append(s)
+            self.train_samples.append(sample)
+
+    def policy_as_array(self, sample):
+        index_start = 0 if sample.lead_role_index == 0 else self.policy_1_index_start
+        policy_outputs = np.zeros(self.expected_policy_len)
+        for idx, prob in sample.policy:
+            policy_outputs[index_start + idx] = prob
+
+        return policy_outputs
 
     def sample_to_nn_style(self, sample, data):
+        check_sample(sample, self.game_info.model)
 
         # transform samples -> numpy arrays as inputs/outputs to nn
 
         # input 1
-        planes = self.base_config.state_to_channels(sample.state, sample.lead_role_index)
+        planes = self.bases_config.state_to_channels(sample.state, sample.lead_role_index)
 
         # input - planes
         data[0].append(planes)
 
         # input - non planes
-        non_planes = self.base_config.get_non_cord_input(sample.state)
+        non_planes = self.bases_config.get_non_cord_input(sample.state)
         data[1].append(non_planes)
 
         # output - policy
-        data[2].append(sample.policy_as_array(self.game_info.model))
+        data[2].append(self.policy_as_array(sample))
 
         # output - best/final scores
         data[3].append(sample.final_score)
@@ -116,16 +101,18 @@ class SamplesHolder(object):
         print training_data[2][-120]
         print training_data[3][-120]
 
-        return network.TrainData(inputs=training_data[:2],
+        return msgdefs.TrainData(inputs=training_data[:2],
                                  outputs=training_data[2:],
                                  validation_inputs=validation_data[:2],
                                  validation_outputs=validation_data[2:])
 
 
-def get_data(store_path, last_step):
+def get_data(conf):
+    last_step = conf.next_step - 1
     step = 0
     while step <= last_step:
-        f = open(os.path.join(store_path, "gendata_%s.json" % step))
+        f = open(os.path.join(conf.store_path,
+                              "gendata_%s_%s.json" % (conf.game, step)))
         yield attrutil.json_to_attr(f.read())
         step += 1
 
@@ -154,31 +141,31 @@ def parse_and_train(conf):
 
     nn = None
     if use_previous:
-        base_config = bases.get_config(conf.game,
-                                       game_info.model,
-                                       prev_generation)
-        nn = base_config.create_network()
+        bases_config = bases.get_config(conf.game,
+                                        game_info.model,
+                                        prev_generation)
+        nn = bases_config.create_network()
         if nn.can_load():
             log.info("Previous generation found.")
 
             nn.load()
-            base_config.update_generation(next_generation)
+            bases_config.update_generation(next_generation)
 
         else:
             log.warning("No previous generation to use...")
             nn = None
 
     if nn is None:
-        base_config = bases.get_config(conf.game,
-                                       game_info.model,
-                                       next_generation)
+        bases_config = bases.get_config(conf.game,
+                                        game_info.model,
+                                        next_generation)
 
         # more parameters passthrough?  XXX
-        nn = base_config.create_network(network_size=conf.network_size)
+        nn = bases_config.create_network(network_size=conf.network_size)
 
-    samples_holder = SamplesHolder(game_info, base_config)
+    samples_holder = SamplesHolder(game_info, bases_config)
 
-    for gen_data in get_data(conf.store_path, conf.next_step - 1):
+    for gen_data in get_data(conf):
         print "with policy gen", gen_data.with_policy_generation
         print "with score gen", gen_data.with_score_generation
         print "number of samples", gen_data.num_samples
@@ -188,9 +175,11 @@ def parse_and_train(conf):
         train_count = int(gen_data.num_samples * conf.validation_split)
 
         for s in gen_data.samples[:train_count]:
+            check_sample(s, game_info.model)
             samples_holder.add(s)
 
         for s in gen_data.samples[train_count:]:
+            check_sample(s, game_info.model)
             samples_holder.add(s, validation=True)
 
     train_conf = samples_holder.massage_data()
@@ -206,50 +195,8 @@ def parse_and_train(conf):
     for_next_generation = "%sgen_%s_%s_prev" % (conf.generation_prefix,
                                                 conf.network_size,
                                                 conf.next_step)
-    base_config.update_generation(for_next_generation)
+    bases_config.update_generation(for_next_generation)
 
     log.info("Saving retraining network with val_policy_acc: %.4f" % res.retrain_best_val_policy_acc)
     nn.get_model().set_weights(res.retrain_best)
     nn.save()
-
-
-def go():
-    from ggplib.util.init import setup_once
-    setup_once()
-
-    conf = msgdefs.TrainNNRequest()
-    conf.game = "breakthrough"
-
-    conf.network_size = "smaller"
-    conf.generation_prefix = "v2_"
-    conf.store_path = os.path.join(os.environ["GGPLEARN_PATH"], "data", "breakthrough", "v2")
-
-    # uses previous network
-    conf.use_previous = True
-    conf.next_step = 62
-
-    conf.validation_split = 0.8
-    conf.batch_size = 64
-    conf.epochs = 16
-    conf.max_sample_count = 100000
-
-    parse_and_train(conf)
-
-
-def main_wrap(fn):
-    import pdb
-    import sys
-    import traceback
-
-    try:
-        fn()
-
-    except Exception as exc:
-        print exc
-        type, value, tb = sys.exc_info()
-        traceback.print_exc()
-        pdb.post_mortem(tb)
-
-
-if __name__ == "__main__":
-    main_wrap(go)
