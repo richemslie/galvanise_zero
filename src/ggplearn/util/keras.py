@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 
 
-def constrain_resources():
+def constrain_resources_tf():
     ' constrain resource as tensorflow likes to assimilate your machine rendering it useless '
 
     import tensorflow as tf
@@ -27,3 +27,9 @@ def constrain_resources():
 
     from keras import backend
     backend.set_session(sess)
+
+
+def constrain_resources():
+    from keras import backend
+    if backend.backend() == "tensorflow":
+        constrain_resources_tf()
