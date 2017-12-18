@@ -1,9 +1,9 @@
 ''' XXX move out of this repo '''
 
 import sys
+import json
 
 import attr
-import json
 
 
 class AttrDict(dict):

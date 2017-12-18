@@ -9,7 +9,7 @@ import traceback
 
 import attr
 
-from twisted.internet import protocol
+from twisted.internet import protocol, reactor
 
 from ggplib.util import log
 from ggplearn.util import attrutil, func
@@ -60,7 +60,7 @@ class Broker(object):
     def register(self, attr_clz, cb):
         ' registers a attr class to a callback '
         assert attr.has(attr_clz)
-        self.handlers[clz_to_name(attr_clz)] = attr_clz, cb
+        self.handlers[clz_to_name(attr_clz)] = cb
 
     def onMessage(self, caller, msg):
         if msg.name not in self.handlers:
@@ -69,12 +69,12 @@ class Broker(object):
             return
 
         try:
-            clz, cb = self.handlers[msg.name]
-            response = cb(caller, msg.payload)
+            cb = self.handlers[msg.name]
+            res = cb(caller, msg.payload)
 
             # doesn't necessarily need to have a response
-            if response is not None:
-                caller.send_msg(response)
+            if res is not None:
+                caller.send_msg(res)
 
         except Exception as e:
             log.error("%s : exception calling method %s.  " % (caller, str(msg.name)))
@@ -83,6 +83,9 @@ class Broker(object):
 
             # do this last as might raise also...
             caller.disconnect()
+
+    def start(self):
+        reactor.run()
 
 
 class Client(protocol.Protocol):
@@ -137,6 +140,9 @@ class Client(protocol.Protocol):
         self.rxd = []
         if len(buf):
             self.rxd.append(buf)
+
+    def init_data_rxd(self, data):
+        raise NotImplementedError
 
     def dataReceived(self, data):
         if self.logical_connection:
@@ -212,7 +218,7 @@ class ServerClient(Client):
         self.transport.write(msg)
         self.expected_response = response(msg)
 
-    def connectionLost(self, reason):
+    def connectionLost(self, reason=""):
         if self.logical_connection:
             self.broker.remove_worker(self)
         Client.connectionLost(self, reason)
