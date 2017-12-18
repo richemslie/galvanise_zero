@@ -68,11 +68,11 @@ def default_conf():
 
 
 class WorkerInfo(object):
-    def __init__(self, worker, create_time):
+    def __init__(self, worker, ping_time):
         self.worker = worker
         self.valid = True
-        self.create_time = create_time
         self.worker_type = None
+        self.ping_time_sent = ping_time
         self.reset()
 
     def reset(self):
@@ -120,10 +120,9 @@ class ServerBroker(Broker):
 
         # when a generation object is around, we are in the processing of training
         self.generation = None
-        self.cmd_running = None
+        self.cmds_running = None
 
         self.register(msgdefs.Pong, self.on_pong)
-        self.register(msgdefs.HelloResponse, self.on_hello_response)
 
         self.register(msgdefs.Ok, self.on_ok)
         self.register(msgdefs.RequestSampleResponse, self.on_sample_response)
@@ -187,7 +186,6 @@ class ServerBroker(Broker):
         self.workers[worker] = WorkerInfo(worker, time.time())
         log.debug("New worker %s" % worker)
         worker.send_msg(msgdefs.Ping())
-        worker.send_msg(msgdefs.Hello())
 
     def remove_worker(self, worker):
         if worker not in self.workers:
@@ -199,13 +197,14 @@ class ServerBroker(Broker):
 
     def on_pong(self, worker, msg):
         info = self.workers[worker]
-
         log.info("worker %s, ping/pong time %.3f msecs" % (worker,
-                                                           (time.time() - info.create_time) * 1000))
+                                                           (time.time() - info.ping_time_sent) * 1000))
 
-    def on_hello_response(self, worker, msg):
-        info = self.workers[worker]
-        info.worker_type = msg.worker_type
+        if info.worker_type is None:
+            self.init_worker(info, msg.worker_type)
+
+    def init_worker(self, info, worker_type):
+        info.worker_type = worker_type
 
         if info.worker_type == "approx_self_play":
             info.reset()
@@ -220,7 +219,7 @@ class ServerBroker(Broker):
             if self.the_nn_trainer is not None:
                 raise Exception("the_nn_trainer already set")
 
-            self.the_nn_trainer = worker
+            self.the_nn_trainer = info
 
         else:
             log.error("Who are you? %s" % (info.worker_type))
@@ -316,13 +315,13 @@ class ServerBroker(Broker):
             for network_size in (self.conf.policy_network_size, self.conf.score_network_size):
                 m.network_size = network_size
 
-                self.the_nn_trainer.send_msg(m)
+                self.the_nn_trainer.worker.send_msg(m)
                 log.info("sent to the_nn_trainer")
                 self.networks_reqd_trained += 1
         else:
             m.network_size = self.conf.policy_network_size
             log.info("sent to the_nn_trainer")
-            self.the_nn_trainer.send_msg(m)
+            self.the_nn_trainer.worker.send_msg(m)
             self.networks_reqd_trained += 1
 
     def roll_generation(self):
@@ -331,7 +330,7 @@ class ServerBroker(Broker):
         self.check_nn_generations_exist()
 
         # reconfigure player workers
-        for worker, info in self.workers.items():
+        for _, info in self.workers.items():
             info.reset()
 
         self.create_approx_config()
@@ -391,7 +390,7 @@ class ServerBroker(Broker):
             log.warning("There is no nn trainer - please start")
 
 
-def start_server_factory(conf=None):
+def start_server_factory():
     from ggplib.util.init import setup_once
     setup_once("worker")
 
