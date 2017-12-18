@@ -1,29 +1,18 @@
-from twisted.internet import reactor
+from builtins import super
 
 from ggplib.util import log
 
-from ggplearn.util.broker import Broker, WorkerFactory
-
 from ggplearn import msgdefs
 from ggplearn.training import nn_train
+from ggplearn.distributed.workerbase import WorkerBrokerBase
 
 
-class WorkerBroker(Broker):
+class WorkerBroker(WorkerBrokerBase):
     worker_type = "nn_train"
 
     def __init__(self, conf):
-        self.conf = conf
-        Broker.__init__(self)
-
-        self.register(msgdefs.Ping, self.on_ping)
-        self.register(msgdefs.Hello, self.on_hello)
+        super().__init__(conf)
         self.register(msgdefs.TrainNNRequest, self.on_train_request)
-
-    def on_ping(self, server, msg):
-        return msgdefs.Pong()
-
-    def on_hello(self, server, msg):
-        return msgdefs.HelloResponse(worker_type=self.worker_type)
 
     def on_train_request(self, server, msg):
         log.warning("request to train %s" % msg)
@@ -40,13 +29,8 @@ def start_worker_factory():
     from ggplearn.util.keras import constrain_resources
     constrain_resources()
 
-    conf = msgdefs.WorkerConf()
-
-    broker = WorkerBroker(conf)
-    reactor.connectTCP(conf.connect_ip_addr,
-                       conf.connect_port,
-                       WorkerFactory(broker))
-    reactor.run()
+    broker = WorkerBroker(msgdefs.WorkerConf())
+    broker.start()
 
 
 if __name__ == "__main__":

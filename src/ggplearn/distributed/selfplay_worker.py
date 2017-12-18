@@ -1,36 +1,22 @@
-from twisted.internet import reactor
+from builtins import super
 
 from ggplib.util import log
 
-from ggplearn.util.broker import Broker, WorkerFactory
-
 from ggplearn import msgdefs
 from ggplearn.training import approximate_play as ap
+from ggplearn.distributed.workerbase import WorkerBrokerBase
 
 
-# XXX code here is very similar to nn_train_worker.py
-class WorkerBroker(Broker):
+class WorkerBroker(WorkerBrokerBase):
     worker_type = "approx_self_play"
 
     def __init__(self, conf):
-        self.conf = conf
-        Broker.__init__(self)
-
-        self.register(msgdefs.Ping, self.on_ping)
-        self.register(msgdefs.Hello, self.on_hello)
-        self.register(msgdefs.SelfPlayQuery, self.on_self_play_query)
-        self.register(msgdefs.SendGenerationFiles, self.on_send_generation_files)
+        super().__init__(conf)
 
         self.register(msgdefs.ConfigureApproxTrainer, self.on_configure)
         self.register(msgdefs.RequestSample, self.on_request_sample)
 
         self.approx_player = None
-
-    def on_ping(self, server, msg):
-        return msgdefs.Pong()
-
-    def on_hello(self, server, msg):
-        return msgdefs.HelloResponse(self.worker_type)
 
     def on_configure(self, server, msg):
         self.approx_player = ap.Runner(msg)
@@ -57,13 +43,8 @@ def start_worker_factory():
     from ggplearn.util.keras import constrain_resources
     constrain_resources()
 
-    conf = msgdefs.WorkerConf()
-
-    broker = WorkerBroker(conf)
-    reactor.connectTCP(conf.connect_ip_addr,
-                       conf.connect_port,
-                       WorkerFactory(broker))
-    reactor.run()
+    broker = WorkerBroker(msgdefs.WorkerConf())
+    broker.start()
 
 
 if __name__ == "__main__":
