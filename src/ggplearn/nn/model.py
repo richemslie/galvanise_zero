@@ -60,13 +60,20 @@ def get_network_model(config, **kwds):
         params = AttrDict(CNN_FILTERS_SIZE=64,
                           RESIDUAL_BLOCKS=3,
                           MAX_HIDDEN_SIZE_NC=128)
+
     elif network_size == "normal":
-        params = AttrDict(CNN_FILTERS_SIZE=128,
-                          RESIDUAL_BLOCKS=6,
+        params = AttrDict(CNN_FILTERS_SIZE=96,
+                          RESIDUAL_BLOCKS=4,
                           MAX_HIDDEN_SIZE_NC=256)
-    elif network_size == "big":
+
+    elif network_size == "larger":
+        params = AttrDict(CNN_FILTERS_SIZE=128,
+                          RESIDUAL_BLOCKS=4,
+                          MAX_HIDDEN_SIZE_NC=256)
+
+    elif network_size == "large":
         params = AttrDict(CNN_FILTERS_SIZE=192,
-                          RESIDUAL_BLOCKS=8,
+                          RESIDUAL_BLOCKS=6,
                           MAX_HIDDEN_SIZE_NC=256)
 
     params.update(dict(ALPHAZERO_REGULARISATION=kwds.get("a0_reg", False)))
