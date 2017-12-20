@@ -5,15 +5,25 @@ from ggplib.player.gamemaster import GameMaster
 from ggplib.db.helper import get_gdl_for_game
 
 from ggplearn import msgdefs
-from ggplearn.player.policyplayer import NNPlayerOneShot
-from ggplearn.player.mc import PUCTPlayer
+from ggplearn.player.puctplayer import PUCTPlayer
+from ggplearn.player.policyplayer import PolicyPlayer
 
 import py.test
 
 ITERATIONS = 1
 
+current_gen = "testgen_normal_1"
+default_puct_config = msgdefs.PUCTPlayerConf(generation=current_gen,
+                                             playouts_per_iteration=42,
+                                             playouts_per_iteration_noop=1)
+
+default_policy_config = msgdefs.PolicyPlayerConf(generation=current_gen)
+
 
 def setup():
+    from ggplib.util.init import setup_once
+    setup_once()
+
     from ggplearn.util.keras import constrain_resources
     constrain_resources()
 
@@ -27,7 +37,7 @@ def test_reversi_tournament():
     pymcs.max_run_time = 0.25
 
     random = get.get_player("pyrandom")
-    nn0 = NNPlayerOneShot("no-scores1")
+    nn0 = PolicyPlayer("no-scores1")
 
     gm.add_player(nn0, "black")
     gm.add_player(random, "red")
@@ -45,18 +55,17 @@ def test_reversi_tournament():
     print "red_score", gm.players_map["red"].name, acc_red_score
 
 
-def test_bt_tournament():
+def test_policy_tournament():
     gm = GameMaster(get_gdl_for_game("breakthrough"))
 
     # add two players
     pymcs = get.get_player("pymcs")
     pymcs.max_run_time = 0.1
 
-    # random = get.get_player("pyrandom")
-    nn0 = NNPlayerOneShot("gen9")
+    black = PolicyPlayer(conf=default_policy_config)
 
     gm.add_player(pymcs, "white")
-    gm.add_player(nn0, "black")
+    gm.add_player(black, "black")
 
     acc_black_score = 0
     acc_red_score = 0
@@ -71,16 +80,37 @@ def test_bt_tournament():
     print "black_score", gm.players_map["black"].name, acc_black_score
 
 
-def test_montecarlo1():
+def test_puct_tournament():
     gm = GameMaster(get_gdl_for_game("breakthrough"))
 
     # add two players
-    white = PUCTPlayer("gen9_small")
-    white.conf.num_of_playouts_per_iteration = 8
-    white.conf.dirichlet_noise_alpha = -1
-    white.conf.expand_root = -1
+    pymcs = get.get_player("pymcs")
+    pymcs.max_run_time = 0.1
 
-    black = NNPlayerOneShot("gen9_small")
+    black = PUCTPlayer(conf=default_puct_config)
+
+    gm.add_player(pymcs, "white")
+    gm.add_player(black, "black")
+
+    acc_black_score = 0
+    acc_red_score = 0
+    for _ in range(ITERATIONS):
+        gm.start(meta_time=30, move_time=15)
+        gm.play_to_end()
+
+        acc_black_score += gm.scores["black"]
+        acc_red_score += gm.scores["white"]
+
+    print "white_score", gm.players_map["white"].name, acc_red_score
+    print "black_score", gm.players_map["black"].name, acc_black_score
+
+
+def test_tournament_2():
+    gm = GameMaster(get_gdl_for_game("breakthrough"))
+
+    # add two players
+    white = PUCTPlayer(conf=default_puct_config)
+    black = PolicyPlayer(conf=default_policy_config)
 
     gm.add_player(black, "white")
     gm.add_player(white, "black")
@@ -99,50 +129,29 @@ def test_montecarlo1():
     print "black_score", gm.players_map["black"].name, acc_black_score
 
 
-def test_montecarlo2():
+def test_fast_plays():
+    ''' very fast rollouts, basically this config of puct player is a policy player '''
     gm = GameMaster(get_gdl_for_game("breakthrough"))
 
-    # add two players
-    white = PUCTPlayer("gen9_small")
-    white.conf.num_of_playouts_per_iteration = 50
+    import attr
+    conf = msgdefs.PUCTPlayerConf(**attr.asdict(default_puct_config))
+    conf.verbose = False
 
-    black = get.get_player("simplemcts")
-    black.max_tree_search_time = 0.5
+    # just checking that we haven't modified default
+    assert conf.verbose == False and default_puct_config.verbose == True
+
+    conf.playouts_per_iteration = 1
+    conf.playouts_per_iteration_noop = 0
+    conf.dirichlet_noise_alpha = -1
+    conf.expand_root = -1
+    print conf
+
+    # add two players
+    white = PUCTPlayer(conf=conf)
+    black = PUCTPlayer(conf=conf)
 
     gm.add_player(white, "white")
     gm.add_player(black, "black")
-
-    acc_black_score = 0
-    acc_red_score = 0
-    for _ in range(ITERATIONS):
-        gm.reset()
-        gm.start(meta_time=30, move_time=15)
-        gm.play_to_end()
-
-        acc_black_score += gm.scores["black"]
-        acc_red_score += gm.scores["white"]
-
-    print "white_score", gm.players_map["white"].name, acc_red_score
-    print "black_score", gm.players_map["black"].name, acc_black_score
-
-
-def test_fast_plays():
-    ''' very fast rollouts '''
-    gm = GameMaster(get_gdl_for_game("breakthrough"))
-
-    conf = msgdefs.PUCTPlayerConf()
-    conf.verbose = False
-    conf.num_of_playouts_per_iteration = 1
-    conf.num_of_playouts_per_iteration_noop = 0
-    conf.dirichlet_noise_alpha = 1.0
-    conf.expand_root = -1
-
-    # add two players
-    nn0 = PUCTPlayer(generation="test", conf=conf)
-    nn1 = PUCTPlayer(generation="test", conf=conf)
-
-    gm.add_player(nn0, "white")
-    gm.add_player(nn1, "black")
 
     acc_black_score = 0
     acc_red_score = 0
@@ -153,43 +162,20 @@ def test_fast_plays():
 
         acc_black_score += gm.scores["black"]
         acc_red_score += gm.scores["white"]
+
+        print gm.depth
 
     print "time taken", time.time() - s
     print "white_score", gm.players_map["white"].name, acc_red_score
     print "black_score", gm.players_map["black"].name, acc_black_score
 
 
-def test_speed_of_one_shot():
-    gm = GameMaster(get_gdl_for_game("breakthrough"))
-
-    black = NNPlayerOneShot("testgen_small_1")
-    white = NNPlayerOneShot("testgen_small_1")
-    gm.add_player(black, "black")
-    gm.add_player(white, "white")
-
-    s = time.time()
-    for _ in range(100):
-        gm.start(meta_time=30, move_time=15)
-        gm.play_to_end()
-        print gm.depth
-    print "average time taken", (time.time() - s) / 100.0
-
-
 def test_not_taking_win():
     gm = GameMaster(get_gdl_for_game("breakthrough"))
 
-    conf = msgdefs.PUCTPlayerConf()
-    conf.verbose = True
-    conf.num_of_playouts_per_iteration = 42
-    conf.num_of_playouts_per_iteration_noop = 1
-    conf.dirichlet_noise_alpha = 0.1
-    conf.expand_root = 100
-
-    # add two c++ players
-    nn0 = NNPlayerOneShot("gen9")
-    nn1 = NNPlayerOneShot("gen9")
-    gm.add_player(nn0, "white")
-    gm.add_player(nn1, "black")
+    # add two players
+    gm.add_player(PUCTPlayer(default_puct_config), "white")
+    gm.add_player(PUCTPlayer(default_puct_config), "black")
 
     str_state = """ (true (control black))
     (true (cellHolds 8 8 black)) (true (cellHolds 8 7 black)) (true (cellHolds 8 2 white))
@@ -207,3 +193,40 @@ def test_not_taking_win():
 
     last_move = gm.play_single_move(last_move=None)
     assert last_move[1] == "(move 7 8 6 7)"
+
+
+def test_choose_policy_random():
+    # ITERATIONS = 100
+    gm = GameMaster(get_gdl_for_game("breakthrough"))
+
+    conf = msgdefs.PolicyPlayerConf(name="white", generation="testgen_normal_1", verbose=False)
+    conf.choose_exponential_scale = 0.15
+    white = PolicyPlayer(conf)
+
+    conf = msgdefs.PolicyPlayerConf(name="black_", generation="testgen_normal_1", verbose=False)
+    conf.choose_exponential_scale = 0.15
+    black = PolicyPlayer(conf)
+
+    gm.add_player(white, "white")
+    gm.add_player(black, "black")
+
+    gm.reset()
+    gm.start(meta_time=30, move_time=15)
+    gm.play_to_end()
+
+    acc_white_score = 0
+    acc_black_score = 0
+    game_depths = []
+    for _ in range(ITERATIONS):
+        gm.reset()
+        gm.start(meta_time=30, move_time=15)
+        gm.play_to_end()
+
+        acc_white_score += gm.scores["white"]
+        acc_black_score += gm.scores["black"]
+
+        game_depths.append(gm.depth)
+
+    print "white_score", gm.players_map["white"].name, acc_white_score
+    print "black_score", gm.players_map["black"].name, acc_black_score
+    print game_depths

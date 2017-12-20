@@ -1,6 +1,4 @@
-import math
 import time
-import random
 from operator import itemgetter, attrgetter
 
 import numpy as np
@@ -27,7 +25,7 @@ class Child(object):
         self.policy_dist_pct = None
 
         # to the next node
-        # XXX this deviates from AlphaGoZero paper, where the keep statistics on child.  But I am
+        # this deviates from AlphaGoZero paper, where the keep statistics on child.  But I am
         # following how I did things in galvanise, as it is simpler to keep it my head.
         self.to_node = None
 
@@ -77,9 +75,7 @@ class Node(object):
         self.terminal_scores = None
 
         self.mc_visits = 0
-        self.mc_score = [0.0, 0.0]
-
-        self.rollout_score = [0.0, 0.0]
+        self.mc_score = None
 
     def add_child(self, move, legal):
         self.children.append(Child(self, move, legal))
@@ -103,37 +99,35 @@ class Node(object):
 
 
 class PUCTPlayer(MatchPlayer):
-    def __init__(self, generation="latest", conf=None):
-        self.nn = None
-        self.root = None
-        self.generation = generation
+    def __init__(self, conf=None):
         if conf is None:
             conf = msgdefs.PUCTPlayerConf()
-
         self.conf = conf
 
+        self.nn = None
+        self.root = None
+
         if self.conf.verbose:
-            assert self.conf.num_of_playouts_per_iteration_noop > 0, "DONT KNOW WHY THIS DOESNT WORK, BUT XXX"
+            assert self.conf.playouts_per_iteration_noop > 0, "DONT KNOW WHY THIS DOESNT WORK, BUT XXX"
 
         self.choose = getattr(self, self.conf.choose)
 
-        identifier = "%s_%s_%s" % (self.conf.name, self.conf.num_of_playouts_per_iteration, generation)
+        identifier = "%s_%s_%s" % (self.conf.name, self.conf.playouts_per_iteration, conf.generation)
         MatchPlayer.__init__(self, identifier)
 
     def on_meta_gaming(self, finish_time):
         self.root = None
         log.info("PUCTPlayer, match id: %s" % self.match.match_id)
 
-        self.game_depth = 0
         sm = self.match.sm
         game_info = self.match.game_info
 
         # this is a performance hack, where once we get the nn/config we don't reget it.
         # if latest is set will always get the latest
 
-        if self.generation == 'latest' or self.nn is None:
-            self.base_config = bases.get_config(game_info.game, game_info.model, self.generation)
-            self.nn = self.base_config.create_network()
+        if self.conf.generation == 'latest' or self.nn is None:
+            self.bases_config = bases.get_config(game_info.game, game_info.model, self.conf.generation)
+            self.nn = self.bases_config.create_network()
             self.nn.load()
 
             # cache joint move, and basestate
@@ -246,7 +240,7 @@ class PUCTPlayer(MatchPlayer):
     def back_propagate(self, path, scores):
         self.count_bp += 1
 
-        for _, node, child in reversed(path):
+        for node in reversed(path):
             for i, s in enumerate(scores):
                 node.mc_score[i] = (node.mc_visits *
                                     node.mc_score[i] + s) / float(node.mc_visits + 1)
@@ -270,7 +264,6 @@ class PUCTPlayer(MatchPlayer):
         return cpuct
 
     def select_child(self, node, depth):
-
         dirichlet_noise = self.dirichlet_noise(node, depth)
         cpuct_constant = self.cpuct_constant(node)
 
@@ -292,7 +285,7 @@ class PUCTPlayer(MatchPlayer):
 
                 # ensure terminals are enforced more than other nodes
                 if cn.is_terminal:
-                    node_score * 1.02
+                    node_score *= 1.02
 
             child_pct = child.policy_dist_pct
 
@@ -321,36 +314,33 @@ class PUCTPlayer(MatchPlayer):
         assert current is not None and not current.is_terminal
 
         path = []
-        depth = 0
         scores = None
+
         while True:
-            child = self.select_child(current, depth)
-            path.append((depth, current, child))
+            path.append(current)
+
+            # already expanded terminal
+            if current.is_terminal:
+                scores = [s / 100.0 for s in current.terminal_scores]
+                break
+
+            child = self.select_child(current, len(path) - 1)
 
             if child.to_node is None:
                 self.expand_child(child)
                 self.nodes_to_predict.append(child.to_node)
                 self.do_predictions()
+
                 scores = child.to_node.mc_score
 
-                depth += 1
-                path.append((depth, child.to_node, None))
+                path.append(child.to_node)
                 break
 
             current = child.to_node
 
-            # already expanded terminal
-            if current.is_terminal:
-                depth += 1
-                path.append((depth, child.to_node, None))
-                scores = [s / 100.0 for s in child.to_node.terminal_scores]
-                break
-
-            depth += 1
-
         assert scores is not None
         self.back_propagate(path, scores)
-        return depth
+        return len(path)
 
     def playout_loop(self, node, finish_time, cb=None):
         max_depth = -1
@@ -360,9 +350,9 @@ class PUCTPlayer(MatchPlayer):
         start_time = time.time()
 
         if self.root.lead_role_index != self.match.our_role_index:
-            max_iterations = self.conf.num_of_playouts_per_iteration_noop
+            max_iterations = self.conf.playouts_per_iteration_noop
         else:
-            max_iterations = self.conf.num_of_playouts_per_iteration
+            max_iterations = self.conf.playouts_per_iteration
 
         while True:
             if time.time() > finish_time:
@@ -389,7 +379,6 @@ class PUCTPlayer(MatchPlayer):
                                                                            max_depth))
 
     def on_apply_move(self, joint_move):
-        self.game_depth += 1
 
         # need to fish for it in children?
         if self.root is not None:
@@ -453,7 +442,7 @@ class PUCTPlayer(MatchPlayer):
         sm.update_bases(self.match.get_current_state())
 
         # break early as possible
-        if not self.conf.verbose and self.conf.num_of_playouts_per_iteration_noop == 0:
+        if not self.conf.verbose and self.conf.playouts_per_iteration_noop == 0:
             ri = self.match.our_role_index
             ls = sm.get_legal_state(ri)
             if ls.get_count() == 1 and ls.get_legal(0) == self.our_noop_legal:
@@ -472,6 +461,21 @@ class PUCTPlayer(MatchPlayer):
             # predict root
             self.nodes_to_predict.append(self.root)
 
+        # s = time.time()
+        # for c in self.root.children[:self.conf.expand_root]:
+        #     if c.to_node is None:
+        #         self.expand_child(c)
+
+        #         for cc in c.to_node.children:
+        #             if cc.to_node is None:
+        #                 self.expand_child(cc)
+        #                 print cc.to_node
+
+        # print "XXXtime taken", time.time() - s
+
+        # we do predictions here and dont combine with expanding some root children (if option is
+        # set), because do_predictions() will reorder the children according to the policy and thus
+        # expand the highest probabilty moves.
         self.do_predictions()
 
         # expand and predict some of root children
@@ -488,37 +492,40 @@ class PUCTPlayer(MatchPlayer):
 
         self.playout_loop(self.root, finish_time)
 
-        # this saves time and time is of the essence for training
-        # becuase choice here is based on node.lead_role_index, not our_role_index
         choice = self.choose(finish_time)
 
         if self.conf.verbose:
-            for c, v in self.get_probabilities():
-                print c, v
-
-            current = self.root
-
-            dump_depth = 0
-            while current is not None:
-                if dump_depth == self.conf.max_dump_depth:
-                    break
-
-                self.dump_node(current, indent=dump_depth * 4)
-                if current.is_terminal:
-                    break
-
-                current = current.sorted_children()[0].to_node
-                dump_depth += 1
-
-            if self.match.game_info.game == "breakthrough":
-                pretty_print_board(sm, self.root.state)
-                print
+            self.debug_output(choice)
 
         noop_res = self.noop()
         if noop_res is not None:
             return noop_res
         else:
             return choice.legal
+
+    def debug_output(self, choice):
+        for c, v in self.get_probabilities():
+            print c, v
+
+        current = self.root
+
+        dump_depth = 0
+        while current is not None:
+            if dump_depth == self.conf.max_dump_depth:
+                break
+
+            self.dump_node(current, indent=dump_depth * 4)
+            if current.is_terminal:
+                break
+
+            current = current.sorted_children()[0].to_node
+            dump_depth += 1
+
+        if self.match.game_info.game == "breakthrough":
+            pretty_print_board(self.match.sm, self.root.state)
+            print
+
+        print "Choice", choice
 
     def get_probabilities(self, temperature=1):
         total_visits = float(sum(c.visits() for c in self.root.children))
@@ -582,59 +589,42 @@ class PUCTPlayer(MatchPlayer):
     def choose_top_visits(self, finish_time):
         return self.root.sorted_children()[0]
 
-    def choose_temperature(self, finish_time):
-        temperature_depth_end = 20
-        depth = min(temperature_depth_end, self.game_depth + 1)
-
-        random_range = 0.5 / math.sqrt(depth) + 0.1
-        temp = 0.35 + 0.65 * (0.9 ** (temperature_depth_end - depth))
-
-        if self.conf.verbose:
-            log.info("depth %d, temperature is %.3f, random range %.3f" % (depth, temp, random_range))
-
-        random_expected = random.random() * random_range
-
-        total_seen = 0
-        res = None
-        for c, p in self.get_probabilities(temp):
-            if self.conf.verbose:
-                print c, 100 * p
-            total_seen += p
-            if res is None and total_seen > random_expected:
-                res = c, p
-                if self.conf.verbose:
-                    print ":::::::::: GOT"
-
-        assert res
-        return res[0]
-
 
 ##############################################################################
 
-def get_test_config():
-    return msgdefs.PUCTPlayerConf(name="xx",
-                                  verbose=True,
-                                  num_of_playouts_per_iteration=32,
-                                  num_of_playouts_per_iteration_noop=1,
-                                  expand_root=100,
-                                  dirichlet_noise_alpha=0.5,
-                                  cpuct_constant_first_4=0.75,
-                                  cpuct_constant_after_4=0.75,
-                                  choose="choose_temperature",
-                                  max_dump_depth=2)
+configs = dict(
+    default=msgdefs.PUCTPlayerConf(name="default",
+                                   verbose=True,
+                                   playouts_per_iteration=32,
+                                   playouts_per_iteration_noop=1,
+                                   expand_root=100,
+                                   dirichlet_noise_alpha=0.5,
+                                   cpuct_constant_first_4=0.75,
+                                   cpuct_constant_after_4=0.75,
+                                   choose="choose_top_visits",
+                                   max_dump_depth=2),
 
+    two=msgdefs.PUCTPlayerConf(name="two-test",
+                               verbose=True,
+                               playouts_per_iteration=1000,
+                               playouts_per_iteration_noop=1,
+                               expand_root=100,
+                               dirichlet_noise_alpha=-1,
+                               cpuct_constant_first_4=3.0,
+                               cpuct_constant_after_4=1.0,
+                               choose="choose_converge",
+                               max_dump_depth=2),
 
-def xget_test_config():
-    return msgdefs.PUCTPlayerConf(name="xx",
-                                  verbose=True,
-                                  num_of_playouts_per_iteration=400,
-                                  num_of_playouts_per_iteration_noop=1,
-                                  expand_root=100,
-                                  dirichlet_noise_alpha=0.1,
-                                  cpuct_constant_first_4=0.75,
-                                  cpuct_constant_after_4=0.75,
-                                  choose="choose_converge",
-                                  max_dump_depth=2)
+    three=msgdefs.PUCTPlayerConf(name="three-test",
+                                 verbose=True,
+                                 playouts_per_iteration=400,
+                                 playouts_per_iteration_noop=1,
+                                 expand_root=100,
+                                 dirichlet_noise_alpha=0.05,
+                                 cpuct_constant_first_4=3.0,
+                                 cpuct_constant_after_4=0.75,
+                                 choose="choose_converge",
+                                 max_dump_depth=2))
 
 
 def main():
@@ -647,11 +637,14 @@ def main():
     port = int(sys.argv[1])
     generation = sys.argv[2]
 
-    conf = None
-    if len(sys.argv) > 3 and sys.argv[3] == "-t":
-        conf = get_test_config()
+    config_name = "default"
 
-    player = PUCTPlayer(generation, conf=conf)
+    if len(sys.argv) > 3:
+        config_name = sys.argv[3]
+
+    conf = configs[config_name]
+    conf.generation = generation
+    player = PUCTPlayer(conf=conf)
     play_runner(player, port)
 
 

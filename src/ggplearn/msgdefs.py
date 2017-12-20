@@ -14,13 +14,29 @@ class TrainData(object):
 
 
 @attr.s
+class PolicyPlayerConf(object):
+    name = attr.ib("PolicyPlayer")
+    verbose = attr.ib(True)
+    generation = attr.ib("latest")
+
+    # < 0 is off
+    choose_exponential_scale = attr.ib(-1.0)
+    random_scale = attr.ib(0.5)
+
+    # < 0 is off
+    temperature_value = attr.ib(0.9)
+    temperature_pct = attr.ib(0.65)
+    temperature_depth = attr.ib(20)
+
+
+@attr.s
 class PUCTPlayerConf(object):
     name = attr.ib("PUCTPlayer")
     verbose = attr.ib(True)
+    generation = attr.ib("latest")
 
-    # XXX remove num_of
-    num_of_playouts_per_iteration = attr.ib(800)
-    num_of_playouts_per_iteration_noop = attr.ib(1)
+    playouts_per_iteration = attr.ib(800)
+    playouts_per_iteration_noop = attr.ib(1)
     cpuct_constant_first_4 = attr.ib(0.75)
     cpuct_constant_after_4 = attr.ib(0.75)
 
@@ -31,8 +47,10 @@ class PUCTPlayerConf(object):
     # MAYBE useful for when small number of iterations.  otherwise pretty much the same
     expand_root = attr.ib(-1)
 
+    # looks up method() to use
     choose = attr.ib("choose_top_visits")
 
+    # debug, only if verbose is true
     max_dump_depth = attr.ib(2)
 
 
@@ -91,8 +109,9 @@ class ConfigureApproxTrainer(object):
     policy_generation = attr.ib("gen0_small")
     score_generation = attr.ib("gen0_smaller")
     temperature = attr.ib(1.0)
-    score_puct_player_conf = attr.ib(default=attr.Factory(PUCTPlayerConf))
-    policy_puct_player_conf = attr.ib(default=attr.Factory(PUCTPlayerConf))
+    player_select_conf = attr.ib(default=attr.Factory(PolicyPlayerConf))
+    player_policy_conf = attr.ib(default=attr.Factory(PUCTPlayerConf))
+    player_score_conf = attr.ib(default=attr.Factory(PolicyPlayerConf))
 
 
 @attr.s
@@ -102,10 +121,8 @@ class RequestSample(object):
 
 @attr.s
 class Sample(object):
-    # 3 previous states, if any
-    prev_state2 = attr.ib()
-    prev_state1 = attr.ib()
-    prev_state0 = attr.ib()
+    # store just the previous states
+    prev_state = attr.ib()
 
     # state policy trained on
     state = attr.ib()
