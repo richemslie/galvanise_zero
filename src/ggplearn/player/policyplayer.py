@@ -23,7 +23,8 @@ class PolicyPlayer(MatchPlayer):
         self.bases_config = None
 
     def on_meta_gaming(self, finish_time):
-        log.info("%s, match id: %s" % (self.get_name(), self.match.match_id))
+        if self.conf.verbose:
+            log.info("%s, match id: %s" % (self.get_name(), self.match.match_id))
 
         game_info = self.match.game_info
 

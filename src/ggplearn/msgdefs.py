@@ -67,8 +67,9 @@ class ServerConfig(object):
     generation_prefix = attr.ib("v2_")
     store_path = attr.ib("somewhere")
 
-    policy_player_conf = attr.ib(default=attr.Factory(PUCTPlayerConf))
-    score_player_conf = attr.ib(default=attr.Factory(PUCTPlayerConf))
+    player_select_conf = attr.ib(default=attr.Factory(PolicyPlayerConf))
+    player_policy_conf = attr.ib(default=attr.Factory(PUCTPlayerConf))
+    player_score_conf = attr.ib(default=attr.Factory(PolicyPlayerConf))
 
     generation_size = attr.ib(1024)
     max_growth_while_training = attr.ib(0.2)
@@ -106,8 +107,6 @@ class Ok(object):
 @attr.s
 class ConfigureApproxTrainer(object):
     game = attr.ib("breakthrough")
-    policy_generation = attr.ib("gen0_small")
-    score_generation = attr.ib("gen0_smaller")
     temperature = attr.ib(1.0)
     player_select_conf = attr.ib(default=attr.Factory(PolicyPlayerConf))
     player_policy_conf = attr.ib(default=attr.Factory(PUCTPlayerConf))

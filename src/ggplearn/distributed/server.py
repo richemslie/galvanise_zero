@@ -30,39 +30,36 @@ def default_conf():
     conf.game = "breakthrough"
     conf.current_step = 1
 
-    conf.score_network_size = "smaller"
-    conf.policy_network_size = "smaller"
+    conf.score_network_size = "small"
+    conf.policy_network_size = "small"
 
-    conf.generation_prefix = "v2_"
-    conf.store_path = os.path.join(os.environ["GGPLEARN_PATH"], "data", "breakthrough", "v2")
+    conf.generation_prefix = "v3_"
+    conf.store_path = os.path.join(os.environ["GGPLEARN_PATH"], "data", "breakthrough", "v3")
 
-    conf.score_player_conf = msgdefs.PUCTPlayerConf(name="score_puct",
-                                                    verbose=False,
-                                                    num_of_playouts_per_iteration=32,
-                                                    num_of_playouts_per_iteration_noop=0,
-                                                    expand_root=5,
-                                                    dirichlet_noise_alpha=0.1,
-                                                    cpuct_constant_first_4=0.75,
-                                                    cpuct_constant_after_4=0.75,
-                                                    choose="choose_converge")
+    # generation set on server
+    conf.player_select_conf = msgdefs.PolicyPlayerConf(verbose=False,
+                                                       choose_exponential_scale=0.3)
 
-    conf.policy_player_conf = msgdefs.PUCTPlayerConf(name="policy_puct",
+    conf.player_policy_conf = msgdefs.PUCTPlayerConf(name="policy_puct",
                                                      verbose=False,
-                                                     num_of_playouts_per_iteration=200,
-                                                     # num_of_playouts_per_iteration=800,
-                                                     num_of_playouts_per_iteration_noop=0,
-                                                     expand_root=5,
+                                                     playouts_per_iteration=800,
+                                                     playouts_per_iteration_noop=0,
+                                                     expand_root=100,
                                                      dirichlet_noise_alpha=-1,
                                                      cpuct_constant_first_4=3.0,
                                                      cpuct_constant_after_4=0.75,
                                                      choose="choose_converge")
+
+    conf.player_score_conf = msgdefs.PolicyPlayerConf(verbose=False,
+                                                      choose_exponential_scale=-1)
     conf.generation_size = 32
     conf.max_growth_while_training = 0.2
 
-    conf.validation_split = 0.9
+    conf.validation_split = 0.8
     conf.batch_size = 32
     conf.epochs = 4
     conf.max_sample_count = 100000
+    conf.run_post_training_cmds = []
 
     return conf
 
@@ -139,12 +136,9 @@ class ServerBroker(Broker):
     def check_nn_generations_exist(self):
         score_gen = self.get_score_generation(self.conf.current_step)
         policy_gen = self.get_policy_generation(self.conf.current_step)
+
         log.debug("current policy gen %s" % score_gen)
         log.debug("current score gen %s" % policy_gen)
-
-        # create them (will overwrite even exist)
-        policy_gen = self.get_policy_generation(self.conf.current_step)
-        score_gen = self.get_score_generation(self.conf.current_step)
 
         for g in (policy_gen, score_gen):
             net = network.create(g, self.game_info, load=False)
@@ -156,10 +150,11 @@ class ServerBroker(Broker):
                     critical_error("Did not find network %s.  exiting." % g)
 
     def save_our_config(self, rolled=False):
-        if rolled:
-            shutil.copy(self.conf_filename, self.conf_filename + "-%00d" % (self.conf.current_step - 1))
-        else:
-            shutil.copy(self.conf_filename, self.conf_filename + "-bak")
+        if os.path.exists(self.conf_filename):
+            if rolled:
+                shutil.copy(self.conf_filename, self.conf_filename + "-%00d" % (self.conf.current_step - 1))
+            else:
+                shutil.copy(self.conf_filename, self.conf_filename + "-bak")
 
         with open(self.conf_filename, 'w') as open_file:
             open_file.write(attrutil.attr_to_json(self.conf, indent=4))
@@ -288,7 +283,8 @@ class ServerBroker(Broker):
         json.encoder.FLOAT_REPR = lambda f: ("%.5f" % f)
 
         log.info("writing json")
-        filename = os.path.join(self.conf.store_path, "gendata_%s.json" % self.conf.current_step)
+        filename = os.path.join(self.conf.store_path, "gendata_%s_%s.json" % (self.conf.game,
+                                                                              self.conf.current_step))
         with open(filename, 'w') as open_file:
             open_file.write(attrutil.attr_to_json(gen, indent=4))
 
@@ -302,7 +298,7 @@ class ServerBroker(Broker):
         m.generation_prefix = self.conf.generation_prefix
         m.store_path = self.conf.store_path
 
-        m.use_previous = True  # until we are big enough, what is the point?
+        m.use_previous = False  # until we are big enough, what is the point?
 
         m.next_step = self.conf.current_step + 1
         m.validation_split = self.conf.validation_split
@@ -348,15 +344,22 @@ class ServerBroker(Broker):
 
         self.generation = None
         log.warning("roll_generation() complete.  We have %s samples leftover" % len(self.accumulated_samples))
+        self.schedule_players()
 
     def create_approx_config(self):
-        conf = msgdefs.ConfigureApproxTrainer()
-        conf.game = self.conf.game
-        conf.policy_generation = self.get_policy_generation(self.conf.current_step)
-        conf.score_generation = self.get_score_generation(self.conf.current_step)
-        conf.temperature = 1.0
-        conf.score_puct_player_conf = self.conf.score_player_conf
-        conf.policy_puct_player_conf = self.conf.policy_player_conf
+        # we use score_gen for select also XXX we should probably just go to one
+        policy_generation = self.get_policy_generation(self.conf.current_step)
+        score_generation = self.get_score_generation(self.conf.current_step)
+
+        self.conf.player_select_conf.generation = score_generation
+        self.conf.player_policy_conf.generation = policy_generation
+        self.conf.player_score_conf.generation = score_generation
+
+        conf = msgdefs.ConfigureApproxTrainer(game=self.conf.game)
+        conf.player_select_conf = self.conf.player_select_conf
+        conf.player_policy_conf = self.conf.player_policy_conf
+        conf.player_score_conf = self.conf.player_score_conf
+
         self.approx_play_config = conf
 
     def schedule_players(self):
@@ -395,6 +398,7 @@ def start_server_factory():
     setup_once("worker")
 
     ServerBroker(sys.argv[1])
+
     reactor.run()
 
 

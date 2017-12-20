@@ -8,6 +8,7 @@ from ggplearn import msgdefs
 from ggplearn.player.puctplayer import PUCTPlayer
 from ggplearn.player.policyplayer import PolicyPlayer
 
+current_gen = "testgen_normal_1"
 
 def setup():
     from ggplib.util.init import setup_once
@@ -22,7 +23,7 @@ def test_speed_of_one_shot():
 
     gm = GameMaster(get_gdl_for_game("breakthrough"))
 
-    conf = msgdefs.PolicyPlayerConf(generation="testgen_normal_1", verbose=False)
+    conf = msgdefs.PolicyPlayerConf(generation=current_gen, verbose=False)
 
     white = PolicyPlayer(conf)
     black = PolicyPlayer(conf)
@@ -52,12 +53,12 @@ def test_speed_of_one_simulation():
     gm = GameMaster(get_gdl_for_game("breakthrough"))
 
     conf_puct = msgdefs.PUCTPlayerConf(verbose=False,
-                                       generation="testgen_normal_1",
+                                       generation=current_gen,
                                        playouts_per_iteration=800,
                                        playouts_per_iteration_noop=0,
                                        dirichlet_noise_alpha=-1,
                                        expand_root=-1)
-    conf_policy = msgdefs.PolicyPlayerConf(generation="testgen_normal_1", verbose=False)
+    conf_policy = msgdefs.PolicyPlayerConf(generation=current_gen, verbose=False)
 
     # add two players
     white = PUCTPlayer(conf=conf_puct)

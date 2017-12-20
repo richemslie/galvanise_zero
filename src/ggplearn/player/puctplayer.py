@@ -116,8 +116,10 @@ class PUCTPlayer(MatchPlayer):
         MatchPlayer.__init__(self, identifier)
 
     def on_meta_gaming(self, finish_time):
+        if self.conf.verbose:
+            log.info("PUCTPlayer, match id: %s" % self.match.match_id)
+
         self.root = None
-        log.info("PUCTPlayer, match id: %s" % self.match.match_id)
 
         sm = self.match.sm
         game_info = self.match.game_info

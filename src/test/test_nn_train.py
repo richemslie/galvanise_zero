@@ -174,13 +174,13 @@ def nn_train_random_generated():
     ' not a unit test - like can take over a few hours ! '
     CREATE_FILE = False
     ACTUALLY_TRAIN = True
-    SAMPLE_COUNT = 10000
+    SAMPLE_COUNT = 50000
 
     train_conf = msgdefs.TrainNNRequest()
     train_conf.game = "breakthrough"
 
-    train_conf.network_size = "smaller"
-    train_conf.generation_prefix = "test2"
+    train_conf.network_size = "small"
+    train_conf.generation_prefix = "v3"
     train_conf.store_path = os.getcwd()
 
     # uses previous network
