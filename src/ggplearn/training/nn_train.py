@@ -44,6 +44,13 @@ class SamplesHolder(object):
         else:
             self.train_samples.append(sample)
 
+    def strip(self, train_count, validate_count):
+        # we can just cleverly use -1 * train_count, but this is clearer
+        train_index = len(self.train_samples) - train_count
+        validate_index = len(self.validation_samples) - validate_count
+        self.train_samples = self.train_samples[train_index:]
+        self.validation_samples = self.validation_samples[validate_index:]
+
     def policy_as_array(self, sample):
         index_start = 0 if sample.lead_role_index == 0 else self.policy_1_index_start
         policy_outputs = np.zeros(self.expected_policy_len)
@@ -77,9 +84,11 @@ class SamplesHolder(object):
         training_data = [[] for _ in range(4)]
         validation_data = [[] for _ in range(4)]
 
+        log.debug("massaging training samples: %s" % len(self.train_samples))
         for sample in self.train_samples:
             self.sample_to_nn_style(sample, training_data)
 
+        log.debug("massaging validation samples: %s" % len(self.validation_samples))
         for sample in self.validation_samples:
             self.sample_to_nn_style(sample, validation_data)
 
@@ -87,13 +96,13 @@ class SamplesHolder(object):
             arr = np.array(data)
             arr.astype('float32')
             training_data[ii] = arr
-            log.debug("Shape of training data %d: %s" % (ii, arr.shape))
+            log.info("Shape of training data %d: %s" % (ii, arr.shape))
 
         for ii, data in enumerate(validation_data):
             arr = np.array(data)
             arr.astype('float32')
             validation_data[ii] = arr
-            log.debug("Shape of validation data %d: %s" % (ii, arr.shape))
+            log.info("Shape of validation data %d: %s" % (ii, arr.shape))
 
         # good always a good idea to print some outputs
         print training_data[0][-120]
@@ -111,9 +120,8 @@ def get_data(conf):
     last_step = conf.next_step - 1
     step = 0
     while step <= last_step:
-        f = open(os.path.join(conf.store_path,
-                              "gendata_%s_%s.json" % (conf.game, step)))
-        yield attrutil.json_to_attr(f.read())
+        fn = os.path.join(conf.store_path, "gendata_%s_%s.json" % (conf.game, step))
+        yield fn, attrutil.json_to_attr(open(fn).read())
         step += 1
 
 
@@ -163,12 +171,17 @@ def parse_and_train(conf):
         # more parameters passthrough?  XXX
         nn = bases_config.create_network(network_size=conf.network_size)
 
+    nn.summary()
+
     samples_holder = SamplesHolder(game_info, bases_config)
 
-    for gen_data in get_data(conf):
-        print "with policy gen", gen_data.with_policy_generation
-        print "with score gen", gen_data.with_score_generation
-        print "number of samples", gen_data.num_samples
+    total_samples = 0
+    for fn, gen_data in get_data(conf):
+        log.debug("Proccesing %s" % fn)
+        log.debug("Game %s, with policy gen: %s, with score gen: %s" % (gen_data.game,
+                                                                        gen_data.with_policy_generation,
+                                                                        gen_data.with_score_generation))
+
         assert gen_data.num_samples == len(gen_data.samples)
 
         assert gen_data.game == conf.game
@@ -181,6 +194,14 @@ def parse_and_train(conf):
         for s in gen_data.samples[train_count:]:
             check_sample(s, game_info.model)
             samples_holder.add(s, validation=True)
+
+        total_samples += gen_data.num_samples
+
+    if conf.max_sample_count < total_samples:
+        train_count = int(conf.max_sample_count * conf.validation_split)
+        validate_count = conf.max_sample_count - train_count
+        log.info("Stripping %s samples from data set" % (total_samples - conf.max_sample_count))
+        samples_holder.strip(train_count, validate_count)
 
     train_conf = samples_holder.massage_data()
     train_conf.epochs = conf.epochs

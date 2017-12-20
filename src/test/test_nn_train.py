@@ -89,7 +89,7 @@ class Rollout(object):
         policy_dist[legals.index(main_legal)] = (main_legal, (ls.get_count() * 3 + 1) / total)
 
         # now we can create a sample :)
-        return msgdefs.Sample(None, None, None, state, policy_dist, final_score, d, self.depth, lead_role_index)
+        return msgdefs.Sample(None, state, policy_dist, final_score, d, self.depth, lead_role_index)
 
     def get_current_state(self):
         return self.states[self.depth]
@@ -172,24 +172,24 @@ class Rollout(object):
 
 def nn_train_random_generated():
     ' not a unit test - like can take over a few hours ! '
-    CREATE_FILE = True
-    ACTUALLY_TRAIN = False
-    SAMPLE_COUNT = 200000
+    CREATE_FILE = False
+    ACTUALLY_TRAIN = True
+    SAMPLE_COUNT = 10000
 
     train_conf = msgdefs.TrainNNRequest()
-    train_conf.game = "hex"
+    train_conf.game = "breakthrough"
 
-    train_conf.network_size = "small"
-    train_conf.generation_prefix = "test"
+    train_conf.network_size = "smaller"
+    train_conf.generation_prefix = "test2"
     train_conf.store_path = os.getcwd()
 
     # uses previous network
     train_conf.use_previous = False
     train_conf.next_step = 1
 
-    train_conf.validation_split = 0.9
+    train_conf.validation_split = 0.8
     train_conf.batch_size = 32
-    train_conf.epochs = 100
+    train_conf.epochs = 30
     train_conf.max_sample_count = SAMPLE_COUNT
     attrutil.pprint(train_conf)
 
@@ -210,6 +210,7 @@ def nn_train_random_generated():
                     sample = r.make_data(unique_states)
                     if sample is not None:
                         break
+
                 if sample is None:
                     print "DUPE NATION", i
                     continue
