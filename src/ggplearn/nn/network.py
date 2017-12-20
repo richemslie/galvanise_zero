@@ -122,18 +122,6 @@ class EarlyStoppingCb(keras.callbacks.Callback):
         policy_acc = logs['policy_acc']
         val_policy_acc = logs['val_policy_acc']
 
-        if epoch >= 4 and policy_acc - 0.02 > val_policy_acc:
-            log.info("Early stopping... since policy accuracy")
-            self.model.stop_training = True
-            return
-
-        # if after 4 epochs, things havent got better - STOP.  We can go on forever without
-        # improving.
-        if self.epoch_last_set_at is not None and epoch > self.epoch_last_set_at + 4:
-            log.info("Early stopping... since not improvingg")
-            self.model.stop_training = True
-            return
-
         # store best weights as best val_policy_acc
         if val_policy_acc > self.best_val_policy_acc:
             log.debug("Setting best to last val_policy_acc %.4f" % val_policy_acc)
@@ -141,16 +129,32 @@ class EarlyStoppingCb(keras.callbacks.Callback):
             self.best_val_policy_acc = val_policy_acc
             self.epoch_last_set_at = epoch
 
-        check_retraining_weights = (epoch >= 2 and
-                                    (self.retrain_best is None or
-                                     (policy_acc < val_policy_acc and
-                                      val_policy_acc > self.retrain_best_val_policy_acc)))
+        # always do at 3 epochs before starting
+        if epoch <= 3:
+            return
+
+        check_retraining_weights = (self.retrain_best is None or
+                                    (policy_acc < val_policy_acc and
+                                     val_policy_acc > self.retrain_best_val_policy_acc))
 
         if check_retraining_weights:
             # store retraining weights
             log.debug("Setting retraining_weights to val_policy_acc %.4f" % val_policy_acc)
             self.retrain_best = self.model.get_weights()
             self.retrain_best_val_policy_acc = val_policy_acc
+
+        if epoch >= 5:
+            # if we are overfitting
+            if policy_acc - 0.02 > val_policy_acc:
+                log.info("Early stopping... since policy accuracy overfitting")
+                self.model.stop_training = True
+                return
+
+            # if things havent got better - STOP.  We can go on forever without improving.
+            if self.epoch_last_set_at is not None and epoch > self.epoch_last_set_at + 3:
+                log.info("Early stopping... since not improving")
+                self.model.stop_training = True
+                return
 
     def on_train_end(self, logs=None):
         if self.best:
