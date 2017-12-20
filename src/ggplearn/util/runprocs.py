@@ -1,7 +1,7 @@
 import os
 import time
 import shlex
-from signal import SIGKILL
+from signal import SIGKILL, SIGTERM
 from subprocess import PIPE, Popen
 
 from twisted.internet import reactor
@@ -11,11 +11,14 @@ from ggplib.util import log
 
 class RunCmds(object):
     def __init__(self, cmds, cb_on_completion=None, max_time=2.0):
+        assert len(cmds) == len(set(cmds)), "cmds not unique: %s" % cmds
         self.cmds = cmds
         self.cb_on_completion = cb_on_completion
         self.max_time = max_time
 
         self.timeout_time = None
+        self.killing = set()
+        self.terminating = set()
 
     def spawn(self):
         self.procs = [(cmd, Popen(shlex.split(cmd),
@@ -40,8 +43,17 @@ class RunCmds(object):
 
         if time.time() > self.timeout_time:
             for cmd, proc in self.procs:
-                log.warning("cmd '%s' taking too long, killing" % cmd)
-                os.kill(proc.pid, SIGKILL)
+                if cmd not in self.killing:
+                    self.killing.add(cmd)
+                    log.warning("cmd '%s' taking too long, terminating" % cmd)
+                    os.kill(proc.pid, SIGTERM)
+
+        if time.time() > self.timeout_time + 1:
+            for cmd, proc in self.procs:
+                if cmd not in self.terminating:
+                    self.terminating.add(cmd)
+                    log.warning("cmd '%s' didn't terminate gracefully, killing" % cmd)
+                    os.kill(proc.pid, SIGKILL)
 
         if self.procs:
             reactor.callLater(0.1, self.check_running_processes)

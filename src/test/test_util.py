@@ -5,6 +5,11 @@ import attr
 from ggplearn.util import attrutil, func, broker, runprocs
 
 
+def setup():
+    from ggplib.util.init import setup_once
+    setup_once()
+
+
 def test_chunks():
     res = list(func.chunks(range(10), 2))
     assert res[0] == [0, 1]
@@ -152,14 +157,34 @@ def test_attrs_listof():
 
 def test_runcmds():
     from twisted.internet import reactor
-    from ggplib.util.init import setup_once
-    setup_once()
 
     def done():
         print "SUCCESS"
-        reactor.stop()
+        reactor.crash()
 
     cmds = ["ls -l", "sleep 3", "python2 -c 'import sys; print >>sys.stderr, 123'"]
+    run_cmds = runprocs.RunCmds(cmds, cb_on_completion=done)
+
+    reactor.callLater(0.1, run_cmds.spawn)
+    reactor.run()
+
+
+def test_runcmds2():
+    from twisted.internet import reactor
+
+    def done():
+        print "SUCCESS"
+        reactor.crash()
+
+    cmds = ["ls -l", "ls -l"]
+
+    try:
+        run_cmds = runprocs.RunCmds(cmds, cb_on_completion=done)
+        raise Exception("Should not get here")
+    except AssertionError:
+        pass
+
+    cmds = ['python -c "import time, signal; signal.signal(signal.SIGTERM, lambda a,b: time.sleep(5)); time.sleep(5)"']
     run_cmds = runprocs.RunCmds(cmds, cb_on_completion=done)
 
     reactor.callLater(0.1, run_cmds.spawn)
