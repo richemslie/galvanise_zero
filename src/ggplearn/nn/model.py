@@ -30,13 +30,18 @@ def ResidualBlock(*args, **kwds):
 
     # all other args/kwds passed through to Conv2DBlock
 
-    def block(tensor):
-        x = Conv2DBlock(*args, **kwds)(tensor)
-        x = Conv2DBlock(*args, **kwds)(x)
+    def identity(tensor):
+        x = klayers.Conv2D(*args, **kwds)(tensor)
+        x = klayers.BatchNormalization()(x)
+        x = klayers.Activation("relu")(x)
+
+        x = klayers.Conv2D(*args, **kwds)(x)
+        x = klayers.BatchNormalization()(x)
+
         x = klayers.add([tensor, x])
         return klayers.Activation("relu")(x)
 
-    return block
+    return identity
 
 
 def get_network_model(config, **kwds):
