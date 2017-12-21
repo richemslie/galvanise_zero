@@ -1,97 +1,62 @@
 GGP - AlphaZero like learning
 ==============================
-
 [General Game Playing](https://en.wikipedia.org/wiki/General_game_playing) experiments with
 reinforcement learning related to
 [AlphaZero](https://www.nature.com/articles/nature24270.epdf?author_access_token=VJXbVjaSHxFoctQQ4p2k4tRgN0jAjWel9jnR3ZoTv0PVW4gB86EEpGqTRDtpIz-2rmo8-KG06gqVobU5NSCFeHILHcVFUeMsbvwS-lxjqQGg98faovwjxeTUgZAUMnRQ)
 and [Thinking Fast And Slow](https://arxiv.org/abs/1705.08439v4).
 
-Just started - WIP.  Lots of hand holding going on.
+Everything here is a WIP.
 
 Based on [GGPLib](https://github.com/richemslie/ggplib).
 
 
 Breakthrough games
 ------------------
-The first attempt was to try learning the game Breakthrough.
+This is the third attempt, where I started completely over from fresh.
 
-After 10 generations, with bugs and misunderstandings in the implementation along the way, it can
-now beat a vanilla MCTS player which is doing ~250k playouts per turn.  The trained network based
-player in the same time frame does only ~400 'iterations' (running on CPU).  That is roughly 3
-orders of magnitude difference in playouts.
+The first run was riddled with bugs and misunderstandings, the second was completely unstable due
+to bad selection of moves for training, so its 3rd time lucky I hope.  This time the entire process
+is 95% automated, and distributed - with little to none hand holding.  After 24 hours of training
+using 1 gpu and 6 cores, 25 generations was complete.  That is 155k samples to train the network
+on.  I pitched the trained network against Gurgeh - which is a very fast MCTS player (which is
+doing 1.2 million tree playouts per move).  The matches gave the players 15 seonds thinking time
+per move. The network based PUCT player (which was set at 800 iterations) is only using a 1-3
+second of.  It wins quite comfortable:
 
-It does however play similar to the MCTS players (and MCS player it was initially trained on) -
-which is very kamikaze like, throwing away pawns for no reason.  I am hoping after a bunch more
-training generations, it finally figures out that this is not the greatest idea.
-
-However, what is interesting in these games is - at the end of the game and throwing away 60% of its pawns,
-it seems to always have a nice base to protect itself whereas the MCTS player is wide open.
-
-Here are the last four games (with gen8, currupted gen9 network with bad PUCT values)
-
- * [game 1](http://www.ggp.org/view/all/matches/a8468283b34055be6e315951499d57d7af21fa67/)
- * [game 2](http://www.ggp.org/view/all/matches/7fb8f051dd46d51bd491bcb28f66d7629344e1fd/)
- * [game 3](http://www.ggp.org/view/all/matches/db0f4ce99613445ddcf89b12b160d1e58686975e/)
- * [game 4](http://www.ggp.org/view/all/matches/a67ea10203cf74b367f7f4e16dfaa3c7923a21af/)
-
+ * [game 1](http://www.ggp.org/view/all/matches/82745815a8ab7ea9a80be4c03626c04d7608eebb/)
+ * [game 2](http://www.ggp.org/view/all/matches/3097bd5b1a64df66d611e612357f7ddf0a802988/)
 
 Note the game is notoriously bad for MCTS players.  Most players in GGP community generally add
-heuristics on top of MCTS play and play significantly stronger than the above.
+heuristics on top of MCTS play and play significantly stronger than the above.  Gurgeh doesn't
+employ any special heuristics, so this is a raw MCTS player.  Next up is against galvanise.
 
 
 Self play
 ---------
-These are some self play games, with only 42 iterations.  In other words it plays according to what
-the policy network has learned.  Admittedly not brilliant, but it has improved.
+These are some self play games, only using the policy part of the network (greedily taking the most
+probable move) - of gen 20 versus gen 25.  Each generation here is basically 5k new games, where
+each generation takes approximately 1 hour to generate and train.
 
- * [gen8 v gen2](http://www.ggp.org/view/all/matches/a0d60b298799ea9be497ae54b719acbc0316a365/)
- * [gen2 v gen8](http://www.ggp.org/view/all/matches/b761a1029b667935fe13c988246a0bf5bc9d19c6/)
+ * [gen25 v gen20](http://www.ggp.org/view/all/matches/91d2cf9cefc7075b33152e0127b1f3e7b12aeef1/)
+ * [gen20 v gen25](http://www.ggp.org/view/all/matches/dc77c121f3958d2cbefcc75f8430dad8f2b52312/)
+
+
+gen25 is very aggressive in exchanging pieces, which is an interesting tactic.
 
 
 Current status
 --------------
-The inputs to the neural network are combination of planes and input nodes.  In GGP
-[GDL](http://alloyggp.blogspot.co.uk/2012/12/the-game-description-language.html) defines the 'base'
-states via prolog like rules.
-
-Base states that look as if they are coordinates in a 2D board are turned into planes and fed into
-a residual part of the network.  The non-coordinate base-states go through a single fully connected
-layer.  GDL does not specifiy whether these are coordinates or not, and for now these are hard
-coded.  It shouldn't be too hard to infer them - at least with non-contrived GDL.
-
-Both lines of the network are concatenated and fed to two outputs heads: a single list of moves and the
-final score of the game (similar to policy and score in AlphaZero).
-
-The trained data is initially sampled from self play of a dumb Monte Carlo search player.  Each
-turn takes 0.25 seconds and it was enough to prime the network and learn the rules of the game.
-This differs from AlphaZero which skips right to the chase and starts from a completely random
-network.  One thing that seems apparent is that after 10 generations it still plays similar to this
-dumb player, and feels like it is caught in a local optima right from the get go.  Next time around
-I plan to start from a random neural network and set number of iterations to be very small - thus
-quickly learning the rules, without learning what a good move is.
-
-Subsequently the network is trained in generations.  A single sample is taken from a self play game
-using Monte Carlo playouts with the policy and score values, using PUCT and Dirichlet noise for
-exploration.  This is played approximately, using different configurations of a Monte Carlo base
-player to arrive at a single state to evaluate thoroughly (800 iterations) for the policy part.
-Then it plays to the end without noise to come up with a final score.  This cuts down in computation
-significantly and is a clever hack (credit ThinkingFastSlow).
-
-A generation is made up of ~10k of these samples and then the neural network retrains from scratch.
-
-
-Comments
---------
-The hyperparameters are very sensitive and getting these right for playing and training seems quite
-hard.
-
-I've no idea what to do with duplicate states.  Should later generations be allowed to update with
-a better quality policies and scores - and by replace can just append to the buffer.  What about
-duplicate states in the same generation.  Also keeping these in sync across machines is a pain.
-
-PUCT constant is the new UCT constant.  Can never find that quite the right value for all
-circumstances.  Hence why I made it auto tuning for each node in galvanise.  And I just found the
-players don't play well at all without dirichlet noise.  Which means my training player has been
-producing basically rubbish.  Initialising each edge to be zero, exploration will never happen, and
-dirichlet noise will at least release some of those nodes.
-
+The trained data is initially sampled from mostly random rollouts.  This is very fast - and used to
+just let the network learn the rules.  For each random rollout (may have some extra bells such as
+greedily taking wins) - there is no search.  One random sample is taking from each rollout.
+Subsequently the real training happens.  The network is trained in generations.  A single sample is
+taken from a self play game, where the self play game only uses the policy part of the network with
+a random choice of move (moves with higher probability have more chance of being played than moves
+with lower probability).  Upon selection of a game state, 800 iterations of a PUCT player is
+performed and the distribution of visits on the root node defines a policy distribution to train
+on.  Finally the game is then played to the end starting from the selected state - via the policy
+part of the network only taking the most probably move at each step.  By generating the data this
+way, and by increasing to larger networks as the number of samples increase (ie starting with a
+tiny neural network) - and a bunch of other optimisations - all in all sped up training by over a
+magnitude over the first couple of attempts.  With the extra bonus that the network does seem to
+improve this time around.
