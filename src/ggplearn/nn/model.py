@@ -48,32 +48,32 @@ def get_network_model(config, **kwds):
     network_size = kwds.get("network_size", "normal")
     if network_size == "tiny":
         params = AttrDict(CNN_FILTERS_SIZE=32,
-                          RESIDUAL_BLOCKS=1,
-                          MAX_HIDDEN_SIZE_NC=16)
+                          RESIDUAL_BLOCKS=4,
+                          MAX_HIDDEN_SIZE_NC=128)
 
     elif network_size == "smaller":
-        params = AttrDict(CNN_FILTERS_SIZE=48,
-                          RESIDUAL_BLOCKS=2,
-                          MAX_HIDDEN_SIZE_NC=64)
+        params = AttrDict(CNN_FILTERS_SIZE=64,
+                          RESIDUAL_BLOCKS=6,
+                          MAX_HIDDEN_SIZE_NC=128)
 
     elif network_size == "small":
-        params = AttrDict(CNN_FILTERS_SIZE=64,
-                          RESIDUAL_BLOCKS=3,
+        params = AttrDict(CNN_FILTERS_SIZE=96,
+                          RESIDUAL_BLOCKS=6,
                           MAX_HIDDEN_SIZE_NC=128)
 
     elif network_size == "normal":
-        params = AttrDict(CNN_FILTERS_SIZE=96,
-                          RESIDUAL_BLOCKS=4,
+        params = AttrDict(CNN_FILTERS_SIZE=128,
+                          RESIDUAL_BLOCKS=6,
                           MAX_HIDDEN_SIZE_NC=256)
 
     elif network_size == "larger":
         params = AttrDict(CNN_FILTERS_SIZE=128,
-                          RESIDUAL_BLOCKS=4,
+                          RESIDUAL_BLOCKS=8,
                           MAX_HIDDEN_SIZE_NC=256)
 
     elif network_size == "large":
         params = AttrDict(CNN_FILTERS_SIZE=192,
-                          RESIDUAL_BLOCKS=6,
+                          RESIDUAL_BLOCKS=8,
                           MAX_HIDDEN_SIZE_NC=256)
 
     params.update(dict(ALPHAZERO_REGULARISATION=kwds.get("a0_reg", False)))
