@@ -9,7 +9,8 @@ else
     echo "Automatically setting \$GGPLEARN_PATH to $GGPLEARN_PATH"
 
     # to activate python
-    . $GGPLEARN_PATH/bin/install/_python2_cpu/bin/activate
+    #. $GGPLEARN_PATH/bin/install/_python2_cpu/bin/activate
+    . ~/bin/install/_p2_tf/bin/activate
 
     export PYTHONPATH=$GGPLEARN_PATH/src:$PYTHONPATH
     export LD_LIBRARY_PATH=$GGPLEARN_PATH/src/cpp:$LD_LIBRARY_PATH
