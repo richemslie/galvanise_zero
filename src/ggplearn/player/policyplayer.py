@@ -123,6 +123,13 @@ class PolicyPlayer(MatchPlayer):
                 print
             print "all states"
 
+        # don't bother to predict if only one move.
+        if self.conf.skip_prediction_single_move:
+            ls = self.match.sm.get_legal_state(self.match.our_role_index)
+            if ls.get_count() == 1:
+                return ls.get_legal(0)
+
+
         policy, network_score = self.nn.predict_1(state, self.match.our_role_index)
         normalise_actions = self.policy_to_actions(policy)
 
