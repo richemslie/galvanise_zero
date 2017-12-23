@@ -12,11 +12,11 @@ def constrain_resources_tf():
 
     if not gpu_available:
         # this doesn't strictly use just one cpu... but seems it is the best one can do
-        config = tf.ConfigProto(device_count=dict(CPU=1),
+        config = tf.ConfigProto(device_count=dict(CPU=2),
                                 allow_soft_placement=False,
                                 log_device_placement=False,
-                                intra_op_parallelism_threads=1,
-                                inter_op_parallelism_threads=1)
+                                intra_op_parallelism_threads=2,
+                                inter_op_parallelism_threads=2)
     else:
         gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.25,
                                     allow_growth=True)
