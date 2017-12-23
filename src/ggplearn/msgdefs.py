@@ -19,6 +19,8 @@ class PolicyPlayerConf(object):
     verbose = attr.ib(True)
     generation = attr.ib("latest")
 
+    skip_prediction_single_move = attr.ib(True)
+
     # < 0 is off
     choose_exponential_scale = attr.ib(-1.0)
     random_scale = attr.ib(0.5)
