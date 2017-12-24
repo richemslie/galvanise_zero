@@ -132,18 +132,18 @@ class PUCTPlayer(MatchPlayer):
             self.nn = self.bases_config.create_network()
             self.nn.load()
 
-            # cache joint move, and basestate
-            self.joint_move = sm.get_joint_move()
-            self.basestate_expand_node = sm.new_base_state()
-            self.basestate_expanded_node = sm.new_base_state()
+        # cache joint move, and basestate
+        self.joint_move = sm.get_joint_move()
+        self.basestate_expand_node = sm.new_base_state()
+        self.basestate_expanded_node = sm.new_base_state()
 
-            def get_noop_idx(actions):
-                for idx, a in enumerate(actions):
-                    if "noop" in a:
-                        return idx
-                assert False, "did not find noop"
+        def get_noop_idx(actions):
+            for idx, a in enumerate(actions):
+                if "noop" in a:
+                    return idx
+            assert False, "did not find noop"
 
-            self.role0_noop_legal, self.role1_noop_legal = map(get_noop_idx, game_info.model.actions)
+        self.role0_noop_legal, self.role1_noop_legal = map(get_noop_idx, game_info.model.actions)
 
         self.our_noop_legal = self.role1_noop_legal if self.match.our_role_index == 1 else self.role0_noop_legal
 
@@ -597,7 +597,7 @@ class PUCTPlayer(MatchPlayer):
 configs = dict(
     default=msgdefs.PUCTPlayerConf(name="default",
                                    verbose=True,
-                                   playouts_per_iteration=32,
+                                   playouts_per_iteration=43,
                                    playouts_per_iteration_noop=1,
                                    expand_root=100,
                                    dirichlet_noise_alpha=0.5,
@@ -608,13 +608,24 @@ configs = dict(
 
     two=msgdefs.PUCTPlayerConf(name="two-test",
                                verbose=True,
-                               playouts_per_iteration=1000,
+                               playouts_per_iteration=800,
                                playouts_per_iteration_noop=1,
                                expand_root=100,
                                dirichlet_noise_alpha=-1,
                                cpuct_constant_first_4=3.0,
                                cpuct_constant_after_4=1.0,
                                choose="choose_converge",
+                               max_dump_depth=2),
+
+    rev=msgdefs.PUCTPlayerConf(name="rev2-test",
+                               verbose=True,
+                               playouts_per_iteration=42,
+                               playouts_per_iteration_noop=1,
+                               expand_root=100,
+                               dirichlet_noise_alpha=-1,
+                               cpuct_constant_first_4=0.75,
+                               cpuct_constant_after_4=0.75,
+                               choose="choose_top_visits",
                                max_dump_depth=2),
 
     three=msgdefs.PUCTPlayerConf(name="three-test",

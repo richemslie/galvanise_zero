@@ -71,7 +71,7 @@ class Runner(object):
     def play_one_game_for_selection(self):
         self.gm_select.reset()
 
-        self.gm_select.start(meta_time=20, move_time=10)
+        self.gm_select.start(meta_time=240, move_time=240)
 
         states = [(0, self.get_bases())]
 
@@ -91,7 +91,7 @@ class Runner(object):
             self.basestate.set(i, v)
 
         self.gm_policy.reset()
-        self.gm_policy.start(meta_time=30, move_time=10, initial_basestate=self.basestate)
+        self.gm_policy.start(meta_time=240, move_time=240, initial_basestate=self.basestate)
 
         # self.last_move used in playout_state
         self.last_move = self.gm_policy.play_single_move(None)
@@ -113,7 +113,7 @@ class Runner(object):
             self.basestate.set(i, v)
 
         self.gm_score.reset()
-        self.gm_score.start(meta_time=30, move_time=10, initial_basestate=self.basestate)
+        self.gm_score.start(meta_time=240, move_time=240, initial_basestate=self.basestate)
         self.gm_score.play_to_end()
 
         # return a list of scores as we expect them in the neural network
