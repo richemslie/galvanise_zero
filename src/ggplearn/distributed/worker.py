@@ -60,10 +60,7 @@ class Worker(Broker):
         self.register(msgdefs.TrainNNRequest, self.on_train_request)
 
         self.approx_players = None
-        self.samples = None
-        self.duplicates_seen = None
-
-        self.first_ping = False
+        self.self_play_session = None
 
         # connect to server
         reactor.callLater(0, self.connect)
@@ -89,49 +86,49 @@ class Worker(Broker):
     def on_configure_approx_trainer(self, server, msg):
         attrutil.pprint(msg)
 
+        # crate a new session and scheduler
+        self.self_play_session = approximate_play.Session()
         self.scheduler = create_scheduler(msg.game, msg.generation, batch_size=1024)
+
         for player_conf in msg.player_select_conf, msg.player_policy_conf, msg.player_score_conf:
             assert player_conf.generation == msg.generation
 
-        self.approx_players = [approximate_play.Runner(msg) for _ in range(self.conf.concurrent_plays)]
+        if self.approx_players is None:
+            self.approx_players = [approximate_play.Runner(msg) for _ in range(self.conf.concurrent_plays)]
+
         for r in self.approx_players:
             r.patch_players(self.scheduler)
 
         return msgdefs.Ok("configured")
 
-    def start_and_record(self, runner):
-        sample, duplicates_seen = runner.generate_sample()
-        self.samples.append(sample)
-        self.duplicates_seen += duplicates_seen
-
     def on_request_sample(self, server, msg):
+        assert self.self_play_session is not None
+        assert self.scheduler is not None
+
         log.debug("Got request for sample with number unique states %s" % len(msg.new_states))
 
         # update duplicates
+        self.self_play_session.reset()
         for s in msg.new_states:
-            for r in self.approx_players:
-                r.add_to_unique_states(tuple(s))
+            self.self_play_session.add_to_unique_states(tuple(s))
 
         for r in self.approx_players:
-            self.scheduler.add_runnable(self.start_and_record, r)
+            self.scheduler.add_runnable(self.self_play_session.start_and_record, r)
 
-        self.samples = []
-        self.duplicates_seen = 0
         log.info("Running scheduler")
 
         s = time.time()
         self.scheduler.run()
 
-        log.info("Number of samples %s" % len(self.samples))
+        log.info("Number of samples %s" % len(self.self_play_session.samples))
         log.info("time takens python/predicting/overall %.2f / %.2f / %.2f" % (self.scheduler.acc_python_time,
                                                                                self.scheduler.acc_predict_time,
                                                                                time.time() - s))
 
         log.info("Done all samples")
-        print "DONE RUN", self.scheduler.count_prediction_size
 
-
-        m = msgdefs.RequestSampleResponse(self.samples, self.duplicates_seen)
+        m = msgdefs.RequestSampleResponse(self.self_play_session.samples,
+                                          self.self_play_session.duplicates_seen)
         server.send_msg(m)
 
     def on_train_request(self, server, msg):
@@ -144,8 +141,8 @@ def start_worker_factory():
     from ggplib.util.init import setup_once
     setup_once("worker")
 
-    #from ggplearn.util.keras import constrain_resources
-    #constrain_resources()
+    # from ggplearn.util.keras import constrain_resources
+    # constrain_resources()
 
     broker = Worker(sys.argv[1])
     broker.start()

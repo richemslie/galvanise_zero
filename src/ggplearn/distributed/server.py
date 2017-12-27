@@ -235,7 +235,7 @@ class ServerBroker(Broker):
             if self.conf.run_post_training_cmds:
                 self.cmds_running = runprocs.RunCmds(self.conf.run_post_training_cmds,
                                                      cb_on_completion=self.finished_cmds_running,
-                                                     max_time=10.0)
+                                                     max_time=15.0)
                 self.cmds_running.spawn()
             else:
                 self.roll_generation()
@@ -302,7 +302,7 @@ class ServerBroker(Broker):
         m.generation_prefix = self.conf.generation_prefix
         m.store_path = self.conf.store_path
 
-        m.use_previous = True  # until we are big enough, what is the point?
+        m.use_previous = self.conf.retrain_network
 
         m.next_step = self.conf.current_step + 1
         m.validation_split = self.conf.validation_split

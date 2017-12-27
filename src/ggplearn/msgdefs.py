@@ -87,6 +87,7 @@ class ServerConfig(object):
     batch_size = attr.ib(32)
     epochs = attr.ib(10)
     max_sample_count = attr.ib(250000)
+    retrain_network = attr.ib(False)
 
     # run system commands after training (copy files to machines etc)
     run_post_training_cmds = attr.ib(default=attr.Factory(list))
