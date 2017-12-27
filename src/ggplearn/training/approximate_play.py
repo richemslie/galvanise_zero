@@ -25,6 +25,26 @@ from ggplearn.player.puctplayer import PUCTPlayer
 from ggplearn.player.policyplayer import PolicyPlayer
 
 
+class Session(object):
+    def __init__(self):
+        self.unique_states = set()
+        self.samples = None
+        self.duplicates_seen = None
+        self.reset()
+
+    def reset(self):
+        self.samples = []
+        self.duplicates_seen = 0
+
+    def start_and_record(self, runner):
+        sample, duplicates = runner.generate_sample(self)
+        self.samples.append(sample)
+        self.duplicates_seen += duplicates
+
+    def add_to_unique_states(self, state):
+        self.unique_states.add(state)
+
+
 class Runner(object):
     def __init__(self, conf):
         assert isinstance(conf, msgdefs.ConfigureApproxTrainer)
@@ -53,7 +73,6 @@ class Runner(object):
         self.roles = self.gm_select.sm.get_roles()
 
         # we want unique samples per generation, so store a unique_set here
-        self.unique_states = set()
         self.reset_debug()
 
     def patch_players(self, scheduler):
@@ -69,9 +88,6 @@ class Runner(object):
         self.time_for_play_one_game = 0
         self.time_for_do_policy = 0
         self.time_for_do_score = 0
-
-    def add_to_unique_states(self, state):
-        self.unique_states.add(state)
 
     def get_bases(self):
         self.gm_select.sm.get_current_state(self.basestate)
@@ -119,33 +135,40 @@ class Runner(object):
         for i, v in enumerate(state):
             self.basestate.set(i, v)
 
-        # XXX crazy code, only works for zero sum, and need to print out values for other games
-        last_game_depth = -1
-        average_scores = [0, 0]
-        for i in range(5):
-            self.gm_score.reset()
-            self.gm_score.start(meta_time=240, move_time=240, initial_basestate=self.basestate, game_depth=depth)
-            self.gm_score.play_to_end()
+        self.gm_score.reset()
+        self.gm_score.start(meta_time=240, move_time=240, initial_basestate=self.basestate, game_depth=depth)
+        self.gm_score.play_to_end()
 
-            # if game is towards the end, will likely be the same depth
-            if last_game_depth == self.gm_score.get_game_depth():
-                return [self.gm_score.get_score(r) / 100.0 for r in self.roles]
+        return [self.gm_score.get_score(role) / 100.0 in enumerate(self.roles)]
+        #     average_scores[idx] += 
 
-            last_game_depth = self.gm_score.get_game_depth()
+        # # XXX crazy code, only works for zero sum, and need to print out values for other games
+        # last_game_depth = -1
+        # average_scores = [0, 0]
+        # for i in range(5):
+        #     self.gm_score.reset()
+        #     self.gm_score.start(meta_time=240, move_time=240, initial_basestate=self.basestate, game_depth=depth)
+        #     self.gm_score.play_to_end()
 
-            for idx, role in enumerate(self.roles):
-                average_scores[idx] += self.gm_score.get_score(role)
+        #     # if game is towards the end, will likely be the same depth
+        #     if last_game_depth == self.gm_score.get_game_depth():
+        #         return [self.gm_score.get_score(r) / 100.0 for r in self.roles]
 
-                # XXX only works for zero sum games
-                if average_scores[idx] >= 300:
-                    result = [0.0, 0.0]
-                    result[idx] = 1.0
-                    return result
+        #     last_game_depth = self.gm_score.get_game_depth()
 
-        # return a list of scores as we expect them in the neural network
-        return [s / 500.0 for s in average_scores]
+        #     for idx, role in enumerate(self.roles):
+        #         average_scores[idx] += self.gm_score.get_score(role)
 
-    def generate_sample(self):
+        #         # XXX only works for zero sum games
+        #         if average_scores[idx] >= 300:
+        #             result = [0.0, 0.0]
+        #             result[idx] = 1.0
+        #             return result
+
+        # # return a list of scores as we expect them in the neural network
+        # return [s / 500.0 for s in average_scores]
+
+    def generate_sample(self, session):
         # debug
         # log.debug("Entering generate_sample(), unique_states: %s" % len(self.unique_states))
 
@@ -167,7 +190,7 @@ class Runner(object):
         while shuffle_states:
             depth, state = shuffle_states.pop()
 
-            if state in self.unique_states:
+            if state in session.unique_states:
                 duplicate_count += 1
                 continue
 
@@ -186,10 +209,13 @@ class Runner(object):
                                     depth, game_length, lead_role_index)
 
 
-            log.debug("Times depth %d, select/policy/score %.2f/%.2f/%.2f" % (game_length,
-                                                                              self.time_for_play_one_game,
-                                                                              self.time_for_do_policy,
-                                                                              self.time_for_do_score))
+            session.add_to_unique_states(tuple(state))
+
+            log.debug("Times depth %d, select/policy/score %.2f/%.2f/%.2f %s" % (game_length,
+                                                                                 self.time_for_play_one_game,
+                                                                                 self.time_for_do_policy,
+                                                                                 self.time_for_do_score,
+                                                                                 final_score))
 
             return sample, duplicate_count
 
