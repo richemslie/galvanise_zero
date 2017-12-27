@@ -87,6 +87,8 @@ class Worker(Broker):
         return msgdefs.WorkerConfigMsg(self.conf)
 
     def on_configure_approx_trainer(self, server, msg):
+        attrutil.pprint(msg)
+
         self.scheduler = create_scheduler(msg.game, msg.generation, batch_size=1024)
         for player_conf in msg.player_select_conf, msg.player_policy_conf, msg.player_score_conf:
             assert player_conf.generation == msg.generation

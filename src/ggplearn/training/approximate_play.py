@@ -29,8 +29,6 @@ class Runner(object):
     def __init__(self, conf):
         assert isinstance(conf, msgdefs.ConfigureApproxTrainer)
 
-        attrutil.pprint(conf)
-
         self.conf = conf
 
         # create two game masters, one for the score playout, and one for the policy evaluation
@@ -97,15 +95,17 @@ class Runner(object):
         self.gm_select.play_to_end(last_move)
         return states
 
-    def do_policy(self, state):
+    def do_policy(self, depth, state):
         for i, v in enumerate(state):
             self.basestate.set(i, v)
 
         self.gm_policy.reset()
-        self.gm_policy.start(meta_time=240, move_time=240, initial_basestate=self.basestate)
+        self.gm_policy.start(meta_time=240, move_time=240, initial_basestate=self.basestate, game_depth=depth)
 
         # self.last_move used in playout_state
         self.last_move = self.gm_policy.play_single_move(None)
+
+        assert self.gm_policy.get_game_depth() == depth
 
         # fish for root (XXX for game specific)
         lead_role_index = 1 if self.last_move[0] == "noop" else 0
@@ -115,20 +115,29 @@ class Runner(object):
         dist = [(c.legal, p) for c, p in player.get_probabilities()]
         return dist, lead_role_index
 
-    def do_score(self, state):
+    def do_score(self, depth, state):
         for i, v in enumerate(state):
             self.basestate.set(i, v)
 
+        # XXX crazy code, only works for zero sum, and need to print out values for other games
+        last_game_depth = -1
         average_scores = [0, 0]
         for i in range(5):
             self.gm_score.reset()
-            self.gm_score.start(meta_time=240, move_time=240, initial_basestate=self.basestate)
+            self.gm_score.start(meta_time=240, move_time=240, initial_basestate=self.basestate, game_depth=depth)
             self.gm_score.play_to_end()
+
+            # if game is towards the end, will likely be the same depth
+            if last_game_depth == self.gm_score.get_game_depth():
+                return [self.gm_score.get_score(r) / 100.0 for r in self.roles]
+
+            last_game_depth = self.gm_score.get_game_depth()
+
             for idx, role in enumerate(self.roles):
                 average_scores[idx] += self.gm_score.get_score(role)
 
                 # XXX only works for zero sum games
-                if average_scores >= 300:
+                if average_scores[idx] >= 300:
                     result = [0.0, 0.0]
                     result[idx] = 1.0
                     return result
@@ -138,14 +147,14 @@ class Runner(object):
 
     def generate_sample(self):
         # debug
-        log.debug("Entering generate_sample(), unique_states: %s" % len(self.unique_states))
+        # log.debug("Entering generate_sample(), unique_states: %s" % len(self.unique_states))
 
         start_time = time.time()
         states = self.play_one_game_for_selection()
         self.time_for_play_one_game = time.time() - start_time
 
         game_length = len(states)
-        log.debug("Done play_one_game_for_selection(), game_length %d" % game_length)
+        # log.debug("Done play_one_game_for_selection(), game_length %d" % game_length)
 
         shuffle_states = states[:]
 
@@ -163,12 +172,12 @@ class Runner(object):
                 continue
 
             start_time = time.time()
-            policy_dist, lead_role_index = self.do_policy(state)
+            policy_dist, lead_role_index = self.do_policy(depth, state)
             self.time_for_do_policy = time.time() - start_time
 
             # start from state and not from what policy returns (which would add bias)
             start_time = time.time()
-            final_score = self.do_score(state)
+            final_score = self.do_score(depth, state)
             self.time_for_do_score += time.time() - start_time
 
             prev_state = states[depth - 1] if depth >= 1 else None
@@ -177,9 +186,10 @@ class Runner(object):
                                     depth, game_length, lead_role_index)
 
 
-            log.debug("Times select/policy/score %.2f/%.2f/%.2f" % (self.time_for_play_one_game,
-                                                                    self.time_for_do_policy,
-                                                                    self.time_for_do_score))
+            log.debug("Times depth %d, select/policy/score %.2f/%.2f/%.2f" % (game_length,
+                                                                              self.time_for_play_one_game,
+                                                                              self.time_for_do_policy,
+                                                                              self.time_for_do_score))
 
             return sample, duplicate_count
 
