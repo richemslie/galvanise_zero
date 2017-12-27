@@ -19,16 +19,24 @@ class PolicyPlayerConf(object):
     verbose = attr.ib(True)
     generation = attr.ib("latest")
 
+    # a training optimisation
     skip_prediction_single_move = attr.ib(True)
 
-    # < 0 is off
-    choose_exponential_scale = attr.ib(-1.0)
+    # a random number is chosen between 0 and random_scale, this is used to choose the move by
+    # iterative over accumulative probability in the poilicy distribution.
     random_scale = attr.ib(0.5)
 
-    # < 0 is off
-    temperature_value = attr.ib(0.9)
-    temperature_pct = attr.ib(0.65)
-    temperature_depth = attr.ib(20)
+    # < 0 is off, a lower temperature (or in other words, a temperture tending to zero) will
+    # encourage more random play.  temperature is applied to the probabilities of the policy (in
+    # alphago zero paper it talks about applying to the number of visits.  This is essentially the
+    # same thing.  It is unlikely this will be ever to set to anything other than 1.  The temperature is
+    # instead controlled via incrementing the temperature game as the game is expanded, with a lower bound set with
+    # depth_temperature_start (so in other words :
+    # new_probability = probability * (1 / conf.temperature * depth)
+    # and depth = max(1, (game_depth - conf.depth_temperature_start) * conf.depth_temperature_increment)
+    temperature = attr.ib(-1)
+    depth_temperature_start = attr.ib(5)
+    depth_temperature_increment = attr.ib(0.5)
 
 
 @attr.s
@@ -63,8 +71,7 @@ class ServerConfig(object):
     game = attr.ib("breakthrough")
 
     current_step = attr.ib(0)
-    policy_network_size = attr.ib("small")
-    score_network_size = attr.ib("smaller")
+    network_size = attr.ib("normal")
 
     generation_prefix = attr.ib("v2_")
     store_path = attr.ib("somewhere")
@@ -89,6 +96,9 @@ class ServerConfig(object):
 class WorkerConf(object):
     connect_port = attr.ib(9000)
     connect_ip_addr = attr.ib("127.0.0.1")
+    do_training = attr.ib(False)
+    do_self_play = attr.ib(False)
+    concurrent_plays = attr.ib(1)
 
 
 @attr.s
@@ -98,7 +108,12 @@ class Ping(object):
 
 @attr.s
 class Pong(object):
-    worker_type = attr.ib()
+    pass
+
+
+@attr.s
+class RequestConfig(object):
+    pass
 
 
 @attr.s
@@ -107,9 +122,14 @@ class Ok(object):
 
 
 @attr.s
+class WorkerConfigMsg(object):
+    conf = attr.ib(default=attr.Factory(WorkerConf))
+
+
+@attr.s
 class ConfigureApproxTrainer(object):
-    game = attr.ib("breakthrough")
-    temperature = attr.ib(1.0)
+    game = attr.ib("game")
+    generation = attr.ib("gen0")
     player_select_conf = attr.ib(default=attr.Factory(PolicyPlayerConf))
     player_policy_conf = attr.ib(default=attr.Factory(PUCTPlayerConf))
     player_score_conf = attr.ib(default=attr.Factory(PolicyPlayerConf))
@@ -139,13 +159,13 @@ class Sample(object):
 
 @attr.s
 class RequestSampleResponse(object):
-    sample = attr.ib(default=attr.Factory(Sample))
+    samples = attr.ib(default=attr.Factory(list))
     duplicates_seen = attr.ib(0)
 
 
 @attr.s
 class TrainNNRequest(object):
-    game = attr.ib("breakthrough")
+    game = attr.ib("game")
 
     network_size = attr.ib("small")
     generation_prefix = attr.ib("v2_")
@@ -164,8 +184,7 @@ class TrainNNRequest(object):
 
 @attr.s
 class Generation(object):
-    game = attr.ib("breakthrough")
-    with_policy_generation = attr.ib("gen0")
-    with_score_generation = attr.ib("gen0")
+    game = attr.ib("game")
+    with_generation = attr.ib("gen0")
     num_samples = attr.ib(1024)
     samples = attr.ib(attr.Factory(list))

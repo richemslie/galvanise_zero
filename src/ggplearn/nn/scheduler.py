@@ -1,7 +1,11 @@
 import time
-from collections import deque
+from collections import deque, Counter
 
 import greenlet
+
+from ggplib.db import lookup
+
+from ggplearn.nn import bases
 
 
 class NetworkScheduler(object):
@@ -9,7 +13,7 @@ class NetworkScheduler(object):
 
     def __init__(self, nn, batch_size=256):
         self.nn = nn
-        self.batch_size = 256
+        self.batch_size = batch_size
 
         self.buf_states = []
         self.buf_lead_role_indexes = []
@@ -17,11 +21,13 @@ class NetworkScheduler(object):
         self.main = greenlet.getcurrent()
         self.runnables = deque()
         self.requestors = []
+
+        # states
         self.before_time = -1
         self.after_time = -1
-
         self.acc_python_time = 0
         self.acc_predict_time = 0
+        self.count_prediction_size = Counter()
 
     def add_runnable(self, fn, arg=None):
         self.runnables.append((greenlet.greenlet(fn), arg))
@@ -50,7 +56,7 @@ class NetworkScheduler(object):
             if self.after_time > 0:
                 self.acc_python_time += self.before_time - self.after_time
 
-            print len(next_states)
+            self.count_prediction_size[len(next_states)] += 1
             results += self.nn.predict_n(next_states, next_lead_role_indexes)
 
             self.after_time = time.time()
@@ -84,6 +90,10 @@ class NetworkScheduler(object):
 
     def run(self):
         # this is us
+        self.before_time = self.after_time -1
+        self.acc_predict_time = self.acc_python_time = 0
+        self.count_prediction_size = Counter()
+
         self.main = greenlet.getcurrent()
 
         # magic below:
@@ -100,3 +110,11 @@ class NetworkScheduler(object):
 
                 if len(self.buf_states) >= self.batch_size:
                     self.do_predictions()
+
+
+def create_scheduler(game, generation, batch_size=256):
+    game_info = lookup.by_name(game)
+    bases_config = bases.get_config(game_info.game, game_info.model, generation)
+    nn = bases_config.create_network()
+    nn.load()
+    return NetworkScheduler(nn, batch_size=batch_size)

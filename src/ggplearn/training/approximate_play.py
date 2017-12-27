@@ -4,6 +4,9 @@ back to square 1, more or less
   * second uses puct player, just on selected state - gm_policy
   * third starting from the same state as policy was trained
     on (not the resultant state), policy player for score - gm_score
+
+XXX still not sure whether this approach will lead to unstable network.
+
 """
 
 import time
@@ -55,11 +58,19 @@ class Runner(object):
         self.unique_states = set()
         self.reset_debug()
 
+    def patch_players(self, scheduler):
+        ''' patch the players to use a scheduler greenlet network, which provides concurrency -
+            which turns to be much faster (even without a gpu) '''
+
+        # patch each player, on each gamemaster
+        for gm in self.gm_select, self.gm_policy, self.gm_score:
+            for p, _ in gm.players:
+                p.nn = scheduler
+
     def reset_debug(self):
-        # debug times
-        self.acc_time_for_play_one_game = 0
-        self.acc_time_for_do_policy = 0
-        self.acc_time_for_do_score = 0
+        self.time_for_play_one_game = 0
+        self.time_for_do_policy = 0
+        self.time_for_do_score = 0
 
     def add_to_unique_states(self, state):
         self.unique_states.add(state)
@@ -101,32 +112,37 @@ class Runner(object):
 
         player = self.gm_policy.get_player(lead_role_index)
 
-        # distx = [(c.move, p) for c, p in player.get_probabilities(self.conf.temperature)]
-        # import pprint
-        # print.pprint(distx)
-
-        dist = [(c.legal, p) for c, p in player.get_probabilities(self.conf.temperature)]
+        dist = [(c.legal, p) for c, p in player.get_probabilities()]
         return dist, lead_role_index
 
     def do_score(self, state):
         for i, v in enumerate(state):
             self.basestate.set(i, v)
 
-        self.gm_score.reset()
-        self.gm_score.start(meta_time=240, move_time=240, initial_basestate=self.basestate)
-        self.gm_score.play_to_end()
+        average_scores = [0, 0]
+        for i in range(5):
+            self.gm_score.reset()
+            self.gm_score.start(meta_time=240, move_time=240, initial_basestate=self.basestate)
+            self.gm_score.play_to_end()
+            for idx, role in enumerate(self.roles):
+                average_scores[idx] += self.gm_score.get_score(role)
+
+                # XXX only works for zero sum games
+                if average_scores >= 300:
+                    result = [0.0, 0.0]
+                    result[idx] = 1.0
+                    return result
 
         # return a list of scores as we expect them in the neural network
-        return [self.gm_score.get_score(role) / 100.0 for role in self.roles]
+        return [s / 500.0 for s in average_scores]
 
     def generate_sample(self):
         # debug
-        log.debug("Entering generate_sample()")
-        log.debug("unique_states: %s" % len(self.unique_states))
+        log.debug("Entering generate_sample(), unique_states: %s" % len(self.unique_states))
 
         start_time = time.time()
         states = self.play_one_game_for_selection()
-        self.acc_time_for_play_one_game += time.time() - start_time
+        self.time_for_play_one_game = time.time() - start_time
 
         game_length = len(states)
         log.debug("Done play_one_game_for_selection(), game_length %d" % game_length)
@@ -148,20 +164,22 @@ class Runner(object):
 
             start_time = time.time()
             policy_dist, lead_role_index = self.do_policy(state)
-            log.debug("Done do_policy()")
-            self.acc_time_for_do_policy += time.time() - start_time
+            self.time_for_do_policy = time.time() - start_time
 
             # start from state and not from what policy returns (which would add bias)
             start_time = time.time()
             final_score = self.do_score(state)
-            log.debug("Done do_score()")
-            self.acc_time_for_do_score += time.time() - start_time
-
+            self.time_for_do_score += time.time() - start_time
 
             prev_state = states[depth - 1] if depth >= 1 else None
             sample = msgdefs.Sample(prev_state,
                                     state, policy_dist, final_score,
                                     depth, game_length, lead_role_index)
+
+
+            log.debug("Times select/policy/score %.2f/%.2f/%.2f" % (self.time_for_play_one_game,
+                                                                    self.time_for_do_policy,
+                                                                    self.time_for_do_score))
 
             return sample, duplicate_count
 

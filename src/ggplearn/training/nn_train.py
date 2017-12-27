@@ -104,7 +104,7 @@ class SamplesHolder(object):
             validation_data[ii] = arr
             log.info("Shape of validation data %d: %s" % (ii, arr.shape))
 
-        # good always a good idea to print some outputs
+        # good always a good idea to  some outputs
         print training_data[0][-120]
         print training_data[1][-120]
         print training_data[2][-120]
@@ -178,9 +178,7 @@ def parse_and_train(conf):
     total_samples = 0
     for fn, gen_data in get_data(conf):
         log.debug("Proccesing %s" % fn)
-        log.debug("Game %s, with policy gen: %s, with score gen: %s" % (gen_data.game,
-                                                                        gen_data.with_policy_generation,
-                                                                        gen_data.with_score_generation))
+        log.debug("Game %s, with gen: %s" % (gen_data.game, gen_data.with_generation))
 
         assert gen_data.num_samples == len(gen_data.samples)
 
