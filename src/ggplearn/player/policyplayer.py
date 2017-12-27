@@ -99,7 +99,6 @@ class PolicyPlayer(MatchPlayer):
             if self.match.game_info.game == "breakthrough":
                 pretty_print_board(self.match.sm, state)
                 print
-            print "all states"
 
         # don't bother to predict if only one move.
         if self.conf.skip_prediction_single_move:
