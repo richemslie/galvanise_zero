@@ -139,34 +139,7 @@ class Runner(object):
         self.gm_score.start(meta_time=240, move_time=240, initial_basestate=self.basestate, game_depth=depth)
         self.gm_score.play_to_end()
 
-        return [self.gm_score.get_score(role) / 100.0 in enumerate(self.roles)]
-        #     average_scores[idx] += 
-
-        # # XXX crazy code, only works for zero sum, and need to print out values for other games
-        # last_game_depth = -1
-        # average_scores = [0, 0]
-        # for i in range(5):
-        #     self.gm_score.reset()
-        #     self.gm_score.start(meta_time=240, move_time=240, initial_basestate=self.basestate, game_depth=depth)
-        #     self.gm_score.play_to_end()
-
-        #     # if game is towards the end, will likely be the same depth
-        #     if last_game_depth == self.gm_score.get_game_depth():
-        #         return [self.gm_score.get_score(r) / 100.0 for r in self.roles]
-
-        #     last_game_depth = self.gm_score.get_game_depth()
-
-        #     for idx, role in enumerate(self.roles):
-        #         average_scores[idx] += self.gm_score.get_score(role)
-
-        #         # XXX only works for zero sum games
-        #         if average_scores[idx] >= 300:
-        #             result = [0.0, 0.0]
-        #             result[idx] = 1.0
-        #             return result
-
-        # # return a list of scores as we expect them in the neural network
-        # return [s / 500.0 for s in average_scores]
+        return [self.gm_score.get_score(r) / 100.0 for r in self.roles]
 
     def generate_sample(self, session):
         # debug
