@@ -69,7 +69,9 @@ class PolicyPlayer(MatchPlayer):
             depth = max(1, (self.match.game_depth - self.conf.depth_temperature_start) *
                         self.conf.depth_temperature_increment)
             temp = 1.0 / self.conf.temperature * depth
-            log.debug("depth %s, temperature %s " % (depth, temp))
+            if self.conf.verbose:
+                log.debug("depth %s, temperature %s " % (depth, temp))
+
             actions = [(idx, move, math.pow(p, temp)) for idx, move, p in actions]
 
             # try to renormalise - if can...
@@ -110,17 +112,20 @@ class PolicyPlayer(MatchPlayer):
         normalise_actions = self.policy_to_actions(policy)
 
         expected_prob = random.random() * self.conf.random_scale
-        if self.conf.verbose:
-            log.verbose("expected_prob: %.2f" % expected_prob)
 
         seen_prob = 0
+        pos = 0
         for best_legal, best_move, best_prob in normalise_actions:
             seen_prob += best_prob
             if seen_prob > expected_prob:
                 break
+            pos += 1
 
         assert best_legal is not None
         if self.conf.verbose:
+            log.verbose("Expected prob: %.2f, choice is %s @ %s" % (expected_prob,
+                                                                    best_move, pos))
+
             log.info("Finals %.3f / %.3f" % tuple(network_score))
             log.info("Choice is %s with %.2f" % (best_move, best_prob * 100))
 
