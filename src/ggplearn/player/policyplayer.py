@@ -1,7 +1,7 @@
 import os
+import math
+import random
 from operator import itemgetter
-
-import numpy as np
 
 from ggplib.player.base import MatchPlayer
 from ggplib.util import log
@@ -37,8 +37,6 @@ class PolicyPlayer(MatchPlayer):
             self.nn = self.bases_config.create_network()
             self.nn.load()
 
-        self.game_depth = 0
-
     def policy_to_actions(self, policy):
         # only do our moves
         ls = self.match.sm.get_legal_state(self.match.our_role_index)
@@ -64,49 +62,29 @@ class PolicyPlayer(MatchPlayer):
 
         # normalise
         actions = [(idx, move, p / total_prob) for idx, move, p in actions]
-        total_prob = sum(p for _, _, p in actions)
-        assert (0.99 < total_prob < 1.01)
 
-        # if self.conf.temperature_value > 0:
-        #    actions = self.apply_temperature(actions)
+        # apply temperature
+        if self.conf.temperature > 0:
+            before_actions = actions
+            depth = max(1, (self.match.game_depth - self.conf.depth_temperature_start) *
+                        self.conf.depth_temperature_increment)
+            temp = 1.0 / self.conf.temperature * depth
+            log.debug("depth %s, temperature %s " % (depth, temp))
+            actions = [(idx, move, math.pow(p, temp)) for idx, move, p in actions]
 
-        if self.conf.verbose:
-            for legal, move, prob in actions:
-                log.verbose("%s \t %.2f" % (move, prob * 100))
+            # try to renormalise - if can...
+            total_prob = sum(p for _, _, p in actions)
+            actions = [(idx, move, p / total_prob) for idx, move, p in actions]
+
+            if self.conf.verbose:
+                for (legal, move, prob), (_, _, before) in zip(actions, before_actions):
+                    log.verbose("%s \t %.2f, %.2f" % (move, prob * 100, before * 100))
+        else:
+            if self.conf.verbose:
+                for legal, move, prob in actions:
+                    log.verbose("%s \t %.2f" % (move, prob * 100))
 
         return actions
-
-    def apply_temperature(self, actions):
-        # WIP ... somehow normalised isn't working, and too tired to figure out right now
-        # XXX how many parameters are required here?  I dont want to overload conf with this.
-        assert 0 < self.conf.temperature_value < 1
-
-        pct = self.conf.temperature_pct
-        value = self.conf.temperature_value
-        depth = self.conf.temperature_depth - min(self.conf.temperature_depth, self.game_depth + 1)
-        temp = (1 - pct) + pct * (value ** depth)
-        temp = 1 / temp
-
-        if self.conf.verbose:
-            log.info("depth %d, temperature is %.3f" % (depth, temp))
-
-        temps = [(l, m, p ** temp) for l, m, p in actions]
-
-        from pprint import pprint
-        pprint(actions)
-        pprint(temps)
-        temps_tot = sum(p for _, _, p in temps)
-        print "XXX temps_tot", temps_tot
-        normalise = [(l, m, p / temps_tot) for l, m, p in actions]
-        print "XXX2 temps_tot", sum(p for _, _, p in normalise)
-
-        normalise.sort(key=itemgetter(2), reverse=True)
-        pprint(normalise)
-
-        return normalise
-
-    def on_apply_move(self, joint_move):
-        self.game_depth += 1
 
     def on_next_move(self, finish_time):
         self.match.sm.update_bases(self.match.get_current_state())
@@ -129,24 +107,18 @@ class PolicyPlayer(MatchPlayer):
             if ls.get_count() == 1:
                 return ls.get_legal(0)
 
-
         policy, network_score = self.nn.predict_1(state, self.match.our_role_index)
         normalise_actions = self.policy_to_actions(policy)
 
-        # choose()
-        if self.conf.choose_exponential_scale > 0:
-            expected_prob = np.random.exponential(self.conf.choose_exponential_scale, 1)
-            expected_prob *= self.conf.random_scale
-            if self.conf.verbose:
-                log.verbose("expected_prob: %.2f" % expected_prob)
+        expected_prob = random.random() * self.conf.random_scale
+        if self.conf.verbose:
+            log.verbose("expected_prob: %.2f" % expected_prob)
 
-            seen_prob = 0
-            for best_legal, best_move, best_prob in normalise_actions:
-                seen_prob += best_prob
-                if seen_prob > expected_prob:
-                    break
-        else:
-            best_legal, best_move, best_prob = normalise_actions[0]
+        seen_prob = 0
+        for best_legal, best_move, best_prob in normalise_actions:
+            seen_prob += best_prob
+            if seen_prob > expected_prob:
+                break
 
         assert best_legal is not None
         if self.conf.verbose:
@@ -158,6 +130,7 @@ class PolicyPlayer(MatchPlayer):
 
 ###############################################################################
 
+
 def main():
     import sys
     from ggplib.play import play_runner
@@ -168,9 +141,23 @@ def main():
     port = int(sys.argv[1])
     generation = sys.argv[2]
 
-    conf = msgdefs.PolicyPlayerConf(name="0.25", generation=generation, choose_exponential_scale=0.25)
-    player = PolicyPlayer(conf)
+    try:
+        conf_name = sys.argv[3]
+    except IndexError:
+        conf_name = "default"
 
+    confs = {
+        'default' : msgdefs.PolicyPlayerConf(name="default", generation=generation,
+                                             temperature=-1, random_scale=0.001),
+
+        'abc' : msgdefs.PolicyPlayerConf(name="abc", generation=generation,
+                                         random_scale=0.85,
+                                         temperature=1.0,
+                                         depth_temperature_start=6,
+                                         depth_temperature_increment=0.25),
+    }
+
+    player = PolicyPlayer(confs[conf_name])
     play_runner(player, port)
 
 
