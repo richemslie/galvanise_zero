@@ -1,5 +1,5 @@
 import time
-from collections import deque, Counter
+from collections import deque
 
 import greenlet
 
@@ -27,7 +27,7 @@ class NetworkScheduler(object):
         self.after_time = -1
         self.acc_python_time = 0
         self.acc_predict_time = 0
-        self.count_prediction_size = Counter()
+        self.num_predictions = 0
 
     def add_runnable(self, fn, arg=None):
         self.runnables.append((greenlet.greenlet(fn), arg))
@@ -56,7 +56,7 @@ class NetworkScheduler(object):
             if self.after_time > 0:
                 self.acc_python_time += self.before_time - self.after_time
 
-            self.count_prediction_size[len(next_states)] += 1
+            self.num_predictions += len(next_states)
             results += self.nn.predict_n(next_states, next_lead_role_indexes)
 
             self.after_time = time.time()
@@ -90,9 +90,9 @@ class NetworkScheduler(object):
 
     def run(self):
         # this is us
-        self.before_time = self.after_time -1
+        self.before_time = self.after_time = -1
         self.acc_predict_time = self.acc_python_time = 0
-        self.count_prediction_size = Counter()
+        self.num_predictions = 0
 
         self.main = greenlet.getcurrent()
 
