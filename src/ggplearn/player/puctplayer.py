@@ -455,18 +455,6 @@ class PUCTPlayer(MatchPlayer):
             # predict root
             self.nodes_to_predict.append(self.root)
 
-        # s = time.time()
-        # for c in self.root.children[:self.conf.expand_root]:
-        #     if c.to_node is None:
-        #         self.expand_child(c)
-
-        #         for cc in c.to_node.children:
-        #             if cc.to_node is None:
-        #                 self.expand_child(cc)
-        #                 print cc.to_node
-
-        # print "XXXtime taken", time.time() - s
-
         # we do predictions here and dont combine with expanding some root children (if option is
         # set), because do_predictions() will reorder the children according to the policy and thus
         # expand the highest probabilty moves.
@@ -474,8 +462,7 @@ class PUCTPlayer(MatchPlayer):
 
         # expand and predict some of root children
         if self.conf.expand_root > 0:
-            expand_root = 8
-            for c in self.root.children[:expand_root]:
+            for c in self.root.children[:self.conf.expand_root]:
                 if c.to_node is None:
                     self.expand_child(c)
                     self.nodes_to_predict.append(c.to_node)
