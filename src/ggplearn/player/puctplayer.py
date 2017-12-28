@@ -109,8 +109,8 @@ class PUCTPlayer(MatchPlayer):
         self.nn = None
         self.root = None
 
-        if self.conf.verbose:
-            assert self.conf.playouts_per_iteration_noop > 0, "DONT KNOW WHY THIS DOESNT WORK, BUT XXX"
+        #if self.conf.verbose:
+        #    assert self.conf.playouts_per_iteration_noop > 0, "DONT KNOW WHY THIS DOESNT WORK, BUT XXX"
 
         self.choose = getattr(self, self.conf.choose)
 
@@ -257,7 +257,7 @@ class PUCTPlayer(MatchPlayer):
         if self.conf.dirichlet_noise_alpha < 0:
             return None
 
-        return np.random.dirichlet([self.conf.dirichlet_noise_alpha] * len(node.children))
+        return np.random.dirichlet([self.conf.dirichlet_noise_alpha, 1.0], len(node.children))[:,0]
 
     def puct_constant(self, node):
         constant = self.conf.puct_constant_after
@@ -293,7 +293,8 @@ class PUCTPlayer(MatchPlayer):
                 child_visits = float(cn.mc_visits)
                 node_score = cn.mc_score[node.lead_role_index]
 
-                # ensure terminals are enforced more than other nodes
+                # ensure terminals are enforced more than other nodes (network can return 1.0 for
+                # basically dumb moves, if it thinks it will win regardless)
                 if cn.is_terminal:
                     node_score *= 1.02
 
@@ -307,7 +308,7 @@ class PUCTPlayer(MatchPlayer):
             cv = float(child_visits + 1)
             puct_score = puct_constant * child_pct * (v ** 0.5) / cv
 
-            score = node_score + puct_score + random.random() * 0.001
+            score = node_score + puct_score
 
             # use for debug/display
             child.debug_node_score = node_score
@@ -364,7 +365,9 @@ class PUCTPlayer(MatchPlayer):
         else:
             max_iterations = self.conf.playouts_per_iteration
 
-        while True:
+        if max_iterations < 0:
+            max_iterations = sys.maxint
+        while iterations < max_iterations:
             if time.time() > finish_time:
                 log.info("RAN OUT OF TIME")
                 break
@@ -375,18 +378,18 @@ class PUCTPlayer(MatchPlayer):
 
             iterations += 1
 
-            if max_iterations > 0 and iterations > max_iterations:
-                break
-
             if cb and cb():
                 break
 
         if self.conf.verbose:
-            log.info("Time taken for %s iteratons %.3f" % (iterations,
-                                                           time.time() - start_time))
+            if iterations:
+                log.info("Time taken for %s iteratons %.3f" % (iterations,
+                                                               time.time() - start_time))
 
-            log.debug("The average depth explored: %.2f, max depth: %d" % (total_depth / float(iterations),
-                                                                           max_depth))
+                log.debug("The average depth explored: %.2f, max depth: %d" % (total_depth / float(iterations),
+                                                                               max_depth))
+            else:
+                log.debug("Did no iterations.")
 
     def on_apply_move(self, joint_move):
 
@@ -532,16 +535,13 @@ class PUCTPlayer(MatchPlayer):
         current = self.root
 
         dump_depth = 0
-        while current is not None:
+        while dump_depth < self.conf.max_dump_depth:
             assert not current.is_terminal
-
-            if dump_depth == self.conf.max_dump_depth:
-                break
 
             self.dump_node(current, indent=dump_depth * 4)
             current = current.sorted_children()[0].to_node
 
-            if current.is_terminal:
+            if current is None or current.is_terminal:
                 break
 
             dump_depth += 1
@@ -553,6 +553,8 @@ class PUCTPlayer(MatchPlayer):
             node = self.root
 
         total_visits = float(sum(c.visits() for c in node.children))
+        if total_visits == 0:
+            total_visits = 1
 
         temps = [((c.visits() + 1) / total_visits) ** temperature for c in node.children]
         temps_tot = sum(temps)
@@ -661,31 +663,58 @@ configs = dict(
     three=msgdefs.PUCTPlayerConf(name="three-test",
                                  verbose=True,
                                  playouts_per_iteration=42,
-                                 playouts_per_iteration_noop=1,
-                                 expand_root=100,
-                                 dirichlet_noise_alpha=-1,
+                                 playouts_per_iteration_noop=0,
+                                 expand_root=0,
+
+                                 dirichlet_noise_alpha=0.03,
+
                                  puct_before_expansions=3,
                                  puct_before_root_expansions=3,
                                  puct_constant_before=3.0,
                                  puct_constant_after=0.75,
                                  puct_constant_tune=False,
-                                 choose="choose_converge",
+
+                                 choose="choose_top_visits",
                                  max_dump_depth=2),
 
     four=msgdefs.PUCTPlayerConf(name="four-test",
                                 verbose=True,
                                 playouts_per_iteration=42,
-                                playouts_per_iteration_noop=1,
-                                expand_root=100,
-                                dirichlet_noise_alpha=0.1,
+                                playouts_per_iteration_noop=0,
+                                expand_root=0,
+
+                                dirichlet_noise_alpha=0.03,
+
                                 puct_before_expansions=3,
-                                puct_before_root_expansions=8,
+                                puct_before_root_expansions=3,
                                 puct_constant_before=5.0,
-                                puct_constant_after=1.5,
+                                puct_constant_after=1.25,
                                 puct_constant_tune=True,
 
                                 choose="choose_top_visits",
-                                max_dump_depth=2))
+                                max_dump_depth=2),
+
+    policy=msgdefs.PUCTPlayerConf(name="policy-test",
+                                  verbose=True,
+                                  playouts_per_iteration=0,
+                                  playouts_per_iteration_noop=0,
+                                  expand_root=0,
+                                  dirichlet_noise_alpha=-1,
+
+                                  choose="choose_top_visits",
+                                  max_dump_depth=1),
+
+    max_score=msgdefs.PUCTPlayerConf(name="max-score",
+                                     verbose=True,
+                                     playouts_per_iteration=1,
+                                     playouts_per_iteration_noop=0,
+                                     expand_root=1000,
+                                     dirichlet_noise_alpha=-1,
+                                     puct_constant_before=0,
+                                     puct_constant_after=0,
+
+                                     choose="choose_top_visits",
+                                     max_dump_depth=2))
 
 
 def main():
