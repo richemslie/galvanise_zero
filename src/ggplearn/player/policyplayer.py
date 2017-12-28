@@ -64,12 +64,14 @@ class PolicyPlayer(MatchPlayer):
         actions = [(idx, move, p / total_prob) for idx, move, p in actions]
 
         # apply temperature
-        if self.conf.temperature > 0:
+        c = self.conf
+        if c.temperature > 0:
             before_actions = actions
-            depth = max(1, (self.match.game_depth - self.conf.depth_temperature_start) *
-                        self.conf.depth_temperature_increment)
-            temp = 1.0 / self.conf.temperature * depth
-            if self.conf.verbose:
+            depth = (self.match.game_depth - c.depth_temperature_start) * c.depth_temperature_increment
+            # XXX add 5 (the max temperature) to attrs
+            depth = max(1, min(depth, 5))
+            temp = c.temperature * float(depth)
+            if c.verbose:
                 log.debug("depth %s, temperature %s " % (depth, temp))
 
             actions = [(idx, move, math.pow(p, temp)) for idx, move, p in actions]
@@ -78,11 +80,11 @@ class PolicyPlayer(MatchPlayer):
             total_prob = sum(p for _, _, p in actions)
             actions = [(idx, move, p / total_prob) for idx, move, p in actions]
 
-            if self.conf.verbose:
+            if c.verbose:
                 for (legal, move, prob), (_, _, before) in zip(actions, before_actions):
                     log.verbose("%s \t %.2f, %.2f" % (move, prob * 100, before * 100))
         else:
-            if self.conf.verbose:
+            if c.verbose:
                 for legal, move, prob in actions:
                     log.verbose("%s \t %.2f" % (move, prob * 100))
 
@@ -159,6 +161,13 @@ def main():
                                          temperature=1.0,
                                          depth_temperature_start=6,
                                          depth_temperature_increment=0.25),
+
+        'score' : msgdefs.PolicyPlayerConf(name="score", generation=generation,
+                                           random_scale=0.75,
+                                           temperature=0.75,
+                                           depth_temperature_start=6,
+                                           depth_temperature_increment=0.2),
+
     }
 
     player = PolicyPlayer(confs[conf_name])
