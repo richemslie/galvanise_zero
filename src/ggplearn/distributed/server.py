@@ -362,6 +362,9 @@ class ServerBroker(Broker):
         self.approx_play_config = conf
 
     def schedule_players(self):
+        if len(self.accumulated_samples) > self.conf.generation_size:
+            self.new_generation()
+
         if not self.free_players:
             return
 
@@ -388,9 +391,6 @@ class ServerBroker(Broker):
                     new_free_players.append(worker_info)
 
         self.free_players = new_free_players
-
-        if len(self.accumulated_samples) > self.conf.generation_size:
-            self.new_generation()
 
         if self.the_nn_trainer is None:
             log.warning("There is no nn trainer - please start")

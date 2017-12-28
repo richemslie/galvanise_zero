@@ -120,10 +120,11 @@ class Worker(Broker):
         s = time.time()
         self.scheduler.run()
 
-        log.info("Number of samples %s" % len(self.self_play_session.samples))
-        log.info("time takens python/predicting/overall %.2f / %.2f / %.2f" % (self.scheduler.acc_python_time,
-                                                                               self.scheduler.acc_predict_time,
-                                                                               time.time() - s))
+        log.info("Number of samples %s, predictions %d" % (len(self.self_play_session.samples),
+                                                           self.scheduler.num_predictions))
+        log.info("time takens python/predict/all %.2f / %.2f / %.2f" % (self.scheduler.acc_python_time,
+                                                                        self.scheduler.acc_predict_time,
+                                                                        time.time() - s))
 
         log.info("Done all samples")
 
