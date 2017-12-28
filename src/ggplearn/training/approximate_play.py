@@ -10,6 +10,7 @@ XXX still not sure whether this approach will lead to unstable network.
 """
 
 import time
+import random
 
 import numpy as np
 
@@ -156,7 +157,9 @@ class Runner(object):
 
         # pop the final state, as we don't want terminal states.  But keep in states intact
         shuffle_states.pop()
+        random.shuffle(shuffle_states)
         np.random.shuffle(shuffle_states)
+        random.shuffle(shuffle_states)
 
         duplicate_count = 0
 
@@ -174,7 +177,7 @@ class Runner(object):
             # start from state and not from what policy returns (which would add bias)
             start_time = time.time()
             final_score = self.do_score(depth, state)
-            self.time_for_do_score += time.time() - start_time
+            self.time_for_do_score = time.time() - start_time
 
             prev_state = states[depth - 1] if depth >= 1 else None
             sample = msgdefs.Sample(prev_state,
@@ -184,11 +187,11 @@ class Runner(object):
 
             session.add_to_unique_states(tuple(state))
 
-            log.debug("Times depth %d, select/policy/score %.2f/%.2f/%.2f %s" % (game_length,
-                                                                                 self.time_for_play_one_game,
-                                                                                 self.time_for_do_policy,
-                                                                                 self.time_for_do_score,
-                                                                                 final_score))
+            log.debug("select/policy/score %.2f/%.2f/%.2f depth %s/%s score %s" % (self.time_for_play_one_game,
+                                                                                   self.time_for_do_policy,
+                                                                                   self.time_for_do_score,
+                                                                                   depth, game_length,
+                                                                                   final_score))
 
             return sample, duplicate_count
 
