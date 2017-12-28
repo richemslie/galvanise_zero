@@ -268,6 +268,74 @@ def retrain():
     parse_and_train(conf)
 
 
+def test_speed():
+    conf = msgdefs.TrainNNRequest()
+    conf.game = "breakthrough"
+
+    conf.network_size = "small"
+    conf.generation_prefix = "v5_"
+    conf.store_path = os.path.join(os.environ["GGPLEARN_PATH"], "data", "breakthrough", "v5")
+
+    # uses previous network
+    conf.use_previous = False
+    conf.next_step = 32
+
+    conf.validation_split = 0.8
+    conf.batch_size = 4096
+    conf.epochs = 10
+    conf.max_sample_count = 150000
+
+    from ggplib.db import lookup
+    from ggplearn.nn import bases
+    from ggplearn.training.nn_train import parse
+    import numpy as np
+
+    game_info = lookup.by_name(conf.game)
+    generation = "%sgen_%s_%s" % (conf.generation_prefix,
+                                  conf.network_size,
+                                  conf.next_step - 1)
+
+    bases_config = bases.get_config(conf.game,
+                                    game_info.model,
+                                    generation)
+
+
+    train_conf = parse(conf, game_info, bases_config)
+    nn = bases_config.create_network()
+    nn.load()
+
+    input_0 = train_conf.inputs[0]
+    input_1 = train_conf.inputs[1]
+
+    import time
+    res = []
+    # warm up
+    for i in range(2):
+        print i
+        idx = i * conf.batch_size
+        end_idx = (i + 1) * conf.batch_size
+        model = nn.get_model()
+        X_0, X_1 = np.array(input_0[idx:end_idx]), np.array(input_1[idx:end_idx])
+        print X_0.shape
+        res.append(model.predict([X_0, X_1], batch_size=conf.batch_size))
+        print res
+
+    import gc
+    for z in range(3):
+        res = []
+        times = []
+        gc.collect()
+        num_batches = 100000 / conf.batch_size + 1
+        for i in range(num_batches):
+            idx = i * conf.batch_size
+            end_idx = (i + 1) * conf.batch_size
+            model = nn.get_model()
+            s = time.time()
+            X_0, X_1 = np.array(input_0[idx:end_idx]), np.array(input_1[idx:end_idx])
+            res.append(model.predict([X_0, X_1], batch_size=conf.batch_size))
+            times.append(time.time() - s)
+        print "times taken", times
+
 if __name__ == "__main__":
     from ggplearn.util.main import main_wrap
-    main_wrap(retrain)
+    main_wrap(test_speed)
