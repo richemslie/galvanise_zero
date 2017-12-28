@@ -78,7 +78,7 @@ class ServerConfig(object):
 
     player_select_conf = attr.ib(default=attr.Factory(PolicyPlayerConf))
     player_policy_conf = attr.ib(default=attr.Factory(PUCTPlayerConf))
-    player_score_conf = attr.ib(default=attr.Factory(PolicyPlayerConf))
+    player_score_conf = attr.ib(default=attr.Factory(PUCTPlayerConf))
 
     generation_size = attr.ib(1024)
     max_growth_while_training = attr.ib(0.2)
@@ -133,7 +133,7 @@ class ConfigureApproxTrainer(object):
     generation = attr.ib("gen0")
     player_select_conf = attr.ib(default=attr.Factory(PolicyPlayerConf))
     player_policy_conf = attr.ib(default=attr.Factory(PUCTPlayerConf))
-    player_score_conf = attr.ib(default=attr.Factory(PolicyPlayerConf))
+    player_score_conf = attr.ib(default=attr.Factory(PUCTPlayerConf))
 
 
 @attr.s
