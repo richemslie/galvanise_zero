@@ -138,7 +138,7 @@ def test_fast_plays():
     conf.verbose = False
 
     # just checking that we haven't modified default
-    assert conf.verbose == False and default_puct_config.verbose == True
+    assert not conf.verbose and default_puct_config.verbose
 
     conf.playouts_per_iteration = 1
     conf.playouts_per_iteration_noop = 0

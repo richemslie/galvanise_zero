@@ -65,7 +65,7 @@ class Runner(object):
             self.gm_policy.add_player(PUCTPlayer(self.conf.player_policy_conf), role)
 
         for role in self.gm_score.sm.get_roles():
-            self.gm_score.add_player(PolicyPlayer(self.conf.player_score_conf), role)
+            self.gm_score.add_player(PUCTPlayer(self.conf.player_score_conf), role)
 
         # cache a local statemachine basestate (doesn't matter which gm it comes from)
         self.basestate = self.gm_select.sm.new_base_state()
@@ -130,6 +130,7 @@ class Runner(object):
         player = self.gm_policy.get_player(lead_role_index)
 
         dist = [(c.legal, p) for c, p in player.get_probabilities()]
+
         return dist, lead_role_index
 
     def do_score(self, depth, state):

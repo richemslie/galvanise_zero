@@ -82,11 +82,17 @@ class Rollout(object):
             return None
 
         self.sm.update_bases(self.states[d])
+
         ls = self.sm.get_legal_state(lead_role_index)
-        total = float(ls.get_count() * 4)
+        ADD_K = 0.3
+        total = float(ls.get_count() * (1.0 + ADD_K))
+
         legals = ls.to_list()
-        policy_dist = [(l, (1 / total)) for l in ls.to_list()]
-        policy_dist[legals.index(main_legal)] = (main_legal, (ls.get_count() * 3 + 1) / total)
+        policy_dist = [(l, (1 / total + random.random() / (10 * ls.get_count()))) for l in ls.to_list()]
+        policy_dist[legals.index(main_legal)] = (main_legal, (ls.get_count() * ADD_K + 1) / total)
+
+        total = sum(p for _, p in policy_dist)
+        policy_dist = [(l, p / total) for l, p in policy_dist]
 
         # now we can create a sample :)
         return msgdefs.Sample(None, state, policy_dist, final_score, d, self.depth, lead_role_index)
@@ -107,7 +113,7 @@ class Rollout(object):
 
         ls = self.sm.get_legal_state(lead_role_index)
         best_moves = []
-        best_count = 10000
+        best_count = -1
 
         # want to reduce this
         for ii in range(ls.get_count()):
@@ -124,7 +130,7 @@ class Rollout(object):
                     return legal
 
             count = self.count_states(next_state, other_role_index)
-            if count < best_count:
+            if count > best_count:
                 best_moves = [legal]
                 best_count = count
             elif count == best_count:
@@ -172,16 +178,17 @@ class Rollout(object):
 
 def nn_train_random_generated():
     ' not a unit test - like can take over a few hours ! '
-    CREATE_FILE = False
-    ACTUALLY_TRAIN = True
-    SAMPLE_COUNT = 50000
+    import sys
+    CREATE_FILE = hasattr(sys, 'pypy_version_info')
+    ACTUALLY_TRAIN = not hasattr(sys, 'pypy_version_info')
+    SAMPLE_COUNT = 250000
 
     train_conf = msgdefs.TrainNNRequest()
-    train_conf.game = "breakthrough"
+    train_conf.game = "reversi"
 
-    train_conf.network_size = "small"
-    train_conf.generation_prefix = "v3"
-    train_conf.store_path = os.getcwd()
+    train_conf.network_size = "normal"
+    train_conf.generation_prefix = "v5_"
+    train_conf.store_path = os.path.join(os.environ["GGPLEARN_PATH"], "data", train_conf.game, "v5")
 
     # uses previous network
     train_conf.use_previous = False
@@ -239,22 +246,22 @@ def nn_train_random_generated():
         parse_and_train(train_conf)
 
 
-def v2_training():
+def retrain():
     conf = msgdefs.TrainNNRequest()
     conf.game = "breakthrough"
 
-    conf.network_size = "smaller"
-    conf.generation_prefix = "v2_"
-    conf.store_path = os.path.join(os.environ["GGPLEARN_PATH"], "data", "breakthrough", "v2")
+    conf.network_size = "small"
+    conf.generation_prefix = "v5_"
+    conf.store_path = os.path.join(os.environ["GGPLEARN_PATH"], "data", "breakthrough", "v5")
 
     # uses previous network
-    conf.use_previous = True
-    conf.next_step = 62
+    conf.use_previous = False
+    conf.next_step = 7
 
     conf.validation_split = 0.8
     conf.batch_size = 64
-    conf.epochs = 16
-    conf.max_sample_count = 100
+    conf.epochs = 10
+    conf.max_sample_count = 150000
 
     # import here so can run with pypy wihtout hitting import keras issues
     from ggplearn.training.nn_train import parse_and_train
@@ -263,4 +270,4 @@ def v2_training():
 
 if __name__ == "__main__":
     from ggplearn.util.main import main_wrap
-    main_wrap(nn_train_random_generated)
+    main_wrap(retrain)

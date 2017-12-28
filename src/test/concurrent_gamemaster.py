@@ -1,23 +1,16 @@
-'''
-time taken in python 104.783336401
-time taken in predicting 24.455483675
-total time taken 129.234750986
-'''
 
 import time
 
 from ggplib.db.helper import get_gdl_for_game
-from ggplib.db import lookup
 from ggplib.player.gamemaster import GameMaster
 
 from ggplearn import msgdefs
-from ggplearn.nn import bases
-from ggplearn.nn.scheduler import NetworkScheduler
+from ggplearn.nn.scheduler import create_scheduler
 
 from ggplearn.training.approximate_play import Runner
 
 from ggplearn.player.puctplayer import PUCTPlayer
-from ggplearn.player.policyplayer import PolicyPlayer
+# from ggplearn.player.policyplayer import PolicyPlayer
 
 
 def setup():
@@ -49,16 +42,7 @@ policy_config2 = msgdefs.PolicyPlayerConf(verbose=False,
 
 
 def test_concurrrent_gamemaster():
-    # first get the game
-    game_info = lookup.by_name("reversi")
-
-    # create a network
-    bases_config = bases.get_config(game_info.game, game_info.model, default_generation)
-    nn = bases_config.create_network()
-    nn.load()
-
-    # create a NetworkScheduler
-    scheduler = NetworkScheduler(nn, batch_size=256)
+    scheduler = create_scheduler("reversi", batch_size=256)
 
     gamemasters = []
 
@@ -75,7 +59,8 @@ def test_concurrrent_gamemaster():
 
             gm.add_player(player, role)
 
-        # anything as long it is at right resolution (since we are trying to parellise self play - this is the resolution we want.
+        # anything as long it is at right resolution (since we are trying to parellise self play -
+        # this is the resolution we want.
         gm.start(meta_time=300, move_time=300)
         scheduler.add_runnable(gm.play_single_move, None)
 
@@ -90,17 +75,9 @@ def f(runner):
     sample = runner.generate_sample()
     runner.sample = sample
 
+
 def test_approx_play():
-    game = "reversi"
-
-    # first get the game
-    game_info = lookup.by_name("reversi")
-
-    # create a network
-    bases_config = bases.get_config(game_info.game, game_info.model, default_generation)
-    nn = bases_config.create_network()
-    nn.load()
-    scheduler = NetworkScheduler(nn, batch_size=256)
+    scheduler = create_scheduler("reversi", batch_size=256)
 
     conf = msgdefs.ConfigureApproxTrainer("reversi")
     conf.player_select_conf = policy_config
@@ -110,21 +87,15 @@ def test_approx_play():
     runners = []
     for i in range(256):
         r = Runner(conf)
+        r.patch_players(scheduler)
         runners.append(r)
-        # patch the player
-        for gm in r.gm_select, r.gm_policy, r.gm_score:
-            for p, _ in gm.players:
-                p.nn = scheduler
-
-
-    for r in runners:
         scheduler.add_runnable(f, r)
 
     s = time.time()
     scheduler.run()
 
     # collect samples
-    samples = [r.sample for r in runners]
+    samples = [runner.sample for runner in runners]
     print "samples", len(samples)
     print "time taken in python", scheduler.acc_python_time
     print "time taken in predicting", scheduler.acc_predict_time

@@ -151,10 +151,10 @@ class EarlyStoppingCb(keras.callbacks.Callback):
                 return
 
             # if things havent got better - STOP.  We can go on forever without improving.
-            if self.epoch_last_set_at is not None and epoch > self.epoch_last_set_at + 3:
-                log.info("Early stopping... since not improving")
-                self.model.stop_training = True
-                return
+            # if self.epoch_last_set_at is not None and epoch > self.epoch_last_set_at + 3:
+            #    log.info("Early stopping... since not improving")
+            #    self.model.stop_training = True
+            #    return
 
     def on_train_end(self, logs=None):
         if self.best:

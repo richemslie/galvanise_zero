@@ -10,6 +10,7 @@ from ggplearn.player.policyplayer import PolicyPlayer
 
 current_gen = "testgen_normal_1"
 
+
 def setup():
     from ggplib.util.init import setup_once
     setup_once()
