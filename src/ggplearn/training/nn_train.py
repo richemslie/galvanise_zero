@@ -125,7 +125,43 @@ def get_data(conf):
         step += 1
 
 
+def parse(conf, game_info, bases_config):
+    samples_holder = SamplesHolder(game_info, bases_config)
+
+    total_samples = 0
+    for fn, gen_data in get_data(conf):
+        log.debug("Proccesing %s" % fn)
+        log.debug("Game %s, with gen: %s" % (gen_data.game, gen_data.with_generation))
+
+        assert gen_data.num_samples == len(gen_data.samples)
+
+        assert gen_data.game == conf.game
+        train_count = int(gen_data.num_samples * conf.validation_split)
+
+        for s in gen_data.samples[:train_count]:
+            check_sample(s, game_info.model)
+            samples_holder.add(s)
+
+        for s in gen_data.samples[train_count:]:
+            check_sample(s, game_info.model)
+            samples_holder.add(s, validation=True)
+
+        total_samples += gen_data.num_samples
+
+    if conf.max_sample_count < total_samples:
+        train_count = int(conf.max_sample_count * conf.validation_split)
+        validate_count = conf.max_sample_count - train_count
+        log.info("Stripping %s samples from data set" % (total_samples - conf.max_sample_count))
+        samples_holder.strip(train_count, validate_count)
+
+    train_conf = samples_holder.massage_data()
+    return train_conf
+
+
 def parse_and_train(conf):
+    # lookup via game_name (this gets statemachine & statemachine model)
+    game_info = lookup.by_name(conf.game)
+
     assert isinstance(conf, msgdefs.TrainNNRequest)
 
     attrutil.pprint(conf)
@@ -135,9 +171,6 @@ def parse_and_train(conf):
         if conf.next_step % 5 == 0:
             log.warning("Not using previous since time to cycle...")
             use_previous = False
-
-    # lookup via game_name (this gets statemachine & statemachine model)
-    game_info = lookup.by_name(conf.game)
 
     prev_generation = "%sgen_%s_%s_prev" % (conf.generation_prefix,
                                             conf.network_size,
@@ -173,35 +206,7 @@ def parse_and_train(conf):
 
     nn.summary()
 
-    samples_holder = SamplesHolder(game_info, bases_config)
-
-    total_samples = 0
-    for fn, gen_data in get_data(conf):
-        log.debug("Proccesing %s" % fn)
-        log.debug("Game %s, with gen: %s" % (gen_data.game, gen_data.with_generation))
-
-        assert gen_data.num_samples == len(gen_data.samples)
-
-        assert gen_data.game == conf.game
-        train_count = int(gen_data.num_samples * conf.validation_split)
-
-        for s in gen_data.samples[:train_count]:
-            check_sample(s, game_info.model)
-            samples_holder.add(s)
-
-        for s in gen_data.samples[train_count:]:
-            check_sample(s, game_info.model)
-            samples_holder.add(s, validation=True)
-
-        total_samples += gen_data.num_samples
-
-    if conf.max_sample_count < total_samples:
-        train_count = int(conf.max_sample_count * conf.validation_split)
-        validate_count = conf.max_sample_count - train_count
-        log.info("Stripping %s samples from data set" % (total_samples - conf.max_sample_count))
-        samples_holder.strip(train_count, validate_count)
-
-    train_conf = samples_holder.massage_data()
+    train_conf = parse(conf, game_info, bases_config)
     train_conf.epochs = conf.epochs
     train_conf.batch_size = conf.batch_size
 
