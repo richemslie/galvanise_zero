@@ -47,8 +47,17 @@ class PUCTPlayerConf(object):
 
     playouts_per_iteration = attr.ib(800)
     playouts_per_iteration_noop = attr.ib(1)
-    cpuct_constant_first_4 = attr.ib(0.75)
-    cpuct_constant_after_4 = attr.ib(0.75)
+
+    # applies different constant until the following expansions are met
+    puct_before_expansions = attr.ib(4)
+    puct_before_root_expansions = attr.ib(4)
+
+    # the puct constant.  before expansions, and after expansions are met
+    puct_constant_before = attr.ib(0.75)
+    puct_constant_after = attr.ib(0.75)
+
+    # tunes the puct_constant with the initial (predicted) score of the node
+    puct_constant_tune = attr.ib(False)
 
     # added to root child policy pct (less than 0 is off)
     dirichlet_noise_pct = attr.ib(0.25)

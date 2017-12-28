@@ -1,7 +1,9 @@
 import time
+import random
 from operator import itemgetter, attrgetter
 
 import numpy as np
+from tabulate import tabulate
 
 from ggplib.util import log
 from ggplib.player.base import MatchPlayer
@@ -22,7 +24,7 @@ class Child(object):
         self.legal = legal
 
         # from NN
-        self.policy_dist_pct = None
+        self.policy_prob = None
 
         # to the next node
         # this deviates from AlphaGoZero paper, where the keep statistics on child.  But I am
@@ -49,13 +51,13 @@ class Child(object):
 
             return "%s %d %.2f%%   %.2f %s" % (self.move,
                                                self.visits(),
-                                               self.policy_dist_pct * 100,
+                                               self.policy_prob * 100,
                                                score,
                                                "T " if n.is_terminal else "* ")
         else:
             return "%s %d %.2f%%   ---- ? " % (self.move,
                                                self.visits(),
-                                               self.policy_dist_pct * 100)
+                                               self.policy_prob * 100)
     __str__ = __repr__
 
 
@@ -159,16 +161,16 @@ class PUCTPlayer(MatchPlayer):
         total = 0
         for c in node.children:
             ridx = start_pos + c.legal
-            c.policy_dist_pct = pred_policy[ridx]
+            c.policy_prob = pred_policy[ridx]
 
-            total += c.policy_dist_pct
+            total += c.policy_prob
 
         # normalise
         for c in node.children:
-            c.policy_dist_pct /= total
+            c.policy_prob /= total
 
         # sort the children now rather than every iteration
-        node.children.sort(key=attrgetter("policy_dist_pct"), reverse=True)
+        node.children.sort(key=attrgetter("policy_prob"), reverse=True)
 
     def do_predictions(self):
         actual_nodes_to_predict = []
@@ -257,17 +259,23 @@ class PUCTPlayer(MatchPlayer):
 
         return np.random.dirichlet([self.conf.dirichlet_noise_alpha] * len(node.children))
 
-    def cpuct_constant(self, node):
-        cpuct = self.conf.cpuct_constant_after_4
-        expanded = sum(1 for c in node.children if c.to_node is not None)
-        if expanded < 3:
-            cpuct = self.conf.cpuct_constant_first_4
+    def puct_constant(self, node):
+        constant = self.conf.puct_constant_after
 
-        return cpuct
+        expansions = self.conf.puct_before_root_expansions if node is self.root else self.conf.puct_before_expansions
+
+        expanded = sum(1 for c in node.children if c.to_node is not None)
+        if expanded <= expansions:
+            constant = self.conf.puct_constant_before
+
+        if self.conf.puct_constant_tune:
+            constant *= node.final_score[node.lead_role_index]
+
+        return constant
 
     def select_child(self, node, depth):
         dirichlet_noise = self.dirichlet_noise(node, depth)
-        cpuct_constant = self.cpuct_constant(node)
+        puct_constant = self.puct_constant(node)
 
         # get best
         best_child = None
@@ -289,7 +297,7 @@ class PUCTPlayer(MatchPlayer):
                 if cn.is_terminal:
                     node_score *= 1.02
 
-            child_pct = child.policy_dist_pct
+            child_pct = child.policy_prob
 
             if dirichlet_noise is not None:
                 noise_pct = self.conf.dirichlet_noise_pct
@@ -297,9 +305,9 @@ class PUCTPlayer(MatchPlayer):
 
             v = float(node.mc_visits + 1)
             cv = float(child_visits + 1)
-            puct_score = cpuct_constant * child_pct * (v ** 0.5) / cv
+            puct_score = puct_constant * child_pct * (v ** 0.5) / cv
 
-            score = node_score + puct_score
+            score = node_score + puct_score + random.random() * 0.001
 
             # use for debug/display
             child.debug_node_score = node_score
@@ -414,22 +422,6 @@ class PUCTPlayer(MatchPlayer):
             if self.conf.verbose:
                 log.verbose("ROOT FOUND: %s / %d" % (new_root, visit_count(new_root)))
 
-    def dump_node(self, node, indent=0):
-        indent_str = " " * indent
-        print indent_str, "node %s %s" % (node.mc_visits, node.final_score)
-        for child in node.sorted_children():
-            print indent_str,
-            print child, "\t->  ",
-            if child.to_node is not None:
-                n = child.to_node
-                print "%d @ %.3f / %.3f" % (n.mc_visits, n.mc_score[0], n.mc_score[1]),
-            else:
-                print "--- @ ---- / ----",
-
-            print "\t  %.2f + %.2f = %.3f" % (child.debug_node_score,
-                                              child.debug_puct_score,
-                                              child.debug_node_score + child.debug_puct_score)
-
     def noop(self):
         if self.root.lead_role_index != self.match.our_role_index:
             if self.match.our_role_index:
@@ -482,7 +474,8 @@ class PUCTPlayer(MatchPlayer):
 
         # expand and predict some of root children
         if self.conf.expand_root > 0:
-            for c in self.root.children[:self.conf.expand_root]:
+            expand_root = 8
+            for c in self.root.children[:expand_root]:
                 if c.to_node is None:
                     self.expand_child(c)
                     self.nodes_to_predict.append(c.to_node)
@@ -505,37 +498,79 @@ class PUCTPlayer(MatchPlayer):
         else:
             return choice.legal
 
+    def dump_node(self, node, indent=0):
+        indent_str = " " * indent
+        role = self.match.sm.get_roles()[node.lead_role_index]
+        print "%s>>> lead: %s, visits: %s, predict: %s" % (indent_str,
+                                                           role,
+                                                           node.mc_visits,
+                                                           node.final_score[node.lead_role_index])
+
+        rows = []
+        for child, prob in self.get_probabilities(node):
+            cols = []
+
+            cols.append(child.move)
+            cols.append(child.visits())
+            cols.append(child.policy_prob * 100)
+            cols.append(prob * 100)
+
+            node_type = '?'
+            if child.to_node is not None:
+                node_type = "T" if child.to_node.is_terminal else "*"
+            cols.append(node_type)
+
+            if child.to_node is not None:
+                n = child.to_node
+                cols.append(n.mc_score[node.lead_role_index])
+            else:
+                cols.append(None)
+
+            cols.append(child.debug_puct_score)
+            cols.append(child.debug_node_score + child.debug_puct_score)
+
+            rows.append(cols)
+
+        headers = "move visits policy prob type score ~puct ~select".split()
+        for line in tabulate(rows, headers, floatfmt=".2f", tablefmt="plain").splitlines():
+            print indent_str + line
+
     def debug_output(self, choice):
-        for c, v in self.get_probabilities():
-            print c, v
-
-        current = self.root
-
-        dump_depth = 0
-        while current is not None:
-            if dump_depth == self.conf.max_dump_depth:
-                break
-
-            self.dump_node(current, indent=dump_depth * 4)
-            if current.is_terminal:
-                break
-
-            current = current.sorted_children()[0].to_node
-            dump_depth += 1
+        log.verbose("Debug @ depth %s" % self.match.game_depth)
 
         if self.match.game_info.game == "breakthrough":
             pretty_print_board(self.match.sm, self.root.state)
             print
 
+        current = self.root
+
+        dump_depth = 0
+        while current is not None:
+            assert not current.is_terminal
+
+            if dump_depth == self.conf.max_dump_depth:
+                break
+
+            self.dump_node(current, indent=dump_depth * 4)
+            current = current.sorted_children()[0].to_node
+
+            if current.is_terminal:
+                break
+
+            dump_depth += 1
+
         print "Choice", choice
 
-    def get_probabilities(self, temperature=1):
-        total_visits = float(sum(c.visits() for c in self.root.children))
+    def get_probabilities(self, node=None, temperature=1):
+        if node is None:
+            node = self.root
 
-        temps = [((c.visits() + 1) / total_visits) ** temperature for c in self.root.children]
+        total_visits = float(sum(c.visits() for c in node.children))
+
+        temps = [((c.visits() + 1) / total_visits) ** temperature for c in node.children]
         temps_tot = sum(temps)
 
-        probs = [(c, t / temps_tot) for c, t in zip(self.root.children, temps)]
+        probs = [(c, t / temps_tot) for c, t in zip(node.children, temps)]
         probs.sort(key=itemgetter(1), reverse=True)
 
         return probs
@@ -601,8 +636,10 @@ configs = dict(
                                    playouts_per_iteration_noop=1,
                                    expand_root=100,
                                    dirichlet_noise_alpha=0.2,
-                                   cpuct_constant_first_4=3.0,
-                                   cpuct_constant_after_4=0.75,
+                                   puct_before_expansions=3,
+                                   puct_before_root_expansions=3,
+                                   puct_constant_before=3.0,
+                                   puct_constant_after=0.75,
                                    choose="choose_top_visits",
                                    max_dump_depth=2),
 
@@ -612,8 +649,11 @@ configs = dict(
                                playouts_per_iteration_noop=800,
                                expand_root=100,
                                dirichlet_noise_alpha=0.1,
-                               cpuct_constant_first_4=3.0,
-                               cpuct_constant_after_4=0.75,
+                               puct_before_expansions=3,
+                               puct_before_root_expansions=3,
+                               puct_constant_before=3.0,
+                               puct_constant_after=0.75,
+                               puct_constant_tune=False,
                                choose="choose_converge",
                                max_dump_depth=2),
 
@@ -623,8 +663,11 @@ configs = dict(
                                playouts_per_iteration_noop=1,
                                expand_root=100,
                                dirichlet_noise_alpha=-1,
-                               cpuct_constant_first_4=0.75,
-                               cpuct_constant_after_4=0.75,
+                               puct_before_expansions=3,
+                               puct_before_root_expansions=3,
+                               puct_constant_before=0.75,
+                               puct_constant_after=0.75,
+                               puct_constant_tune=False,
                                choose="choose_top_visits",
                                max_dump_depth=2),
 
@@ -634,10 +677,28 @@ configs = dict(
                                  playouts_per_iteration_noop=1,
                                  expand_root=100,
                                  dirichlet_noise_alpha=-1,
-                                 cpuct_constant_first_4=3.0,
-                                 cpuct_constant_after_4=0.75,
+                                 puct_before_expansions=3,
+                                 puct_before_root_expansions=3,
+                                 puct_constant_before=3.0,
+                                 puct_constant_after=0.75,
+                                 puct_constant_tune=False,
                                  choose="choose_converge",
-                                 max_dump_depth=2))
+                                 max_dump_depth=2),
+
+    four=msgdefs.PUCTPlayerConf(name="four-test",
+                                verbose=True,
+                                playouts_per_iteration=42,
+                                playouts_per_iteration_noop=1,
+                                expand_root=100,
+                                dirichlet_noise_alpha=0.1,
+                                puct_before_expansions=3,
+                                puct_before_root_expansions=8,
+                                puct_constant_before=5.0,
+                                puct_constant_after=1.5,
+                                puct_constant_tune=True,
+
+                                choose="choose_top_visits",
+                                max_dump_depth=2))
 
 
 def main():
