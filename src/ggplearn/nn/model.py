@@ -1,146 +1,192 @@
 from keras import layers as klayers
-from keras import models
 from keras.regularizers import l2
+from keras import backend as K
+from keras.models import Model as KerasModel
+
+from ggplearn import msgdefs
+
+
+# kind of thought keras was taking care of this XXX
+def get_bn_axis():
+    return 1 if is_channels_first() else 3
+
+
+def is_channels_first():
+    ' NCHW is cuDNN default, and what tf wants for GPU. '
+    return K.image_data_format() == "channels_first"
 
 
 def Conv2DBlock(*args, **kwds):
-    activation = None
-    if "activation" in kwds:
-        activation = kwds.pop("activation")
+    # args, kwds -> passed through to Conv2D
 
-    # XXX augment name
-    # if "name" in kwds:
-    #    res_name = kwds.pop("name")
+    assert "activation" in kwds
+    activation = kwds.pop("activation")
+
+    try:
+        name = kwds.pop('name',)
+    except KeyError:
+        name = 'conv2d_block'
+
+    conv_name = name + '_conv2d'
+    bn_name = name + '_bn'
+    act_name = name + '_act'
 
     def block(x):
-        x = klayers.Conv2D(*args, **kwds)(x)
-        x = klayers.BatchNormalization()(x)
-        x = klayers.Activation(activation)(x)
+        x = klayers.Conv2D(*args,
+                           name=conv_name, **kwds)(x)
+
+        x = klayers.BatchNormalization(axis=get_bn_axis(),
+                                       name=bn_name)(x)
+
+        x = klayers.Activation(activation, name=act_name)(x)
         return x
+
     return block
 
 
 def ResidualBlock(*args, **kwds):
+    # args, kwds -> passed through to Conv2D
     assert "padding" not in kwds
-    kwds["padding"] = "same"
 
-    # XXX augment name
-    # if "name" in kwds:
-    #    res_name = kwds.pop("name")
+    try:
+        name = kwds.pop('name',)
+    except KeyError:
+        name = 'residual_block'
 
-    # all other args/kwds passed through to Conv2DBlock
+    name_conv0 = name + "_conv0"
+    name_conv1 = name + "_conv1"
+    name_bn0 = name + "_bn0"
+    name_bn1 = name + "_bn1"
+    name_act0 = name + "_act0"
+    name_act_after = name + "_act_after"
+    name_add = name + "_add"
 
-    def identity(tensor):
-        x = klayers.Conv2D(*args, **kwds)(tensor)
-        x = klayers.BatchNormalization()(x)
-        x = klayers.Activation("relu")(x)
+    def block(tensor):
+        x = klayers.Conv2D(*args,
+                           name=name_conv0,
+                           padding="same",
+                           **kwds)(tensor)
 
-        x = klayers.Conv2D(*args, **kwds)(x)
-        x = klayers.BatchNormalization()(x)
+        x = klayers.BatchNormalization(axis=get_bn_axis(),
+                                       name=name_bn0)(x)
 
-        x = klayers.add([tensor, x])
-        return klayers.Activation("relu")(x)
+        x = klayers.Activation("relu", name=name_act0)(x)
 
-    return identity
+        x = klayers.Conv2D(*args,
+                           name=name_conv1,
+                           padding="same",
+                           **kwds)(x)
+
+        x = klayers.BatchNormalization(axis=get_bn_axis(),
+                                       name=name_bn1)(x)
+
+        x = klayers.add([tensor, x], name=name_add)
+        x = klayers.Activation("relu", name=name_act_after)(x)
+
+        return x
+
+    return block
 
 
-def get_network_model(config, **kwds):
+def residual_one_by_one(rows, cols, reqd):
+    ''' XXX I am not entirely sure why AGZ decided upon 1 and 2 filters for 1x1 before flattening.
+    for its go architecture.  My best guess is that they want more than the next layer, and to keep the weights low.
+    With that in mind, since we dont know what the next layer is - we calculate it instead of specifying it. '''
 
-    class AttrDict(dict):
-        def __getattr__(self, name):
-            return self[name]
+    size = rows * cols
+    if reqd < size:
+        return 1
 
-    network_size = kwds.get("network_size", "normal")
-    if network_size == "tiny":
-        params = AttrDict(CNN_FILTERS_SIZE=32,
-                          RESIDUAL_BLOCKS=4,
-                          MAX_HIDDEN_SIZE_NC=128)
+    if reqd % size == 0:
+        return reqd / size
 
-    elif network_size == "smaller":
-        params = AttrDict(CNN_FILTERS_SIZE=64,
-                          RESIDUAL_BLOCKS=6,
-                          MAX_HIDDEN_SIZE_NC=128)
+    return reqd / size + 1
 
-    elif network_size == "small":
-        params = AttrDict(CNN_FILTERS_SIZE=96,
-                          RESIDUAL_BLOCKS=6,
-                          MAX_HIDDEN_SIZE_NC=128)
 
-    elif network_size == "normal":
-        params = AttrDict(CNN_FILTERS_SIZE=128,
-                          RESIDUAL_BLOCKS=6,
-                          MAX_HIDDEN_SIZE_NC=256)
+def get_network_model(conf):
+    assert isinstance(conf, msgdefs.NNModelConfig)
 
-    elif network_size == "larger":
-        params = AttrDict(CNN_FILTERS_SIZE=128,
-                          RESIDUAL_BLOCKS=8,
-                          MAX_HIDDEN_SIZE_NC=256)
-
-    elif network_size == "large":
-        params = AttrDict(CNN_FILTERS_SIZE=192,
-                          RESIDUAL_BLOCKS=8,
-                          MAX_HIDDEN_SIZE_NC=256)
-
-    params.update(dict(ALPHAZERO_REGULARISATION=kwds.get("a0_reg", False)))
-    params.update(dict(DO_DROPOUT=kwds.get("dropout", True)))
-
-    # fancy l2 regularizer stuff I will understand one day
-    ######################################################
-    reg_params = {}
-    if params.ALPHAZERO_REGULARISATION:
-        reg_params["kernel_regularizer"] = l2(1e-4)
+    # fancy l2 regularizer stuff
+    extra_params = {}
+    if conf.alphazero_regularisation:
+        extra_params["kernel_regularizer"] = l2(1e-4)
 
     # inputs:
-    #########
-    inputs_board = klayers.Input(shape=(config.num_rows,
-                                        config.num_cols,
-                                        config.num_channels))
+    if is_channels_first():
+        inputs_board = klayers.Input(shape=(conf.input_channels,
+                                            conf.input_rows,
+                                            conf.input_columns),
+                                     name="inputs_board")
+    else:
+        inputs_board = klayers.Input(shape=(conf.input_rows,
+                                            conf.input_columns,
+                                            conf.input_channels),
+                                     name="inputs_board")
 
-    assert config.number_of_non_cord_states
-    inputs_other = klayers.Input(shape=(config.number_of_non_cord_states,))
+    inputs_other = klayers.Input(shape=(conf.input_others,), name="inputs_other")
 
-    # CNN/Resnet on cords
-    #####################
-    layer = Conv2DBlock(params.CNN_FILTERS_SIZE, 3,
+    # initial conv2d /Resnet on cords
+    layer = Conv2DBlock(conf.cnn_filter_size, conf.cnn_kernel_size,
                         padding='same',
-                        activation='relu', **reg_params)(inputs_board)
+                        activation='relu',
+                        name='initial', **extra_params)(inputs_board)
 
-    for _ in range(params.RESIDUAL_BLOCKS):
-        layer = ResidualBlock(params.CNN_FILTERS_SIZE, 3)(layer)
+    for i in range(conf.residual_layers):
+        layer = ResidualBlock(conf.cnn_filter_size,
+                              conf.cnn_kernel_size,
+                              name="ResLayer_%s" % i,
+                              **extra_params)(layer)
 
-    # number of roles + 1
-    res_policy_out = Conv2DBlock(config.role_count + 1, 1,
-                                 padding='valid', activation='relu', **reg_params)(layer)
+    # residual net -> flattened for policy head
+    # here we set number of filters to the number of roles + 1.
 
-    res_score_out = Conv2DBlock(2, 1, padding='valid', activation='relu', **reg_params)(layer)
-    res_policy_out = klayers.Flatten()(res_policy_out)
-    res_score_out = klayers.Flatten()(res_score_out)
+    # XXX possible this should be based on the number of legals to choose from?  I think that is
+    # about the only thing that makes sense for it being 2 in the alpha go case.  Funny enough they
+    # didn't report anything about chess/shogi.
+    filters = residual_one_by_one(conf.input_rows, conf.input_columns, conf.policy_dist_count)
+    to_flatten = Conv2DBlock(filters, 1,
+                             name='to_flatten_policy_head',
+                             padding='valid',
+                             activation='relu',
+                             **extra_params)(layer)
 
-    if params.DO_DROPOUT:
-        res_policy_out = klayers.Dropout(0.333)(res_policy_out)
-        res_score_out = klayers.Dropout(0.5)(res_score_out)
+    res_flat_policy = klayers.Flatten()(to_flatten)
+
+    # residual net -> flattened for value head
+    filters = residual_one_by_one(conf.input_rows, conf.input_columns, conf.value_hidden_size)
+    to_flatten = Conv2DBlock(filters, 1,
+                             name='to_flatten_value_head',
+                             padding='valid',
+                             activation='relu',
+                             **extra_params)(layer)
+
+    res_flat_value = klayers.Flatten()(to_flatten)
 
     # FC on other non-cord states
-    #############################
-    nc_layer_count = min(config.number_of_non_cord_states * 2, params.MAX_HIDDEN_SIZE_NC)
-    nc_layer = klayers.Dense(nc_layer_count, activation="relu", name="nc_layer", **reg_params)(inputs_other)
-    nc_layer = klayers.BatchNormalization()(nc_layer)
+    nc_layer_count = min(conf.input_others * 2, conf.max_hidden_other_size)
+    nc_layer = klayers.Dense(nc_layer_count, activation="relu",
+                             name="nc_layer", **extra_params)(inputs_other)
+    nc_layer = klayers.BatchNormalization(name="nc_layer_bn")(nc_layer)
 
-    # output: policy
-    ################
-    prelude_policy = klayers.concatenate([res_policy_out, nc_layer], axis=-1)
-    output_policy = klayers.Dense(config.policy_dist_count,
-                                  activation="softmax", name="policy", **reg_params)(prelude_policy)
+    # output: policy head
+    prelude = klayers.concatenate([res_flat_policy, nc_layer])
+    if conf.dropout_rate_policy > 0:
+        prelude = klayers.Dropout(conf.dropout_rate_policy)(prelude)
 
-    # output: score
-    ###############
-    prelude_scores = klayers.concatenate([res_score_out, nc_layer], axis=-1)
-    prelude_scores = klayers.Dense(32, activation="relu", **reg_params)(prelude_scores)
+    policy_head = klayers.Dense(conf.policy_dist_count,
+                                activation="softmax", name="policy", **extra_params)(prelude)
 
-    output_score = klayers.Dense(config.final_score_count,
-                                 activation="sigmoid", name="score", **reg_params)(prelude_scores)
+    # output: value head
+    prelude = klayers.concatenate([res_flat_value, nc_layer])
+    if conf.dropout_rate_value > 0:
+        prelude = klayers.Dropout(conf.dropout_rate_value)(prelude)
 
-    # model
-    #######
-    return models.Model(inputs=[inputs_board, inputs_other],
-                        outputs=[output_policy, output_score])
+    hidden = klayers.Dense(conf.value_hidden_size, activation="relu",
+                           name="value_hidden_layer", **extra_params)(prelude)
+
+    value_head = klayers.Dense(conf.role_count,
+                               activation="sigmoid", name="value", **extra_params)(hidden)
+
+    # model:
+    return KerasModel(inputs=[inputs_board, inputs_other],
+                      outputs=[policy_head, value_head])

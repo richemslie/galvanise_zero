@@ -2,14 +2,13 @@ import os
 import numpy as np
 
 from ggplib.util import log
-
 from ggplib.db import lookup
 
 from ggplearn.util import attrutil
 
-from ggplearn.nn import bases
+from ggplearn import msgdefs, templates
 
-from ggplearn import msgdefs
+from ggplearn.nn.manager import get_manager
 
 
 def check_sample(sample, game_model):
@@ -25,11 +24,11 @@ def check_sample(sample, game_model):
 
 
 class SamplesHolder(object):
-    def __init__(self, game_info, bases_config):
+    def __init__(self, game_info, transformer):
         assert len(game_info.model.roles) == 2, "only 2 roles supported for now"
 
         self.game_info = game_info
-        self.bases_config = bases_config
+        self.transformer = transformer
         self.train_samples = []
         self.validation_samples = []
 
@@ -65,13 +64,13 @@ class SamplesHolder(object):
         # transform samples -> numpy arrays as inputs/outputs to nn
 
         # input 1
-        planes = self.bases_config.state_to_channels(sample.state, sample.lead_role_index)
+        planes = self.transformer.state_to_channels(sample.state, sample.lead_role_index)
 
         # input - planes
         data[0].append(planes)
 
         # input - non planes
-        non_planes = self.bases_config.get_non_cord_input(sample.state)
+        non_planes = self.transformer.get_non_cord_input(sample.state)
         data[1].append(non_planes)
 
         # output - policy
@@ -104,7 +103,7 @@ class SamplesHolder(object):
             validation_data[ii] = arr
             log.info("Shape of validation data %d: %s" % (ii, arr.shape))
 
-        # good always a good idea to  some outputs
+        # good always a good idea to print some outputs
         print training_data[0][-120]
         print training_data[1][-120]
         print training_data[2][-120]
@@ -117,36 +116,62 @@ class SamplesHolder(object):
 
 
 def get_data(conf):
-    last_step = conf.next_step - 1
-    step = 0
-    while step <= last_step:
+    assert isinstance(conf, msgdefs.TrainNNRequest)
+
+    step = conf.next_step - 1
+    while step >= conf.starting_step:
         fn = os.path.join(conf.store_path, "gendata_%s_%s.json" % (conf.game, step))
         yield fn, attrutil.json_to_attr(open(fn).read())
-        step += 1
+        step -= 1
 
 
-def parse(conf, game_info, bases_config):
-    samples_holder = SamplesHolder(game_info, bases_config)
+def parse(conf, game_info, transformer):
+    assert isinstance(conf, msgdefs.TrainNNRequest)
+
+    samples_holder = SamplesHolder(game_info, transformer)
 
     total_samples = 0
+    from collections import Counter
+    count = Counter()
+
     for fn, gen_data in get_data(conf):
         log.debug("Proccesing %s" % fn)
-        log.debug("Game %s, with gen: %s" % (gen_data.game, gen_data.with_generation))
+        log.debug("Game %s, with gen: %s and sample count %s" % (gen_data.game,
+                                                                 gen_data.with_generation,
+                                                                 gen_data.num_samples))
 
-        assert gen_data.num_samples == len(gen_data.samples)
+        samples = []
+        # XXX should we even support this deduping?
+        for g in gen_data.samples:
+            s = tuple(g.state)
+            # keep the top 3 only
+            if count[s] == 4:
+                pass  # XXX continue
+
+            count[s] += 1
+            samples.append(g)
+
+        print "DROPPED DUPES", gen_data.num_samples - len(samples)
+
+        # assert gen_data.num_samples == len(gen_data.samples)
 
         assert gen_data.game == conf.game
-        train_count = int(gen_data.num_samples * conf.validation_split)
+        num_samples = len(samples)
+        train_count = int(num_samples * conf.validation_split)
 
-        for s in gen_data.samples[:train_count]:
+        for s in samples[:train_count]:
             check_sample(s, game_info.model)
             samples_holder.add(s)
 
-        for s in gen_data.samples[train_count:]:
+        for s in samples[train_count:]:
             check_sample(s, game_info.model)
             samples_holder.add(s, validation=True)
 
-        total_samples += gen_data.num_samples
+        total_samples += num_samples
+        if total_samples > conf.max_sample_count:
+            break
+
+    log.info("Total samples %s" % total_samples)
 
     if conf.max_sample_count < total_samples:
         train_count = int(conf.max_sample_count * conf.validation_split)
@@ -158,69 +183,81 @@ def parse(conf, game_info, bases_config):
     return train_conf
 
 
+def get_nn_model_conf(conf):
+    # temp here
+    nn_model_conf = templates.nn_model_config_template(conf.game, conf.network_size)
+
+    nn_model_conf.dropout_rate_policy = 0.25
+    nn_model_conf.dropout_rate_value = 0.25
+
+    # ensure no regularisation
+    nn_model_conf.alphazero_regularisation = False
+
+    # this is learning rate for adam
+    nn_model_conf.learning_rate = 0.0005
+
+    # nn_model_conf.alphazero_regularisation = True
+    attrutil.pprint(nn_model_conf)
+
+    return nn_model_conf
+
+
 def parse_and_train(conf):
-    # lookup via game_name (this gets statemachine & statemachine model)
-    game_info = lookup.by_name(conf.game)
-
     assert isinstance(conf, msgdefs.TrainNNRequest)
-
     attrutil.pprint(conf)
 
-    use_previous = conf.use_previous
-    if use_previous:
-        if conf.next_step % 5 == 0:
-            log.warning("Not using previous since time to cycle...")
-            use_previous = False
-
-    prev_generation = "%sgen_%s_%s_prev" % (conf.generation_prefix,
-                                            conf.network_size,
-                                            conf.next_step - 1)
+    # lookup via game_name (this gets statemachine & statemachine model)
+    game_info = lookup.by_name(conf.game)
 
     next_generation = "%sgen_%s_%s" % (conf.generation_prefix,
                                        conf.network_size,
                                        conf.next_step)
 
+    man = get_manager()
+
     nn = None
-    if use_previous:
-        bases_config = bases.get_config(conf.game,
-                                        game_info.model,
-                                        prev_generation)
-        nn = bases_config.create_network()
-        if nn.can_load():
-            log.info("Previous generation found.")
 
-            nn.load()
-            bases_config.update_generation(next_generation)
+    if conf.use_previous:
+        prev_generation = "%sgen_%s_%s_prev" % (conf.generation_prefix,
+                                                conf.network_size,
+                                                conf.next_step - 1)
 
+        if man.can_load(conf.game, prev_generation):
+            log.info("Previous generation found: %s" % prev_generation)
+            nn = man.load_network(conf.game, prev_generation)
         else:
             log.warning("No previous generation to use...")
-            nn = None
+
+    # XXX should be passed in
+    nn_model_conf = get_nn_model_conf(conf)
 
     if nn is None:
-        bases_config = bases.get_config(conf.game,
-                                        game_info.model,
-                                        next_generation)
-
-        # more parameters passthrough?  XXX
-        nn = bases_config.create_network(network_size=conf.network_size)
+        nn = man.create_new_network(conf.game, nn_model_conf)
 
     nn.summary()
 
-    train_conf = parse(conf, game_info, bases_config)
+    train_conf = parse(conf, game_info, man.get_transformer(conf.game))
     train_conf.epochs = conf.epochs
     train_conf.batch_size = conf.batch_size
 
-    nn.compile()
+    nn.compile(alphazero_regularisation=nn_model_conf.alphazero_regularisation,
+               learning_rate=nn_model_conf.learning_rate)
     res = nn.train(train_conf)
-    nn.save()
+    man.save_network(nn, conf.game, next_generation)
 
     ###############################################################################
     # save a previous model for next time
+    if res.retrain_best is None:
+        log.warning("No retraining network")
+        return
+
+    log.info("Saving retraining network with val_policy_acc: %.4f" % res.retrain_best_val_policy_acc)
+
+    prev_nn = man.create_new_network(conf.game, nn_model_conf)
+    prev_nn.get_model().set_weights(res.retrain_best)
+
     for_next_generation = "%sgen_%s_%s_prev" % (conf.generation_prefix,
                                                 conf.network_size,
                                                 conf.next_step)
-    bases_config.update_generation(for_next_generation)
 
-    log.info("Saving retraining network with val_policy_acc: %.4f" % res.retrain_best_val_policy_acc)
-    nn.get_model().set_weights(res.retrain_best)
-    nn.save()
+    man.save_network(prev_nn, conf.game, for_next_generation)

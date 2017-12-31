@@ -42,12 +42,12 @@ policy_config2 = msgdefs.PolicyPlayerConf(verbose=False,
 
 
 def test_concurrrent_gamemaster():
-    scheduler = create_scheduler("reversi", batch_size=256)
+    scheduler = create_scheduler("reversi", "gen1", batch_size=256)
 
     gamemasters = []
 
     # create a bunch of gamemaster and players [slow first step]
-    for i in range(128):
+    for _ in range(128):
         gm = GameMaster(get_gdl_for_game("reversi"), fast_reset=True)
         gamemasters.append(gm)
 
@@ -77,7 +77,7 @@ def f(runner):
 
 
 def test_approx_play():
-    scheduler = create_scheduler("reversi", batch_size=256)
+    scheduler = create_scheduler("reversi", "gen1", batch_size=256)
 
     conf = msgdefs.ConfigureApproxTrainer("reversi")
     conf.player_select_conf = policy_config
@@ -85,7 +85,7 @@ def test_approx_play():
     conf.player_score_conf = policy_config2
 
     runners = []
-    for i in range(256):
+    for _ in range(256):
         r = Runner(conf)
         r.patch_players(scheduler)
         runners.append(r)

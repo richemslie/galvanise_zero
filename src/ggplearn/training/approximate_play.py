@@ -1,14 +1,3 @@
-"""
-back to square 1, more or less
-  * first play is random-ish with policy player - gm_select
-  * second uses puct player, just on selected state - gm_policy
-  * third starting from the same state as policy was trained
-    on (not the resultant state), policy player for score - gm_score
-
-XXX still not sure whether this approach will lead to unstable network.
-
-"""
-
 import time
 import random
 
@@ -18,8 +7,6 @@ from ggplib.util import log
 
 from ggplib.player.gamemaster import GameMaster
 from ggplib.db.helper import get_gdl_for_game
-
-from ggplearn.util import attrutil
 
 from ggplearn import msgdefs
 from ggplearn.player.puctplayer import PUCTPlayer
@@ -184,7 +171,6 @@ class Runner(object):
             sample = msgdefs.Sample(prev_state,
                                     state, policy_dist, final_score,
                                     depth, game_length, lead_role_index)
-
 
             session.add_to_unique_states(tuple(state))
 

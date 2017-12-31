@@ -1,5 +1,5 @@
+import sys
 import time
-import random
 from operator import itemgetter, attrgetter
 
 import numpy as np
@@ -12,7 +12,7 @@ from ggplearn.util.bt import pretty_print_board
 
 from ggplearn import msgdefs
 
-from ggplearn.nn import bases
+from ggplearn.nn.manager import get_manager
 
 
 ###############################################################################
@@ -109,9 +109,6 @@ class PUCTPlayer(MatchPlayer):
         self.nn = None
         self.root = None
 
-        #if self.conf.verbose:
-        #    assert self.conf.playouts_per_iteration_noop > 0, "DONT KNOW WHY THIS DOESNT WORK, BUT XXX"
-
         self.choose = getattr(self, self.conf.choose)
 
         identifier = "%s_%s_%s" % (self.conf.name, self.conf.playouts_per_iteration, conf.generation)
@@ -126,13 +123,11 @@ class PUCTPlayer(MatchPlayer):
         sm = self.match.sm
         game_info = self.match.game_info
 
-        # this is a performance hack, where once we get the nn/config we don't reget it.
-        # if latest is set will always get the latest
+        # This is a performance hack, where once we get the nn/config we don't reget it.
+        # If latest is set will always get the latest
 
         if self.conf.generation == 'latest' or self.nn is None:
-            self.bases_config = bases.get_config(game_info.game, game_info.model, self.conf.generation)
-            self.nn = self.bases_config.create_network()
-            self.nn.load()
+            self.nn = get_manager().load_network(game_info.game, self.conf.generation)
 
         # cache joint move, and basestate
         self.joint_move = sm.get_joint_move()
@@ -257,7 +252,7 @@ class PUCTPlayer(MatchPlayer):
         if self.conf.dirichlet_noise_alpha < 0:
             return None
 
-        return np.random.dirichlet([self.conf.dirichlet_noise_alpha, 1.0], len(node.children))[:,0]
+        return np.random.dirichlet([self.conf.dirichlet_noise_alpha, 1.0], len(node.children))[:, 0]
 
     def puct_constant(self, node):
         constant = self.conf.puct_constant_after
@@ -265,7 +260,7 @@ class PUCTPlayer(MatchPlayer):
         expansions = self.conf.puct_before_root_expansions if node is self.root else self.conf.puct_before_expansions
 
         expanded = sum(1 for c in node.children if c.to_node is not None)
-        if expanded <= expansions:
+        if expanded < expansions:
             constant = self.conf.puct_constant_before
 
         if self.conf.puct_constant_tune:
@@ -714,15 +709,30 @@ configs = dict(
                                      puct_constant_after=0,
 
                                      choose="choose_top_visits",
-                                     max_dump_depth=2))
+                                     max_dump_depth=2),
+
+    comp=msgdefs.PUCTPlayerConf(name="comp",
+                                verbose=True,
+                                playouts_per_iteration=200,
+                                playouts_per_iteration_noop=200,
+                                expand_root=0,
+
+                                dirichlet_noise_alpha=0.03,
+
+                                puct_before_expansions=3,
+                                puct_before_root_expansions=5,
+                                puct_constant_before=3.0,
+                                puct_constant_after=0.75,
+                                puct_constant_tune=False,
+
+                                choose="choose_top_visits",
+                                max_dump_depth=2))
 
 
 def main():
-    import sys
-    from ggplib.play import play_runner
-    from ggplearn.util.keras import constrain_resources
-
-    constrain_resources()
+    from ggplearn.util.keras import init
+    #init(data_format='channels_first')
+    init(data_format='channels_last')
 
     port = int(sys.argv[1])
     generation = sys.argv[2]
@@ -735,6 +745,8 @@ def main():
     conf = configs[config_name]
     conf.generation = generation
     player = PUCTPlayer(conf=conf)
+
+    from ggplib.play import play_runner
     play_runner(player, port)
 
 

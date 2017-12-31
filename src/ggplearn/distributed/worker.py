@@ -1,11 +1,3 @@
-'''
-2017-12-27 04:02:55,695087 [INFO    ]  time takens python/predicting/overall 36.17 / 62.28 / 99.46
-
-2017-12-27 04:05:05,520730 [INFO    ]  time takens python/predicting/overall 38.21 / 65.23 / 104.45
-
-
-'''
-
 from builtins import super
 
 import os
@@ -65,7 +57,7 @@ class Worker(Broker):
         # connect to server
         reactor.callLater(0, self.connect)
 
-    def save_our_config(self, rolled=False):
+    def save_our_config(self):
         if os.path.exists(self.conf_filename):
             shutil.copy(self.conf_filename, self.conf_filename + "-bak")
 
@@ -142,8 +134,8 @@ def start_worker_factory():
     from ggplib.util.init import setup_once
     setup_once("worker")
 
-    # from ggplearn.util.keras import constrain_resources
-    # constrain_resources()
+    from ggplearn.util.keras import init
+    init(data_format='channels_last')
 
     broker = Worker(sys.argv[1])
     broker.start()

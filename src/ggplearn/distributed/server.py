@@ -13,8 +13,9 @@ from ggplib.db import lookup
 from ggplearn.util import attrutil, runprocs
 from ggplearn.util.broker import Broker, ServerFactory
 
-from ggplearn import msgdefs
-from ggplearn.nn import network
+from ggplearn import msgdefs, templates
+
+from ggplearn.nn.manager import get_manager
 
 
 def critical_error(msg):
@@ -139,15 +140,18 @@ class ServerBroker(Broker):
         reactor.listenTCP(conf.port, ServerFactory(self))
 
     def check_nn_generations_exist(self):
+        game = self.conf.game
         gen = self.get_generation(self.conf.current_step)
-
         log.debug("current gen %s" % gen)
 
-        net = network.create(gen, self.game_info, load=False)
-        if not net.can_load():
-            # will create a randon network
+        man = get_manager()
+        if not man.can_load(game, gen):
             if self.conf.current_step == 0:
-                net.save()
+                # create a random network and save it
+                nn_model_conf = templates.nn_model_config_template(game, self.conf.network_size)
+                nn = man.create_new_network(game, nn_model_conf)
+                man.save_network(nn, game, gen)
+
             else:
                 critical_error("Did not find network %s.  exiting." % gen)
 
@@ -296,22 +300,26 @@ class ServerBroker(Broker):
         if self.the_nn_trainer is None:
             critical_error("There is no nn trainer to create network - exiting")
 
-        log.info("create TrainNNRequest()")
+        next_step = self.conf.current_step + 1
+        log.info("create TrainNNRequest() for step %s" % next_step)
+
         m = msgdefs.TrainNNRequest()
         m.game = self.conf.game
+        m.network_size = self.conf.network_size
         m.generation_prefix = self.conf.generation_prefix
         m.store_path = self.conf.store_path
 
-        m.use_previous = self.conf.retrain_network
+        # every 5 steps, force a full training from scratch
+        m.use_previous = self.conf.retrain_network if next_step % 5 != 0 else False
 
-        m.next_step = self.conf.current_step + 1
+        m.next_step = next_step
         m.validation_split = self.conf.validation_split
         m.batch_size = self.conf.batch_size
         m.epochs = self.conf.epochs
         m.max_sample_count = self.conf.max_sample_count
+        m.starting_step = self.conf.starting_step
 
         # send out message to train
-        m.network_size = self.conf.network_size
         log.info("sent to the_nn_trainer")
         self.the_nn_trainer.worker.send_msg(m)
         self.training_in_progress = True

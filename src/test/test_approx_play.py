@@ -16,7 +16,7 @@ av time for play one game: 8.82
 
 import time
 
-from ggplearn.training.approximate_play import Runner
+from ggplearn.training import approximate_play
 from ggplearn import msgdefs
 
 
@@ -44,18 +44,19 @@ def go_test():
                                                       generation=current_gen,
                                                       choose_exponential_scale=-1)
 
-    runner = Runner(conf)
+    session = approximate_play.Session()
+    runner = approximate_play.Runner(conf)
     number_of_samples = 10
 
     # slow first run
-    runner.generate_sample()
+    runner.generate_sample(session)
     runner.reset_debug()
 
     total_time = 0
 
     for _ in range(number_of_samples):
         start = time.time()
-        print runner.generate_sample()
+        print runner.generate_sample(session)
         total_time += (time.time() - start)
 
     print "av time for play_one_game: %.2f" % (runner.acc_time_for_play_one_game / number_of_samples)

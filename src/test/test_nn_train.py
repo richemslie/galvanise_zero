@@ -1,7 +1,13 @@
 ''' takes forever to create data - so not a py.test '''
 
+import gc
 import os
+import sys
+import time
 import random
+
+from ggplib.util import log
+from ggplib.db import lookup
 
 from ggplearn.util import attrutil
 
@@ -176,12 +182,53 @@ class Rollout(object):
             self.scores.append(self.sm.get_goal_value(ii))
 
 
-def nn_train_random_generated():
+def create_data_samples(train_conf, sample_count=1000):
+    if not hasattr(sys, 'pypy_version_info'):
+        log.warning("Running create_data_samples() with pypy - will be very slow")
+
+    game_info = lookup.by_name(train_conf.game)
+    r = Rollout(game_info)
+
+    # perform a bunch of rollouts
+    unique_states = set()
+
+    try:
+        samples = []
+        for i in range(sample_count):
+            r.go()
+            sample = None
+            for _ in range(10):
+                sample = r.make_data(unique_states)
+                if sample is not None:
+                    break
+
+            if sample is None:
+                print "DUPE NATION", i
+                continue
+
+            samples.append(sample)
+
+            if i % 5000 == 0:
+                print i
+
+    except KeyboardInterrupt:
+        pass
+
+    # create a generation, and write file
+    gen = msgdefs.Generation()
+    gen.game = train_conf.game
+    gen.with_generation = 0
+    gen.num_samples = len(samples)
+    gen.samples = samples
+
+    # XXX this needs to filename code needs to go somewhere (or even use ggplib.db... humm)
+    filename = os.path.join(train_conf.store_path, "gendata_%s_0.json" % gen.game)
+    with open(filename, 'w') as open_file:
+        open_file.write(attrutil.attr_to_json(gen))
+
+
+def random_generated_conf():
     ' not a unit test - like can take over a few hours ! '
-    import sys
-    CREATE_FILE = hasattr(sys, 'pypy_version_info')
-    ACTUALLY_TRAIN = not hasattr(sys, 'pypy_version_info')
-    SAMPLE_COUNT = 250000
 
     train_conf = msgdefs.TrainNNRequest()
     train_conf.game = "reversi"
@@ -197,145 +244,140 @@ def nn_train_random_generated():
     train_conf.validation_split = 0.8
     train_conf.batch_size = 32
     train_conf.epochs = 30
-    train_conf.max_sample_count = SAMPLE_COUNT
+    train_conf.max_sample_count = -1
+    train_conf.starting_step = 0
+
+    return train_conf
+
+
+def train(train_conf):
+    assert isinstance(train_conf, msgdefs.TrainNNRequest)
     attrutil.pprint(train_conf)
 
-    if CREATE_FILE:
-        from ggplib.db import lookup
-        game_info = lookup.by_name(train_conf.game)
-        r = Rollout(game_info)
-
-        # perform a million rollouts
-        unique_states = set()
-
-        try:
-            samples = []
-            for i in range(SAMPLE_COUNT):
-                r.go()
-                sample = None
-                for _ in range(10):
-                    sample = r.make_data(unique_states)
-                    if sample is not None:
-                        break
-
-                if sample is None:
-                    print "DUPE NATION", i
-                    continue
-
-                samples.append(sample)
-
-                if i % 5000 == 0:
-                    print i
-        except KeyboardInterrupt:
-            pass
-
-        gen = msgdefs.Generation()
-        gen.game = train_conf.game
-        gen.with_score_generation = 0
-        gen.with_policy_generation = 0
-        gen.num_samples = len(samples)
-        gen.samples = samples
-
-        filename = os.path.join(train_conf.store_path, "gendata_%s_0.json" % gen.game)
-        with open(filename, 'w') as open_file:
-            open_file.write(attrutil.attr_to_json(gen))
-
-    if ACTUALLY_TRAIN:
-        # import here so can run with pypy wihtout hitting import keras issues
-        from ggplearn.training.nn_train import parse_and_train
-        parse_and_train(train_conf)
-
-
-def retrain():
-    conf = msgdefs.TrainNNRequest()
-    conf.game = "breakthrough"
-
-    conf.network_size = "small"
-    conf.generation_prefix = "v5_"
-    conf.store_path = os.path.join(os.environ["GGPLEARN_PATH"], "data", "breakthrough", "v5")
-
-    # uses previous network
-    conf.use_previous = False
-    conf.next_step = 7
-
-    conf.validation_split = 0.8
-    conf.batch_size = 64
-    conf.epochs = 10
-    conf.max_sample_count = 150000
-
-    # import here so can run with pypy wihtout hitting import keras issues
+    # import here so can run with pypy without hitting import keras issues (XXX basically this is silly)
     from ggplearn.training.nn_train import parse_and_train
-    parse_and_train(conf)
+    parse_and_train(train_conf)
 
 
-def test_speed():
-    conf = msgdefs.TrainNNRequest()
-    conf.game = "breakthrough"
+def retrain_config():
+    conf = msgdefs.TrainNNRequest("breakthrough")
 
-    conf.network_size = "small"
-    conf.generation_prefix = "v5_"
+    conf.network_size = "large"
+    conf.generation_prefix = "v5_dp_"
     conf.store_path = os.path.join(os.environ["GGPLEARN_PATH"], "data", "breakthrough", "v5")
 
-    # uses previous network
-    conf.use_previous = False
-    conf.next_step = 32
+    conf.use_previous = True
+    conf.next_step = 54
 
     conf.validation_split = 0.8
-    conf.batch_size = 4096
-    conf.epochs = 10
-    conf.max_sample_count = 150000
+    conf.batch_size = 256
+    conf.epochs = 16
+    conf.max_sample_count = 300000
+    conf.starting_step = 10
+    return conf
 
-    from ggplib.db import lookup
-    from ggplearn.nn import bases
-    from ggplearn.training.nn_train import parse
+
+def speed_test_helper(conf, generation):
+    ''' returns model and train_conf '''
+
+
+    nn = man.load_network(conf.game, generation)
+    game_info = lookup.by_name(conf.game)
+
+    train_conf = parse(conf, game_info, man.get_transformer(conf.game))
+    return nn.get_model(), train_conf
+
+
+def speed_test():
+    ''' XXX move this '''
+    ITERATIONS = 3
+
+    # import here so can run with pypy without hitting import keras issues (XXX basically this is silly)
     import numpy as np
+    from ggplearn.nn.manager import get_manager
+    from ggplearn.training.nn_train import parse
+
+    man = get_manager()
+
+    # get data
+    conf = retrain_config()
+    assert conf.game == "breakthrough"
+    conf.next_step = 54
+    conf.starting_step = 10
+    conf.max_sample_count = 250000
 
     game_info = lookup.by_name(conf.game)
-    generation = "%sgen_%s_%s" % (conf.generation_prefix,
-                                  conf.network_size,
-                                  conf.next_step - 1)
+    train_conf = parse(conf, game_info, man.get_transformer(conf.game))
+    input_0, input_1 = train_conf.inputs[0], train_conf.inputs[1]
 
-    bases_config = bases.get_config(conf.game,
-                                    game_info.model,
-                                    generation)
+    # get nn to test speed on
+    generation = "v5_dp_gen_normal_54"
+    keras_model = man.load_network(conf.game, generation).get_model()
 
-
-    train_conf = parse(conf, game_info, bases_config)
-    nn = bases_config.create_network()
-    nn.load()
-
-    input_0 = train_conf.inputs[0]
-    input_1 = train_conf.inputs[1]
-
-    import time
     res = []
+
+    batch_size = 4096
+    sample_count = len(input_0)
+
     # warm up
     for i in range(2):
-        print i
-        idx = i * conf.batch_size
-        end_idx = (i + 1) * conf.batch_size
-        model = nn.get_model()
-        X_0, X_1 = np.array(input_0[idx:end_idx]), np.array(input_1[idx:end_idx])
-        print X_0.shape
-        res.append(model.predict([X_0, X_1], batch_size=conf.batch_size))
-        print res
+        idx, end_idx = i * batch_size, (i + 1) * batch_size
+        print i, idx, end_idx
+        inputs = map(np.array, (input_0[idx:end_idx], input_1[idx:end_idx]))
+        res.append(keras_model.predict(inputs, batch_size=conf.batch_size))
+        print res[0]
 
-    import gc
-    for z in range(3):
+
+    # start the speed test!
+    def num_game_est(av_len, sims):
+        return sample_count / (av_len * sims)
+
+    for _ in range(ITERATIONS):
         res = []
         times = []
         gc.collect()
-        num_batches = 100000 / conf.batch_size + 1
+
+        print 'Starting speed run'
+
+        num_batches = sample_count / batch_size + 1
         for i in range(num_batches):
-            idx = i * conf.batch_size
-            end_idx = (i + 1) * conf.batch_size
-            model = nn.get_model()
+            idx, end_idx = i * batch_size, (i + 1) * batch_size
             s = time.time()
-            X_0, X_1 = np.array(input_0[idx:end_idx]), np.array(input_1[idx:end_idx])
-            res.append(model.predict([X_0, X_1], batch_size=conf.batch_size))
+            inputs = map(np.array, (input_0[idx:end_idx], input_1[idx:end_idx]))
+            res.append(keras_model.predict(inputs, batch_size=batch_size))
             times.append(time.time() - s)
+
         print "times taken", times
+        print "total_time taken", sum(times)
+        est_time_per_game = sum(times) / num_game_est(60, 800)
+        print "average per game (appox)", est_time_per_game
+
+        print "time for 25k games seconds", est_time_per_game * 25000
+        print "time for 25k games minutes", (est_time_per_game * 25000) / 60.0
+        print "time for 25k games hours", (est_time_per_game * 25000) / 3600.0
+
 
 if __name__ == "__main__":
     from ggplearn.util.main import main_wrap
-    main_wrap(test_speed)
+    if sys.argv[1] == "-r":
+        def retrain():
+            train(retrain_config())
+        main_wrap(retrain, data_format='channels_last')
+
+    elif sys.argv[1] == "-s":
+        main_wrap(speed_test, data_format='channels_last')
+
+    elif sys.argv[1] == "-g":
+        def generate_data():
+            create_data_samples(random_generated_conf())
+
+        main_wrap(generate_data)
+
+    elif sys.argv[1] == "-f":
+        def train_random_generation():
+            train(random_generated_conf())
+
+        main_wrap(generate_data)
+
+    else:
+        assert False, "What up?"

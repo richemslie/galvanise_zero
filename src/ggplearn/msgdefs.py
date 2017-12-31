@@ -14,6 +14,32 @@ class TrainData(object):
 
 
 @attr.s
+class NNModelConfig(object):
+    role_count = attr.ib(2)
+
+    input_rows = attr.ib(8)
+    input_columns = attr.ib(8)
+    input_channels = attr.ib(8)
+
+    input_others = attr.ib(8)
+    max_hidden_other_size = attr.ib(128)
+
+    residual_layers = attr.ib(8)
+    cnn_filter_size = attr.ib(64)
+    cnn_kernel_size = attr.ib(3)
+
+    value_hidden_size = attr.ib(256)
+    policy_dist_count = attr.ib(2)
+
+    alphazero_regularisation = attr.ib(False)
+
+    # < 0 - no dropout
+    dropout_rate_policy = attr.ib(0.333)
+    dropout_rate_value = attr.ib(0.5)
+
+    learning_rate = attr.ib(0.001)
+
+@attr.s
 class PolicyPlayerConf(object):
     name = attr.ib("PolicyPlayer")
     verbose = attr.ib(True)
@@ -95,7 +121,12 @@ class ServerConfig(object):
     validation_split = attr.ib(0.8)
     batch_size = attr.ib(32)
     epochs = attr.ib(10)
+
     max_sample_count = attr.ib(250000)
+
+    # this is applied even if max_sample_count can't be reached
+    starting_step = attr.ib(0)
+
     retrain_network = attr.ib(False)
 
     # run system commands after training (copy files to machines etc)
@@ -178,18 +209,27 @@ class TrainNNRequest(object):
     game = attr.ib("game")
 
     network_size = attr.ib("small")
-    generation_prefix = attr.ib("v2_")
-    store_path = attr.ib("somewhere")
 
-    # uses previous netwrok
-    use_previous = attr.ib("42")
+    # the generation prefix is what defines our models (along wuith step). Be careful not to
+    # overwrite these.
+    generation_prefix = attr.ib("v2_")
+
+    # this is where the generations are stored
+    store_path = attr.ib("/home/me/somewhere")
+
+    # uses previous network?
+    use_previous = attr.ib(True)
     next_step = attr.ib("42")
 
     validation_split = attr.ib(0.8)
     batch_size = attr.ib(32)
     epochs = attr.ib(10)
 
+    # if the total number of samples is met, will trim the oldest samples
     max_sample_count = attr.ib(250000)
+
+    # this is applied even if max_sample_count can't be reached
+    starting_step = attr.ib(0)
 
 
 @attr.s

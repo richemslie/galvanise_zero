@@ -24,8 +24,8 @@ def setup():
     from ggplib.util.init import setup_once
     setup_once()
 
-    from ggplearn.util.keras import constrain_resources
-    constrain_resources()
+    from ggplearn.util.keras import init
+    init()
 
 
 def test_reversi_tournament():

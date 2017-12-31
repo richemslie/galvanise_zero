@@ -3,9 +3,7 @@ from collections import deque
 
 import greenlet
 
-from ggplib.db import lookup
-
-from ggplearn.nn import bases
+from ggplearn.nn.manager import get_manager
 
 
 class NetworkScheduler(object):
@@ -70,18 +68,18 @@ class NetworkScheduler(object):
 
         cur_requestor = None
         cur_result = None
-        for i in range(len(results)):
+        for i, res in enumerate(results):
             if cur_requestor is None:
                 cur_requestor = self.requestors[i]
-                cur_result = [results[i]]
+                cur_result = [res]
 
             elif cur_requestor != self.requestors[i]:
                 self.runnables.append((cur_requestor, cur_result))
 
                 cur_requestor = self.requestors[i]
-                cur_result = [results[i]]
+                cur_result = [res]
             else:
-                cur_result.append(results[i])
+                cur_result.append(res)
 
         if cur_requestor is not None:
             self.runnables.append((cur_requestor, cur_result))
@@ -113,8 +111,5 @@ class NetworkScheduler(object):
 
 
 def create_scheduler(game, generation, batch_size=256):
-    game_info = lookup.by_name(game)
-    bases_config = bases.get_config(game_info.game, game_info.model, generation)
-    nn = bases_config.create_network()
-    nn.load()
+    nn = get_manager().load_network(game, generation)
     return NetworkScheduler(nn, batch_size=batch_size)

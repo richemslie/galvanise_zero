@@ -1,30 +1,12 @@
-' Regularisation tricks (tyvm) credit to :https://github.com/mokemokechicken/reversi-alpha-zero '
-
-import os
-
 import numpy as np
-from keras import models, metrics
-from keras.optimizers import SGD
+from keras import metrics
+from keras.optimizers import SGD, Adam
 from keras.utils.generic_utils import Progbar
 import keras.callbacks
 import keras.backend as K
 
 from ggplib.util import log
-from ggplearn.nn import bases
-
-
-def model_path(game, generation):
-    filename = "%s_%s.json" % (game, generation)
-    return os.path.join(os.environ["GGPLEARN_PATH"], "data", "models", filename)
-
-
-def weights_path(game, generation):
-    filename = "%s_%s.h5" % (game, generation)
-    return os.path.join(os.environ["GGPLEARN_PATH"], "data", "weights", filename)
-
-
-def top_2_acc(y_true, y_pred):
-    return metrics.top_k_categorical_accuracy(y_true, y_pred, k=2)
+from ggplearn import msgdefs
 
 
 def top_3_acc(y_true, y_pred):
@@ -78,23 +60,23 @@ class TrainingLoggerCb(keras.callbacks.Callback):
             strs = [fmt % (k, logs[k]) for k in names]
             return ", ".join(strs)
 
-        loss_names = "loss policy_loss score_loss".split()
-        val_loss_names = "val_loss val_policy_loss val_score_loss".split()
+        loss_names = "loss policy_loss value_loss".split()
+        val_loss_names = "val_loss val_policy_loss val_value_loss".split()
 
         log.info(str_by_name(loss_names, 4))
         log.info(str_by_name(val_loss_names, 4))
 
         # accuracy:
-        for output in "policy score".split():
+        for output in "policy value".split():
             acc = []
             val_acc = []
             for k in self.params['metrics']:
                 if output not in k or "acc" not in k:
                     continue
-                if "score" in output and "top" in k:
+                if "value" in output and "top" in k:
                     continue
 
-                if 'val' in k:
+                if 'val_' in k:
                     val_acc.append(k)
                 else:
                     acc.append(k)
@@ -129,16 +111,14 @@ class EarlyStoppingCb(keras.callbacks.Callback):
             self.best_val_policy_acc = val_policy_acc
             self.epoch_last_set_at = epoch
 
-        # always do at 3 epochs before starting
-        if epoch <= 3:
+        # always do at least 2 epochs before starting
+        if epoch <= 2:
             return
 
-        check_retraining_weights = (self.retrain_best is None or
-                                    (policy_acc < val_policy_acc and
-                                     val_policy_acc > self.retrain_best_val_policy_acc))
+        store_retraining_weights = ((policy_acc + 0.01) < val_policy_acc and
+                                    val_policy_acc > self.retrain_best_val_policy_acc)
 
-        if check_retraining_weights:
-            # store retraining weights
+        if store_retraining_weights:
             log.debug("Setting retraining_weights to val_policy_acc %.4f" % val_policy_acc)
             self.retrain_best = self.model.get_weights()
             self.retrain_best_val_policy_acc = val_policy_acc
@@ -148,13 +128,11 @@ class EarlyStoppingCb(keras.callbacks.Callback):
             if policy_acc - 0.02 > val_policy_acc:
                 log.info("Early stopping... since policy accuracy overfitting")
                 self.model.stop_training = True
-                return
 
             # if things havent got better - STOP.  We can go on forever without improving.
-            # if self.epoch_last_set_at is not None and epoch > self.epoch_last_set_at + 3:
-            #    log.info("Early stopping... since not improving")
-            #    self.model.stop_training = True
-            #    return
+            if self.epoch_last_set_at is not None and epoch > self.epoch_last_set_at + 3:
+                log.info("Early stopping... since not improving")
+                self.model.stop_training = True
 
     def on_train_end(self, logs=None):
         if self.best:
@@ -165,9 +143,11 @@ class EarlyStoppingCb(keras.callbacks.Callback):
 ###############################################################################
 
 class NeuralNetwork(object):
+    ''' combines a keras model and gdl bases transformer to give a clean interface to use as a
+        network. '''
 
-    def __init__(self, bases_config, keras_model=None):
-        self.bases_config = bases_config
+    def __init__(self, gdl_bases_transformer, keras_model):
+        self.gdl_bases_transformer = gdl_bases_transformer
         self.keras_model = keras_model
 
     def summary(self):
@@ -182,47 +162,58 @@ class NeuralNetwork(object):
     def predict_n(self, states, lead_role_indexes):
         num_states = len(states)
 
-        X_0 = [self.bases_config.state_to_channels(s, ri) for s, ri in zip(states,
-                                                                           lead_role_indexes)]
+        to_channels = self.gdl_bases_transformer.state_to_channels
+        X_0 = [to_channels(s, ri) for s, ri in zip(states, lead_role_indexes)]
 
         X_0 = np.array(X_0)
-        X_1 = np.array([self.bases_config.get_non_cord_input(s) for s in states])
+
+        get = self.gdl_bases_transformer.get_non_cord_input
+        X_1 = np.array([get(s) for s in states])
 
         Y = self.keras_model.predict([X_0, X_1], batch_size=num_states)
         assert len(Y) == 2
 
         result = []
         for i in range(num_states):
-            policy, scores = Y[0][i], Y[1][i]
-            result.append((policy, scores))
+            policy, values = Y[0][i], Y[1][i]
+            result.append((policy, values))
 
         return result
 
     def predict_1(self, state, lead_role_index):
         return self.predict_n([state], [lead_role_index])[0]
 
-    def compile(self, alphazero_regularisation=False):
+    def compile(self, alphazero_regularisation=False, learning_rate=None):
         if alphazero_regularisation:
-            optimizer = SGD(lr=1e-2, momentum=0.9)
+            lr = 1e-2
+        else:
+            lr = 0.001
+
+        if learning_rate is not None:
+            lr = learning_rate
+
+        if alphazero_regularisation:
+            optimizer = SGD(lr=lr, momentum=0.9)
             loss = [objective_function_for_policy, "mean_squared_error"]
         else:
             loss = ['categorical_crossentropy', 'mean_squared_error']
-            optimizer = "adam"
+            optimizer = Adam(lr=lr)
 
-        # loss is much less on score.  it overfits really fast.
+        # loss is much less on value.  it overfits really fast.
         self.keras_model.compile(loss=loss, optimizer=optimizer,
                                  loss_weights=[1.0, 0.01],
-                                 metrics=["acc", top_2_acc, top_3_acc])
+                                 metrics=["acc", top_3_acc])
 
-    def train(self, conf):
-        validation_data = [conf.validation_inputs, conf.validation_outputs]
+    def train(self, train_conf):
+        assert isinstance(train_conf, msgdefs.TrainData)
+        validation_data = [train_conf.validation_inputs, train_conf.validation_outputs]
 
         early_stopping_cb = EarlyStoppingCb()
-        self.keras_model.fit(conf.inputs,
-                             conf.outputs,
+        self.keras_model.fit(train_conf.inputs,
+                             train_conf.outputs,
                              verbose=0,
-                             batch_size=conf.batch_size,
-                             epochs=conf.epochs,
+                             batch_size=train_conf.batch_size,
+                             epochs=train_conf.epochs,
                              validation_data=validation_data,
                              callbacks=[TrainingLoggerCb(), early_stopping_cb],
                              shuffle=True)
@@ -230,46 +221,5 @@ class NeuralNetwork(object):
         return early_stopping_cb
 
     def get_model(self):
+        assert self.keras_model is not None
         return self.keras_model
-
-    def save(self):
-        # save model / weights
-        with open(model_path(self.bases_config.game,
-                             self.bases_config.generation), "w") as f:
-            f.write(self.keras_model.to_json())
-
-        self.keras_model.save_weights(weights_path(self.bases_config.game,
-                                                   self.bases_config.generation),
-                                      overwrite=True)
-
-    def load(self):
-        # save model / weights
-        f = model_path(self.bases_config.game, self.bases_config.generation)
-
-        self.keras_model = models.model_from_json(open(f).read())
-        self.keras_model.load_weights(weights_path(self.bases_config.game,
-                                                   self.bases_config.generation))
-
-    def can_load(self):
-        # save model / weights
-        mode_fn = model_path(self.bases_config.game, self.bases_config.generation)
-        weights_fn = weights_path(self.bases_config.game,
-                                  self.bases_config.generation)
-
-        return os.path.exists(mode_fn) and os.path.exists(weights_fn)
-
-
-###############################################################################
-
-def create(generation, game_info, load=True, **kwds):
-    ''' game_info is got from db.lookup().
-    if load is False, and then call save will overwrite existing generation '''
-
-    bases_config = bases.get_config(game_info.game,
-                                    game_info.model,
-                                    generation=generation)
-
-    nn = bases_config.create_network(**kwds)
-    if load:
-        nn.load()
-    return nn

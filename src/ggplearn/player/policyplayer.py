@@ -9,7 +9,8 @@ from ggplib.util import log
 from ggplearn.util.bt import pretty_print_board
 
 from ggplearn import msgdefs
-from ggplearn.nn import bases
+
+from ggplearn.nn.manager import get_manager
 
 models_path = os.path.join(os.environ["GGPLEARN_PATH"], "src", "ggplearn", "models")
 
@@ -20,7 +21,6 @@ class PolicyPlayer(MatchPlayer):
         self.conf = conf
 
         self.nn = None
-        self.bases_config = None
 
     def on_meta_gaming(self, finish_time):
         if self.conf.verbose:
@@ -28,14 +28,11 @@ class PolicyPlayer(MatchPlayer):
 
         game_info = self.match.game_info
 
-        # This is a performance hack, where once we get the nn/config we don't reload it.
-        # Obviously now will only play that game.  For production should use 'latest' as will
-        # always get the latest nn for that game.
+        # This is a performance hack, where once we get the nn/config we don't reget it.
+        # If latest is set will always get the latest
 
         if self.conf.generation == 'latest' or self.nn is None:
-            self.bases_config = bases.get_config(game_info.game, game_info.model, self.conf.generation)
-            self.nn = self.bases_config.create_network()
-            self.nn.load()
+            self.nn = get_manager().load_network(game_info.game, self.conf.generation)
 
     def policy_to_actions(self, policy):
         # only do our moves
@@ -68,8 +65,8 @@ class PolicyPlayer(MatchPlayer):
         if c.temperature > 0:
             before_actions = actions
             depth = (self.match.game_depth - c.depth_temperature_start) * c.depth_temperature_increment
-            # XXX add 5 (the max temperature) to attrs
-            depth = max(1, min(depth, 5))
+            # XXX add 10 (the max temperature) to attrs
+            depth = max(1, min(depth, 8))
             temp = c.temperature * float(depth)
             if c.verbose:
                 log.debug("depth %s, temperature %s " % (depth, temp))
@@ -81,7 +78,7 @@ class PolicyPlayer(MatchPlayer):
             actions = [(idx, move, p / total_prob) for idx, move, p in actions]
 
             if c.verbose:
-                for (legal, move, prob), (_, _, before) in zip(actions, before_actions):
+                for (_, move, prob), (_, _, before) in zip(actions, before_actions):
                     log.verbose("%s \t %.2f, %.2f" % (move, prob * 100, before * 100))
         else:
             if c.verbose:
@@ -136,13 +133,13 @@ class PolicyPlayer(MatchPlayer):
 
 ###############################################################################
 
-
 def main():
     import sys
     from ggplib.play import play_runner
-    from ggplearn.util.keras import constrain_resources
+    from ggplearn.util.keras import init
 
-    constrain_resources()
+    init(data_format='channels_first')
+    # init(data_format='channels_last')
 
     port = int(sys.argv[1])
     generation = sys.argv[2]

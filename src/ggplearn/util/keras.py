@@ -1,4 +1,5 @@
 from __future__ import absolute_import
+from ggplib.util import log
 
 
 def constrain_resources_tf():
@@ -29,7 +30,13 @@ def constrain_resources_tf():
     backend.set_session(sess)
 
 
-def constrain_resources():
-    from keras import backend
-    if backend.backend() == "tensorflow":
-        constrain_resources_tf()
+def init(data_format='channels_first'):
+    from keras import backend as K
+    assert K.backend() == "tensorflow"
+
+    if K.image_data_format() != data_format:
+        was = K.image_data_format()
+        K.set_image_data_format(data_format)
+        log.warning("Changing image_data_format: %s -> %s" % (was, K.image_data_format()))
+
+    constrain_resources_tf()
