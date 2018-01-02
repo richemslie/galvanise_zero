@@ -70,7 +70,10 @@ class Runner(object):
         # patch each player, on each gamemaster
         for gm in self.gm_select, self.gm_policy, self.gm_score:
             for p, _ in gm.players:
-                p.nn = scheduler
+                if hasattr(p, "puct_evaluator"):
+                    p.puct_evaluator.nn = scheduler
+                else:
+                    p.nn = scheduler
 
     def reset_debug(self):
         self.time_for_play_one_game = 0
