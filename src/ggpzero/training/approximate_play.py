@@ -171,8 +171,8 @@ class Runner(object):
             self.time_for_do_score = time.time() - start_time
 
             prev_state = states[depth - 1] if depth >= 1 else None
-            sample = confs.Sample(prev_state,
-                                  state, policy_dist, final_score,
+            sample = confs.Sample(state,
+                                  prev_state, policy_dist, final_score,
                                   depth, game_length, lead_role_index)
 
             session.add_to_unique_states(tuple(state))
