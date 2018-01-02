@@ -5,6 +5,24 @@ import json
 
 import attr
 
+# register classes is to add a tiny bit of security, otherwise could end up executing any old code
+_registered_clz = set()
+
+
+class SerialiseException(Exception):
+    pass
+
+
+def register_clz(clz):
+    reg = clz.__module__, clz.__name__
+    _registered_clz.add(reg)
+
+
+def get_clz(mod, name):
+    if (mod, name) not in _registered_clz:
+        raise SerialiseException("Attempt to create an unregistered class: %s / %s" % (mod, name))
+    return getattr(sys.modules[mod], name)
+
 
 class AttrDict(dict):
     def __init__(self, *args, **kwds):
@@ -13,15 +31,23 @@ class AttrDict(dict):
 
     def _add_clz_info(self, name, obj):
         clz = obj.__class__
-        k = "%s__clz__" % name
-        v = (clz.__module__, clz.__name__)
-        self[k] = v
+        key = "%s__clz__" % name
+        value = clz.__module__, clz.__name__
+
+        if value not in _registered_clz:
+            raise SerialiseException("Attempt to serialise unregistered class: %s / %s" % value)
+
+        self[key] = value
 
     def _add_clz_info_list(self, name, obj):
         clz = obj.__class__
-        k = "%s__clzlist__" % name
-        v = (clz.__module__, clz.__name__)
-        self[k] = v
+        key = "%s__clzlist__" % name
+        value = clz.__module__, clz.__name__
+
+        if value not in _registered_clz:
+            raise SerialiseException("Attempt to serialise unregistered class: %s / %s" % value)
+
+        self[key] = value
 
     def __setitem__(self, k, v):
         if self._enabled:
@@ -66,11 +92,12 @@ def _fromdict_plus(d):
     # disable or we end up adding back in the ...__clz__ keys
     if isinstance(d, AttrDict):
         d._enabled = False
+
     for k in d.keys():
         if "__clz__" in k:
             # get clz and remove ...__clz__ key from dict
             mod, clz_name = d.pop(k)
-            clz = getattr(sys.modules[mod], clz_name)
+            clz = get_clz(mod, clz_name)
 
             # recurse
             k = k.replace('__clz__', '')
@@ -82,7 +109,7 @@ def _fromdict_plus(d):
         if "__clzlist__" in k:
             # get clz and remove ...__clz__ key from dict
             mod, clz_name = d.pop(k)
-            clz = getattr(sys.modules[mod], clz_name)
+            clz = get_clz(mod, clz_name)
 
             # recurse
             k = k.replace('__clzlist__', '')
@@ -118,3 +145,9 @@ def pprint(obj):
     assert attr.has(obj)
     from pprint import pprint
     pprint(attr.asdict(obj))
+
+
+def register_attrs(clz):
+    clz = attr.s(clz)
+    register_clz(clz)
+    return clz

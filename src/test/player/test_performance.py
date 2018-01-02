@@ -8,7 +8,7 @@ from ggplearn import msgdefs
 from ggplearn.player.puctplayer import PUCTPlayer
 from ggplearn.player.policyplayer import PolicyPlayer
 
-current_gen = "testgen_normal_1"
+current_gen = "v5_gen_small_71"
 
 
 def setup():
@@ -16,7 +16,7 @@ def setup():
     setup_once()
 
     from ggplearn.util.keras import init
-    init()
+    init(data_format='channels_last')
 
 
 def test_speed_of_one_shot():
@@ -43,7 +43,7 @@ def test_speed_of_one_shot():
         s = time.time()
         gm.play_to_end()
         acc_time += time.time() - s
-        print gm.depth
+        print gm.get_game_depth()
 
     print "average time taken", acc_time / ITERATIONS
 
@@ -80,6 +80,6 @@ def test_speed_of_one_simulation():
         s = time.time()
         gm.play_single_move(last_move=last_move)
         acc_time += time.time() - s
-        assert gm.depth == 3
+        assert gm.get_game_depth() == 2
 
     print "average time taken", acc_time / ITERATIONS

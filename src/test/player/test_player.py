@@ -12,7 +12,11 @@ import py.test
 
 ITERATIONS = 1
 
-current_gen = "testgen_normal_1"
+current_gen = "v5_gen_small_71"
+
+# first in the run, completely random weights
+random_gen = "v5_gen_small_0"
+
 default_puct_config = msgdefs.PUCTPlayerConf(generation=current_gen,
                                              playouts_per_iteration=42,
                                              playouts_per_iteration_noop=1)
@@ -25,7 +29,7 @@ def setup():
     setup_once()
 
     from ggplearn.util.keras import init
-    init()
+    init(data_format='channels_last')
 
 
 def test_reversi_tournament():
@@ -163,7 +167,7 @@ def test_fast_plays():
         acc_black_score += gm.scores["black"]
         acc_red_score += gm.scores["white"]
 
-        print gm.depth
+        print gm.get_game_depth()
 
     print "time taken", time.time() - s
     print "white_score", gm.players_map["white"].name, acc_red_score
@@ -196,14 +200,14 @@ def test_not_taking_win():
 
 
 def test_choose_policy_random():
-    # ITERATIONS = 100
+    ITERATIONS = 10
     gm = GameMaster(get_gdl_for_game("breakthrough"))
 
-    conf = msgdefs.PolicyPlayerConf(name="white", generation="testgen_normal_1", verbose=False)
+    conf = msgdefs.PolicyPlayerConf(name="white", generation=random_gen, verbose=False)
     conf.choose_exponential_scale = 0.15
     white = PolicyPlayer(conf)
 
-    conf = msgdefs.PolicyPlayerConf(name="black_", generation="testgen_normal_1", verbose=False)
+    conf = msgdefs.PolicyPlayerConf(name="black_", generation=random_gen, verbose=False)
     conf.choose_exponential_scale = 0.15
     black = PolicyPlayer(conf)
 
@@ -225,7 +229,7 @@ def test_choose_policy_random():
         acc_white_score += gm.scores["white"]
         acc_black_score += gm.scores["black"]
 
-        game_depths.append(gm.depth)
+        game_depths.append(gm.get_game_depth())
 
     print "white_score", gm.players_map["white"].name, acc_white_score
     print "black_score", gm.players_map["black"].name, acc_black_score

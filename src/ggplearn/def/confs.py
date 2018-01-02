@@ -1,19 +1,8 @@
 import attr
 
-# XXX separate this into confs and msgs
+# DO NOT IMPORT msgs.py
 
-
-@attr.s
-class TrainData(object):
-    inputs = attr.ib()
-    outputs = attr.ib()
-    validation_inputs = attr.ib()
-    validation_outputs = attr.ib()
-    batch_size = attr.ib(512)
-    epochs = attr.ib(24)
-
-
-@attr.s
+@register_attrs
 class NNModelConfig(object):
     role_count = attr.ib(2)
 
@@ -39,8 +28,8 @@ class NNModelConfig(object):
 
     learning_rate = attr.ib(0.001)
 
-@attr.s
-class PolicyPlayerConf(object):
+@register_attrs
+class PolicyPlayerConfig(object):
     name = attr.ib("PolicyPlayer")
     verbose = attr.ib(True)
     generation = attr.ib("latest")
@@ -55,9 +44,9 @@ class PolicyPlayerConf(object):
     # < 0 is off, a lower temperature (or in other words, a temperture tending to zero) will
     # encourage more random play.  temperature is applied to the probabilities of the policy (in
     # alphago zero paper it talks about applying to the number of visits.  This is essentially the
-    # same thing.  It is unlikely this will be ever to set to anything other than 1.  The temperature is
-    # instead controlled via incrementing the temperature game as the game is expanded, with a lower bound set with
-    # depth_temperature_start (so in other words :
+    # same thing.  It is unlikely this will be ever to set to anything other than 1.  The
+    # temperature is instead controlled via incrementing the temperature game as the game is
+    # expanded, with a lower bound set with depth_temperature_start (so in other words :
     # new_probability = probability * (1 / conf.temperature * depth)
     # and depth = max(1, (game_depth - conf.depth_temperature_start) * conf.depth_temperature_increment)
     temperature = attr.ib(-1)
@@ -65,8 +54,8 @@ class PolicyPlayerConf(object):
     depth_temperature_increment = attr.ib(0.5)
 
 
-@attr.s
-class PUCTPlayerConf(object):
+@register_attrs
+class PUCTPlayerConfig(object):
     name = attr.ib("PUCTPlayer")
     verbose = attr.ib(True)
     generation = attr.ib("latest")
@@ -98,8 +87,14 @@ class PUCTPlayerConf(object):
     # debug, only if verbose is true
     max_dump_depth = attr.ib(2)
 
+    random_scale = attr.ib(0.5)
+    temperature = attr.ib(1.0)
+    depth_temperature_start = attr.ib(5)
+    depth_temperature_increment = attr.ib(0.5)
+    depth_temperature_stop = attr.ib(10)
 
-@attr.s
+
+@register_attrs
 class ServerConfig(object):
     port = attr.ib(9000)
 
@@ -133,8 +128,8 @@ class ServerConfig(object):
     run_post_training_cmds = attr.ib(default=attr.Factory(list))
 
 
-@attr.s
-class WorkerConf(object):
+@register_attrs
+class WorkerConfig(object):
     connect_port = attr.ib(9000)
     connect_ip_addr = attr.ib("127.0.0.1")
     do_training = attr.ib(False)
@@ -142,99 +137,50 @@ class WorkerConf(object):
     concurrent_plays = attr.ib(1)
 
 
-@attr.s
-class Ping(object):
-    pass
+# XXX not sure this should be here?
+@register_attrs
+class TrainData(object):
+    inputs = attr.ib()
+    outputs = attr.ib()
+    validation_inputs = attr.ib()
+    validation_outputs = attr.ib()
+    batch_size = attr.ib(512)
+    epochs = attr.ib(24)
 
 
-@attr.s
-class Pong(object):
-    pass
-
-
-@attr.s
-class RequestConfig(object):
-    pass
-
-
-@attr.s
-class Ok(object):
-    message = attr.ib("ok")
-
-
-@attr.s
-class WorkerConfigMsg(object):
-    conf = attr.ib(default=attr.Factory(WorkerConf))
-
-
-@attr.s
-class ConfigureApproxTrainer(object):
-    game = attr.ib("game")
-    generation = attr.ib("gen0")
-    player_select_conf = attr.ib(default=attr.Factory(PolicyPlayerConf))
-    player_policy_conf = attr.ib(default=attr.Factory(PUCTPlayerConf))
-    player_score_conf = attr.ib(default=attr.Factory(PUCTPlayerConf))
-
-
-@attr.s
-class RequestSample(object):
-    new_states = attr.ib(default=attr.Factory(list))
-
-
-@attr.s
+@register_attrs
 class Sample(object):
-    # store just the previous states
-    prev_state = attr.ib()
+    # state policy trained on.  This is a tuple of 0/1s.  Effectively a bit array.
+    state = attr.ib([0, 0, 0, 1])
 
-    # state policy trained on
-    state = attr.ib()
+    # previous state
+    prev_state = attr.ib([1, 0, 0, 1])
 
-    # polict distribution
-    policy = attr.ib()
+    # polict distribution - should sum to 1.
+    policy = attr.ib([0, 0, 0.5, 0.5])
 
-    final_score = attr.ib()
-    depth = attr.ib()
-    game_length = attr.ib()
-    lead_role_index = attr.ib()
+    # list of final scores for value head of network - list has same number as number of roles
+    final_score = attr.ib([0, 1])
 
+    # game depth at which point sample is taken
+    depth = attr.ib(42)
 
-@attr.s
-class RequestSampleResponse(object):
-    samples = attr.ib(default=attr.Factory(list))
-    duplicates_seen = attr.ib(0)
+    # total length of game
+    game_length = attr.ib(42)
 
-
-@attr.s
-class TrainNNRequest(object):
-    game = attr.ib("game")
-
-    network_size = attr.ib("small")
-
-    # the generation prefix is what defines our models (along wuith step). Be careful not to
-    # overwrite these.
-    generation_prefix = attr.ib("v2_")
-
-    # this is where the generations are stored
-    store_path = attr.ib("/home/me/somewhere")
-
-    # uses previous network?
-    use_previous = attr.ib(True)
-    next_step = attr.ib("42")
-
-    validation_split = attr.ib(0.8)
-    batch_size = attr.ib(32)
-    epochs = attr.ib(10)
-
-    # if the total number of samples is met, will trim the oldest samples
-    max_sample_count = attr.ib(250000)
-
-    # this is applied even if max_sample_count can't be reached
-    starting_step = attr.ib(0)
+    # conceptually who's turn it is.  It is the role index (into sm.roles) if game has concept of 'turn'.  If not -1.
+    lead_role_index = attr.ib(0)
 
 
-@attr.s
+@register_attrs
 class Generation(object):
     game = attr.ib("game")
+
+    # trained with this generation
     with_generation = attr.ib("gen0")
+
+    # number of samples in this generation
     num_samples = attr.ib(1024)
+
+    # the samples (list of Sample)
     samples = attr.ib(attr.Factory(list))

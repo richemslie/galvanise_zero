@@ -263,23 +263,23 @@ def retrain_config():
     conf = msgdefs.TrainNNRequest("breakthrough")
 
     conf.network_size = "large"
-    conf.generation_prefix = "v5_dp_"
+    conf.generation_prefix = "v5_more_"
     conf.store_path = os.path.join(os.environ["GGPLEARN_PATH"], "data", "breakthrough", "v5")
 
-    conf.use_previous = True
-    conf.next_step = 54
+    conf.use_previous = False
+    conf.next_step = 76
 
-    conf.validation_split = 0.8
-    conf.batch_size = 256
-    conf.epochs = 16
-    conf.max_sample_count = 300000
+    conf.validation_split = 0.9
+    conf.batch_size = 128
+    conf.epochs = 20
+    conf.max_sample_count = 500000
     conf.starting_step = 10
+
     return conf
 
 
 def speed_test_helper(conf, generation):
     ''' returns model and train_conf '''
-
 
     nn = man.load_network(conf.game, generation)
     game_info = lookup.by_name(conf.game)

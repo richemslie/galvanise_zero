@@ -88,19 +88,27 @@ def ResidualBlock(*args, **kwds):
     return block
 
 
-def residual_one_by_one(rows, cols, reqd):
-    ''' XXX I am not entirely sure why AGZ decided upon 1 and 2 filters for 1x1 before flattening.
-    for its go architecture.  My best guess is that they want more than the next layer, and to keep the weights low.
-    With that in mind, since we dont know what the next layer is - we calculate it instead of specifying it. '''
+def residual_one_by_one(last_filter_size, reqd, dropout=-1):
+    ''' I am not entirely sure why AGZ decided upon 1 and 2 filters for 1x1 before flattening.  for
+    its go architecture.  My best guess is that they want more than the next layer, and to keep the
+    weights low.
 
-    size = rows * cols
-    if reqd < size:
+    With that in mind, since we dont know what the next layer is - we calculate it instead of
+    specifying it.
+
+    XXX We use the size of layers being propagated through the resnet.  (this would get 1 and 2 as
+    per alpha go - but I am guessing here if this is a sane thing to do).  '''
+
+    if dropout > 0:
+        reqd *= (1 + dropout)
+
+    if reqd < last_filter_size:
         return 1
 
-    if reqd % size == 0:
-        return reqd / size
+    if reqd % last_filter_size == 0:
+        return reqd / last_filter_size
 
-    return reqd / size + 1
+    return reqd / last_filter_size + 1
 
 
 def get_network_model(conf):
@@ -140,10 +148,8 @@ def get_network_model(conf):
     # residual net -> flattened for policy head
     # here we set number of filters to the number of roles + 1.
 
-    # XXX possible this should be based on the number of legals to choose from?  I think that is
-    # about the only thing that makes sense for it being 2 in the alpha go case.  Funny enough they
-    # didn't report anything about chess/shogi.
-    filters = residual_one_by_one(conf.input_rows, conf.input_columns, conf.policy_dist_count)
+    # residual net -> flattened for policy head
+    filters = residual_one_by_one(conf.cnn_filter_size, conf.policy_dist_count)
     to_flatten = Conv2DBlock(filters, 1,
                              name='to_flatten_policy_head',
                              padding='valid',
@@ -153,7 +159,7 @@ def get_network_model(conf):
     res_flat_policy = klayers.Flatten()(to_flatten)
 
     # residual net -> flattened for value head
-    filters = residual_one_by_one(conf.input_rows, conf.input_columns, conf.value_hidden_size)
+    filters = residual_one_by_one(conf.cnn_filter_size, conf.value_hidden_size)
     to_flatten = Conv2DBlock(filters, 1,
                              name='to_flatten_value_head',
                              padding='valid',

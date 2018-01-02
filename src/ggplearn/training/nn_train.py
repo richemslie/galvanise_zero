@@ -187,14 +187,18 @@ def get_nn_model_conf(conf):
     # temp here
     nn_model_conf = templates.nn_model_config_template(conf.game, conf.network_size)
 
-    nn_model_conf.dropout_rate_policy = 0.25
-    nn_model_conf.dropout_rate_value = 0.25
+    # slightly bigger than small
+    nn_model_conf.residual_layers = 8
+    nn_model_conf.cnn_filter_size = 112
+
+    nn_model_conf.dropout_rate_policy = 0.33
+    nn_model_conf.dropout_rate_value = 0.5
 
     # ensure no regularisation
     nn_model_conf.alphazero_regularisation = False
 
     # this is learning rate for adam
-    nn_model_conf.learning_rate = 0.0005
+    nn_model_conf.learning_rate = 0.001
 
     # nn_model_conf.alphazero_regularisation = True
     attrutil.pprint(nn_model_conf)
