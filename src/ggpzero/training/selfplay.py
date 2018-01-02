@@ -47,12 +47,10 @@ import numpy as np
 
 from ggplib.util import log
 
-from ggplib.player.gamemaster import GameMaster
 from ggplib.db.helper import get_gdl_for_game
 
-from ggplearn import msgdefs
-from ggplearn.player.puctplayer import PUCTPlayer
-from ggplearn.player.policyplayer import PolicyPlayer
+from ggpzero.defs import msgs, confs
+from ggpzero.player.puctplayer import PUCTEvaluator
 
 
 class Session(object):
@@ -79,32 +77,31 @@ class Session(object):
 
 class Runner(object):
     def __init__(self, conf):
-        assert isinstance(conf, msgdefs.ConfigureApproxTrainer)
+        assert isinstance(conf, msgs.ConfigureApproxTrainer)
 
         self.conf = conf
 
         gdl = get_gdl_for_game(self.conf.game)
-
+        gdl = gdl
 
         # XXX no gamemastes
         # create game masters, one for the score playout, and one for the policy evaluation
-        #self.gm_select = GameMaster(gdl, fast_reset=True)
-        #self.gm_policy = GameMaster(gdl, fast_reset=True)
-        #self.gm_score = GameMaster(gdl, fast_reset=True)
+        # self.gm_select = GameMaster(gdl, fast_reset=True)
+        # self.gm_policy = GameMaster(gdl, fast_reset=True)
+        # self.gm_score = GameMaster(gdl, fast_reset=True)
 
         # add players to gamemasteres
-        #for role in self.gm_select.sm.get_roles():
+        # for role in self.gm_select.sm.get_roles():
         #    self.gm_select.add_player(PUCTPlayer(self.conf.player_select_conf), role)
 
-        #for role in self.gm_policy.sm.get_roles():
+        # for role in self.gm_policy.sm.get_roles():
         #    self.gm_policy.add_player(PUCTPlayer(self.conf.player_policy_conf), role)
 
-        #for role in self.gm_score.sm.get_roles():
+        # for role in self.gm_score.sm.get_roles():
         #    self.gm_score.add_player(PUCTPlayer(self.conf.player_score_conf), role)
 
         # just one puctevalutor
-        self.evaluator = PUCTEvaluator(xxx)
-
+        self.evaluator = PUCTEvaluator(None)  # XXXX todo
 
         # cache a local statemachine basestate (doesn't matter which gm it comes from)
         self.basestate = self.gm_select.sm.new_base_state()
@@ -166,15 +163,13 @@ class Runner(object):
         # fish for root (XXX for game specific)
         lead_role_index = 1 if self.last_move[0] == "noop" else 0
 
+        results = []
+        for i in range(3):
+            policy_dist, lead_role_index = self.do_policy(depth, state)
+            results.append((depth, state, policy_dist, lead_role_index))
 
-            for i in range(3):
-                policy_dist, lead_role_index = self.do_policy(depth, state)
-                results.append((depth, state, policy_dist, lead_role_index))
-
-                # advance state/depth with best move
-                depth += 1
-
-
+            # advance state/depth with best move
+            depth += 1
 
         player = self.gm_policy.get_player(lead_role_index)
 
@@ -221,9 +216,6 @@ class Runner(object):
                 continue
 
             start_time = time.time()
-            results = []
-
-            XXX
 
             self.time_for_do_policy = time.time() - start_time
 
@@ -233,9 +225,11 @@ class Runner(object):
             self.time_for_do_score = time.time() - start_time
 
             prev_state = states[depth - 1] if depth >= 1 else None
-            sample = msgdefs.Sample(prev_state,
-                                    state, policy_dist, final_score,
-                                    depth, game_length, lead_role_index)
+            policy_dist = None  # XXXX
+            lead_role_index = None  # XXXX
+            sample = confs.Sample(prev_state,
+                                  state, policy_dist, final_score,
+                                  depth, game_length, lead_role_index)
 
             session.add_to_unique_states(tuple(state))
 

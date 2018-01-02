@@ -4,11 +4,15 @@ import numpy as np
 from ggplib.util import log
 from ggplib.db import lookup
 
-from ggplearn.util import attrutil
+from ggpzero.util import attrutil
 
-from ggplearn import msgdefs, templates
+from ggpzero.defs import msgs, confs, templates
 
-from ggplearn.nn.manager import get_manager
+from ggpzero.nn.manager import get_manager
+
+
+class TrainException(Exception):
+    pass
 
 
 def check_sample(sample, game_model):
@@ -36,7 +40,7 @@ class SamplesHolder(object):
         self.expected_policy_len = sum(len(actions) for actions in game_info.model.actions)
 
     def add(self, sample, validation=False):
-        assert isinstance(sample, msgdefs.Sample)
+        assert isinstance(sample, confs.Sample)
 
         if validation:
             self.validation_samples.append(sample)
@@ -109,14 +113,14 @@ class SamplesHolder(object):
         print training_data[2][-120]
         print training_data[3][-120]
 
-        return msgdefs.TrainData(inputs=training_data[:2],
-                                 outputs=training_data[2:],
-                                 validation_inputs=validation_data[:2],
-                                 validation_outputs=validation_data[2:])
+        return confs.TrainData(inputs=training_data[:2],
+                              outputs=training_data[2:],
+                              validation_inputs=validation_data[:2],
+                              validation_outputs=validation_data[2:])
 
 
 def get_data(conf):
-    assert isinstance(conf, msgdefs.TrainNNRequest)
+    assert isinstance(conf, msgs.TrainNNRequest)
 
     step = conf.next_step - 1
     while step >= conf.starting_step:
@@ -126,7 +130,7 @@ def get_data(conf):
 
 
 def parse(conf, game_info, transformer):
-    assert isinstance(conf, msgdefs.TrainNNRequest)
+    assert isinstance(conf, msgs.TrainNNRequest)
 
     samples_holder = SamplesHolder(game_info, transformer)
 
@@ -187,19 +191,6 @@ def get_nn_model_conf(conf):
     # temp here
     nn_model_conf = templates.nn_model_config_template(conf.game, conf.network_size)
 
-    # slightly bigger than small
-    nn_model_conf.residual_layers = 8
-    nn_model_conf.cnn_filter_size = 112
-
-    nn_model_conf.dropout_rate_policy = 0.33
-    nn_model_conf.dropout_rate_value = 0.5
-
-    # ensure no regularisation
-    nn_model_conf.alphazero_regularisation = False
-
-    # this is learning rate for adam
-    nn_model_conf.learning_rate = 0.001
-
     # nn_model_conf.alphazero_regularisation = True
     attrutil.pprint(nn_model_conf)
 
@@ -207,24 +198,28 @@ def get_nn_model_conf(conf):
 
 
 def parse_and_train(conf):
-    assert isinstance(conf, msgdefs.TrainNNRequest)
+    assert isinstance(conf, msgs.TrainNNRequest)
     attrutil.pprint(conf)
 
     # lookup via game_name (this gets statemachine & statemachine model)
     game_info = lookup.by_name(conf.game)
 
-    next_generation = "%sgen_%s_%s" % (conf.generation_prefix,
-                                       conf.network_size,
-                                       conf.next_step)
+    next_generation = "%s_%s" % (conf.generation_prefix, conf.next_step)
 
     man = get_manager()
 
     nn = None
+    # check the generation does not already exist
+
+    if man.can_load(conf.game, next_generation):
+        msg = "Generation already exists %s / %s" % (conf.game, next_generation)
+        log.error(msg)
+        if not conf.overwrite_existing:
+            raise TrainException("Generation already exists %s / %s" % (conf.game, next_generation))
 
     if conf.use_previous:
-        prev_generation = "%sgen_%s_%s_prev" % (conf.generation_prefix,
-                                                conf.network_size,
-                                                conf.next_step - 1)
+        prev_generation = "%s_%s_prev" % (conf.generation_prefix,
+                                          conf.next_step - 1)
 
         if man.can_load(conf.game, prev_generation):
             log.info("Previous generation found: %s" % prev_generation)
@@ -260,8 +255,7 @@ def parse_and_train(conf):
     prev_nn = man.create_new_network(conf.game, nn_model_conf)
     prev_nn.get_model().set_weights(res.retrain_best)
 
-    for_next_generation = "%sgen_%s_%s_prev" % (conf.generation_prefix,
-                                                conf.network_size,
-                                                conf.next_step)
+    for_next_generation = "%s_%s_prev" % (conf.generation_prefix,
+                                          conf.next_step)
 
     man.save_network(prev_nn, conf.game, for_next_generation)

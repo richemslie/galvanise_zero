@@ -1,13 +1,13 @@
 from ggplib.db import lookup
 
-from ggplearn import templates
+from ggpzero.defs import templates
 
-from ggplearn.nn.manager import get_manager
+from ggpzero.nn.manager import get_manager
 
 
 def setup():
     from ggplib.util.init import setup_once
-    from ggplearn.util import keras
+    from ggpzero.util import keras
 
     # set up ggplib
     setup_once()

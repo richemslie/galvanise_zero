@@ -1,8 +1,8 @@
 import attr
 
-from util.attrutil import register_attrs
+from ggpzero.util.attrutil import register_attrs
 
-from def.confs import PUCTPlayerConf, PolicyPlayerConf, WorkerConf
+from ggpzero.defs.confs import PUCTPlayerConfig, PolicyPlayerConfig, WorkerConfig
 
 
 @register_attrs
@@ -15,9 +15,9 @@ class Pong(object):
     pass
 
 
-@defensive
+@register_attrs
 class Ok(object):
-    message = attr.b("ok")
+    message = attr.ib("ok")
 
 
 @register_attrs
@@ -27,16 +27,16 @@ class RequestConfig(object):
 
 @register_attrs
 class WorkerConfigMsg(object):
-    conf = attr.b(default=attr.Factory(WorkerConf))
+    conf = attr.ib(default=attr.Factory(WorkerConfig))
 
 
 @register_attrs
 class ConfigureApproxTrainer(object):
     game = attr.ib("game")
     generation = attr.ib("gen0")
-    player_select_conf = attr.ib(default=attr.Factory(PolicyPlayerConf))
-    player_policy_conf = attr.ib(default=attr.Factory(PUCTPlayerConf))
-    player_score_conf = attr.ib(default=attr.Factory(PUCTPlayerConf))
+    player_select_conf = attr.ib(default=attr.Factory(PolicyPlayerConfig))
+    player_policy_conf = attr.ib(default=attr.Factory(PUCTPlayerConfig))
+    player_score_conf = attr.ib(default=attr.Factory(PUCTPlayerConfig))
 
 
 @register_attrs
@@ -69,7 +69,7 @@ class TrainNNRequest(object):
     # uses previous network?
     use_previous = attr.ib(True)
     next_step = attr.ib("42")
-
+    overwrite_existing = attr.ib(False)
     validation_split = attr.ib(0.8)
     batch_size = attr.ib(32)
     epochs = attr.ib(10)
@@ -79,4 +79,3 @@ class TrainNNRequest(object):
 
     # this is applied even if max_sample_count can't be reached
     starting_step = attr.ib(0)
-

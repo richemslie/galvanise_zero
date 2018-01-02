@@ -1,6 +1,6 @@
 
-PY_FILES := $(shell find $(GGPLEARN_PATH)/src/ggplearn -name '*.py')
-TEST_FILES := $(shell find $(GGPLEARN_PATH)/src/test -name '*.py')
+PY_FILES := $(shell find $(GGPZERO_PATH)/src/ggpzero -name '*.py')
+TEST_FILES := $(shell find $(GGPZERO_PATH)/src/test -name '*.py')
 
 all:
 	flake8 $(PY_FILES)

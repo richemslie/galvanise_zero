@@ -1,11 +1,11 @@
-from ggplearn import msgdefs
-from ggplearn.nn.manager import get_manager
+from ggpzero.defs import confs
+from ggpzero.nn.manager import get_manager
 
 
 def nn_model_config_template(game, network_size_hint="small"):
     ' helper for creating NNModelConfig templates '
 
-    conf = msgdefs.NNModelConfig()
+    conf = confs.NNModelConfig()
 
     # from transformer
     transformer = get_manager().get_transformer(game)
@@ -18,9 +18,14 @@ def nn_model_config_template(game, network_size_hint="small"):
     conf.input_others = transformer.number_of_non_cord_states
     conf.policy_dist_count = transformer.policy_dist_count
 
+    # ensure no regularisation
+    conf.alphazero_regularisation = False
+
+    # use defaults
+    conf.learning_rate = None
+
     # normal defaults
     conf.cnn_kernel_size = 3
-    conf.alphazero_regularisation = False
     conf.dropout_rate_policy = 0.333
     conf.dropout_rate_value = 0.5
 
@@ -43,13 +48,13 @@ def nn_model_config_template(game, network_size_hint="small"):
         conf.max_hidden_other_size = 128
 
     elif network_size_hint == "normal":
-        conf.residual_layers = 6
-        conf.cnn_filter_size = 128
-        conf.value_hidden_size = 256
+        conf.residual_layers = 8
+        conf.cnn_filter_size = 112
+        conf.value_hidden_size = 129
         conf.max_hidden_other_size = 128
 
     elif network_size_hint == "larger":
-        conf.residual_layers = 6
+        conf.residual_layers = 8
         conf.cnn_filter_size = 128
         conf.value_hidden_size = 256
         conf.max_hidden_other_size = 128

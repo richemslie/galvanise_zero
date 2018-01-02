@@ -1,4 +1,3 @@
-import os
 import math
 import random
 from operator import itemgetter
@@ -6,13 +5,11 @@ from operator import itemgetter
 from ggplib.player.base import MatchPlayer
 from ggplib.util import log
 
-from ggplearn.util.bt import pretty_print_board
+from ggpzero.util.bt import pretty_print_board
 
-from ggplearn import msgdefs
+from ggpzero.defs import confs
 
-from ggplearn.nn.manager import get_manager
-
-models_path = os.path.join(os.environ["GGPLEARN_PATH"], "src", "ggplearn", "models")
+from ggpzero.nn.manager import get_manager
 
 
 class PolicyPlayer(MatchPlayer):
@@ -82,7 +79,7 @@ class PolicyPlayer(MatchPlayer):
                     log.verbose("%s \t %.2f, %.2f" % (move, prob * 100, before * 100))
         else:
             if c.verbose:
-                for legal, move, prob in actions:
+                for _, move, prob in actions:
                     log.verbose("%s \t %.2f" % (move, prob * 100))
 
         return actions
@@ -136,7 +133,7 @@ class PolicyPlayer(MatchPlayer):
 def main():
     import sys
     from ggplib.play import play_runner
-    from ggplearn.util.keras import init
+    from ggpzero.util.keras import init
 
     # init(data_format='channels_first')
     init(data_format='channels_last')
@@ -149,25 +146,24 @@ def main():
     except IndexError:
         conf_name = "default"
 
-    confs = {
-        'default' : msgdefs.PolicyPlayerConf(name="default", generation=generation,
+    some_confs = {
+        'default' : confs.PolicyPlayerConfig(name="default", generation=generation,
                                              temperature=-1, random_scale=0.001),
 
-        'abc' : msgdefs.PolicyPlayerConf(name="abc", generation=generation,
+        'abc' : confs.PolicyPlayerConfig(name="abc", generation=generation,
                                          random_scale=0.85,
                                          temperature=1.0,
                                          depth_temperature_start=6,
                                          depth_temperature_increment=0.25),
 
-        'score' : msgdefs.PolicyPlayerConf(name="score", generation=generation,
+        'score' : confs.PolicyPlayerConfig(name="score", generation=generation,
                                            random_scale=0.75,
                                            temperature=0.75,
                                            depth_temperature_start=6,
-                                           depth_temperature_increment=0.2),
-
+                                           depth_temperature_increment=0.2)
     }
 
-    player = PolicyPlayer(confs[conf_name])
+    player = PolicyPlayer(some_confs[conf_name])
     play_runner(player, port)
 
 

@@ -3,7 +3,7 @@ from collections import deque
 
 import greenlet
 
-from ggplearn.nn.manager import get_manager
+from ggpzero.nn.manager import get_manager
 
 
 class NetworkScheduler(object):

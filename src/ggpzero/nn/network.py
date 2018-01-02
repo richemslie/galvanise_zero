@@ -6,7 +6,7 @@ import keras.callbacks
 import keras.backend as K
 
 from ggplib.util import log
-from ggplearn import msgdefs
+from ggpzero.defs import confs
 
 
 def top_3_acc(y_true, y_pred):
@@ -205,7 +205,7 @@ class NeuralNetwork(object):
                                  metrics=["acc", top_3_acc])
 
     def train(self, train_conf):
-        assert isinstance(train_conf, msgdefs.TrainData)
+        assert isinstance(train_conf, confs.TrainData)
         validation_data = [train_conf.validation_inputs, train_conf.validation_outputs]
 
         early_stopping_cb = EarlyStoppingCb()

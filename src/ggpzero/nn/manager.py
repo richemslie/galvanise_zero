@@ -2,24 +2,24 @@ import os
 
 from keras.models import model_from_json
 
-from ggplearn import msgdefs
-
 from ggplib.db import lookup
 
-from ggplearn.nn.network import NeuralNetwork
-from ggplearn.nn.model import get_network_model, is_channels_first
+from ggpzero.defs import confs
+
+from ggpzero.nn.network import NeuralNetwork
+from ggpzero.nn.model import get_network_model, is_channels_first
 
 the_manager = None
 
 
 def model_path(game, generation):
     filename = "%s_%s.json" % (game, generation)
-    return os.path.join(os.environ["GGPLEARN_PATH"], "data", game, "models", filename)
+    return os.path.join(os.environ["GGPZERO_PATH"], "data", game, "models", filename)
 
 
 def weights_path(game, generation):
     filename = "%s_%s.h5" % (game, generation)
-    return os.path.join(os.environ["GGPLEARN_PATH"], "data", game, "weights", filename)
+    return os.path.join(os.environ["GGPZERO_PATH"], "data", game, "weights", filename)
 
 
 class Manager(object):
@@ -48,7 +48,7 @@ class Manager(object):
         return transformer
 
     def create_new_network(self, game, nn_model_conf):
-        assert isinstance(nn_model_conf, msgdefs.NNModelConfig)
+        assert isinstance(nn_model_conf, confs.NNModelConfig)
 
         transformer = self.get_transformer(game)
         keras_model = get_network_model(nn_model_conf)
@@ -81,7 +81,7 @@ def get_manager():
     if the_manager is None:
         the_manager = Manager()
 
-        from ggplearn.nn.bases import init
+        from ggpzero.nn.bases import init
         init()
 
     return the_manager

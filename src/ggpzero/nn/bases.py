@@ -283,6 +283,6 @@ class Hex(GdlBasesTransformer):
 ###############################################################################
 
 def init():
-    from ggplearn.nn.manager import get_manager
+    from ggpzero.nn.manager import get_manager
     for clz in (AtariGo_7x7, Breakthrough, Reversi, Connect4, Hex):
         get_manager().register_transformer(clz)

@@ -8,9 +8,9 @@ from ggplib.util import log
 from ggplib.player.gamemaster import GameMaster
 from ggplib.db.helper import get_gdl_for_game
 
-from ggplearn import msgdefs
-from ggplearn.player.puctplayer import PUCTPlayer
-from ggplearn.player.policyplayer import PolicyPlayer
+from ggpzero.defs import msgs, confs
+from ggpzero.player.puctplayer import PUCTPlayer
+from ggpzero.player.policyplayer import PolicyPlayer
 
 
 class Session(object):
@@ -35,7 +35,7 @@ class Session(object):
 
 class Runner(object):
     def __init__(self, conf):
-        assert isinstance(conf, msgdefs.ConfigureApproxTrainer)
+        assert isinstance(conf, msgs.ConfigureApproxTrainer)
 
         self.conf = conf
 
@@ -171,9 +171,9 @@ class Runner(object):
             self.time_for_do_score = time.time() - start_time
 
             prev_state = states[depth - 1] if depth >= 1 else None
-            sample = msgdefs.Sample(prev_state,
-                                    state, policy_dist, final_score,
-                                    depth, game_length, lead_role_index)
+            sample = confs.Sample(prev_state,
+                                  state, policy_dist, final_score,
+                                  depth, game_length, lead_role_index)
 
             session.add_to_unique_states(tuple(state))
 

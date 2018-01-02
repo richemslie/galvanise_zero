@@ -3,7 +3,7 @@ from keras.regularizers import l2
 from keras import backend as K
 from keras.models import Model as KerasModel
 
-from ggplearn import msgdefs
+from ggpzero.defs import confs
 
 
 # kind of thought keras was taking care of this XXX
@@ -112,7 +112,7 @@ def residual_one_by_one(last_filter_size, reqd, dropout=-1):
 
 
 def get_network_model(conf):
-    assert isinstance(conf, msgdefs.NNModelConfig)
+    assert isinstance(conf, confs.NNModelConfig)
 
     # fancy l2 regularizer stuff
     extra_params = {}

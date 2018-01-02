@@ -11,11 +11,11 @@ from tabulate import tabulate
 from ggplib.util import log
 from ggplib.player.base import MatchPlayer
 
-from ggplearn.util.bt import pretty_print_board
+from ggpzero.util.bt import pretty_print_board
 
-from ggplearn import msgdefs
+from ggpzero.defs import confs
 
-from ggplearn.nn.manager import get_manager
+from ggpzero.nn.manager import get_manager
 
 
 ###############################################################################
@@ -107,7 +107,7 @@ class Node(object):
 class PUCTEvaluator(object):
     def __init__(self, conf=None):
         if conf is None:
-            conf = msgdefs.PUCTPlayerConf()
+            conf = confs.PUCTPlayerConfig()
         self.conf = conf
 
         self.nn = None
@@ -532,8 +532,8 @@ class PUCTEvaluator(object):
             node = self.root
 
         total_visits = float(sum(c.visits() for c in node.children))
-        if total_visits == 0:
-            total_visits = 1
+        if total_visits < 1.0:
+            total_visits = 1.0
 
         temps = [((c.visits() + 1) / total_visits) ** temperature for c in node.children]
         temps_tot = sum(temps)
@@ -666,13 +666,14 @@ class PUCTPlayer(MatchPlayer):
             return choice.legal
 
     def get_probabilities(self, node=None, temperature=1):
-        return self.puct_evaluator.get_probabilities()
+        return self.puct_evaluator.get_probabilities(node=node,
+                                                     temperature=temperature)
 
 
 ##############################################################################
 
 configs = dict(
-    default=msgdefs.PUCTPlayerConf(name="default",
+    default=confs.PUCTPlayerConfig(name="default",
                                    verbose=True,
                                    playouts_per_iteration=800,
                                    playouts_per_iteration_noop=800,
@@ -690,7 +691,7 @@ configs = dict(
                                    choose="choose_top_visits",
                                    max_dump_depth=1),
 
-    two=msgdefs.PUCTPlayerConf(name="two-test",
+    two=confs.PUCTPlayerConfig(name="two-test",
                                verbose=True,
                                playouts_per_iteration=800,
                                playouts_per_iteration_noop=800,
@@ -704,30 +705,31 @@ configs = dict(
                                choose="choose_converge",
                                max_dump_depth=2),
 
-    rev=msgdefs.PUCTPlayerConf(name="rev2-test",
+    rev=confs.PUCTPlayerConfig(name="rev-test",
                                verbose=True,
-                               playouts_per_iteration=42,
-                               playouts_per_iteration_noop=1,
-                               expand_root=100,
-                               dirichlet_noise_alpha=-1,
+                               playouts_per_iteration=100,
+                               playouts_per_iteration_noop=0,
+                               expand_root=0,
+
+                               dirichlet_noise_alpha=0.03,
                                puct_before_expansions=3,
-                               puct_before_root_expansions=3,
-                               puct_constant_before=0.75,
+                               puct_before_root_expansions=5,
+                               puct_constant_before=3.00,
                                puct_constant_after=0.75,
                                puct_constant_tune=False,
+
                                choose="choose_top_visits",
                                max_dump_depth=2),
 
-    three=msgdefs.PUCTPlayerConf(name="three-test",
+    three=confs.PUCTPlayerConfig(name="three-test",
                                  verbose=True,
                                  playouts_per_iteration=42,
                                  playouts_per_iteration_noop=0,
                                  expand_root=0,
 
                                  dirichlet_noise_alpha=0.03,
-
                                  puct_before_expansions=3,
-                                 puct_before_root_expansions=3,
+                                 puct_before_root_expansions=5,
                                  puct_constant_before=3.0,
                                  puct_constant_after=0.75,
                                  puct_constant_tune=False,
@@ -735,7 +737,7 @@ configs = dict(
                                  choose="choose_top_visits",
                                  max_dump_depth=2),
 
-    four=msgdefs.PUCTPlayerConf(name="four-test",
+    four=confs.PUCTPlayerConfig(name="four-test",
                                 verbose=True,
                                 playouts_per_iteration=42,
                                 playouts_per_iteration_noop=0,
@@ -752,7 +754,7 @@ configs = dict(
                                 choose="choose_top_visits",
                                 max_dump_depth=2),
 
-    policy=msgdefs.PUCTPlayerConf(name="policy-test",
+    policy=confs.PUCTPlayerConfig(name="policy-test",
                                   verbose=True,
                                   playouts_per_iteration=0,
                                   playouts_per_iteration_noop=0,
@@ -762,7 +764,7 @@ configs = dict(
                                   choose="choose_top_visits",
                                   max_dump_depth=1),
 
-    max_score=msgdefs.PUCTPlayerConf(name="max-score",
+    max_score=confs.PUCTPlayerConfig(name="max-score",
                                      verbose=True,
                                      playouts_per_iteration=1,
                                      playouts_per_iteration_noop=0,
@@ -774,7 +776,7 @@ configs = dict(
                                      choose="choose_top_visits",
                                      max_dump_depth=2),
 
-    comp=msgdefs.PUCTPlayerConf(name="comp",
+    comp=confs.PUCTPlayerConfig(name="comp",
                                 verbose=True,
                                 playouts_per_iteration=200,
                                 playouts_per_iteration_noop=200,
@@ -793,7 +795,7 @@ configs = dict(
 
 
 def main():
-    from ggplearn.util.keras import init
+    from ggpzero.util.keras import init
 
     # init(data_format='channels_first')
     init(data_format='channels_last')

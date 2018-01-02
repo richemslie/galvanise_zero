@@ -1,71 +1,48 @@
-'''
-tiny/smaller
-
-
-average time to generate sample: 9.41
-av time for do_policy: 2.24
-av time for play one game: 7.17
-
-smaller/small
-
-average time to generate sample: 12.36
-av time for do_policy: 3.54
-av time for play one game: 8.82
-
-'''
-
 import time
 
-from ggplearn.training import approximate_play
-from ggplearn import msgdefs
+from ggpzero.training import approximate_play
+from ggpzero.defs import confs, msgs
 
 
-current_gen = "testgen_normal_1"
+ITERATIONS = 2
+current_gen = "v5_0"
 
 
-def go_test():
-    conf = msgdefs.ConfigureApproxTrainer()
-    conf.player_select_conf = msgdefs.PolicyPlayerConf(verbose=False,
-                                                       generation=current_gen,
-                                                       choose_exponential_scale=0.3)
+def setup():
+    from ggplib.util.init import setup_once
+    setup_once()
 
-    conf.player_policy_conf = msgdefs.PUCTPlayerConf(name="policy_puct",
+    from ggpzero.util.keras import init
+    init(data_format='channels_last')
+
+
+def test_approx():
+    conf = msgs.ConfigureApproxTrainer("breakthrough")
+    conf.generation = current_gen
+    conf.player_select_conf = confs.PolicyPlayerConfig(verbose=False,
+                                                       generation=current_gen)
+
+    conf.player_policy_conf = confs.PUCTPlayerConfig(name="puct_abc",
                                                      verbose=False,
                                                      generation=current_gen,
-                                                     playouts_per_iteration=800,
+                                                     playouts_per_iteration=42,
                                                      playouts_per_iteration_noop=0,
-                                                     expand_root=100,
-                                                     dirichlet_noise_alpha=-1,
-                                                     cpuct_constant_first_4=3.0,
-                                                     cpuct_constant_after_4=0.75,
-                                                     choose="choose_converge")
+                                                     choose="choose_top_visits")
 
-    conf.player_score_conf = msgdefs.PolicyPlayerConf(verbose=False,
-                                                      generation=current_gen,
-                                                      choose_exponential_scale=-1)
+    conf.player_score_conf = conf.player_policy_conf
 
     session = approximate_play.Session()
     runner = approximate_play.Runner(conf)
-    number_of_samples = 10
 
     # slow first run
     runner.generate_sample(session)
     runner.reset_debug()
 
     total_time = 0
-
-    for _ in range(number_of_samples):
+    for _ in range(ITERATIONS):
         start = time.time()
         print runner.generate_sample(session)
         total_time += (time.time() - start)
 
-    print "av time for play_one_game: %.2f" % (runner.acc_time_for_play_one_game / number_of_samples)
-    print "av time for do_policy: %.2f" % (runner.acc_time_for_do_policy / number_of_samples)
-    print "av time for do_score: %.2f" % (runner.acc_time_for_do_score / number_of_samples)
+    print "average time to generate sample: %.2f" % (total_time / float(ITERATIONS))
 
-    print "average time to generate sample: %.2f" % (total_time / number_of_samples)
-
-
-if __name__ == "__main__":
-    from ggplearn.util.main import main_wrap
-    main_wrap(go_test)

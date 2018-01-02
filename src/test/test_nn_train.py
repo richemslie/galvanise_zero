@@ -9,9 +9,9 @@ import random
 from ggplib.util import log
 from ggplib.db import lookup
 
-from ggplearn.util import attrutil
+from ggpzero.util import attrutil
 
-from ggplearn import msgdefs
+from ggpzero.defs import msgs, confs
 
 MAX_STATES_FOR_ROLLOUT = 500
 
@@ -101,7 +101,7 @@ class Rollout(object):
         policy_dist = [(l, p / total) for l, p in policy_dist]
 
         # now we can create a sample :)
-        return msgdefs.Sample(None, state, policy_dist, final_score, d, self.depth, lead_role_index)
+        return confs.Sample(None, state, policy_dist, final_score, d, self.depth, lead_role_index)
 
     def get_current_state(self):
         return self.states[self.depth]
@@ -215,7 +215,7 @@ def create_data_samples(train_conf, sample_count=1000):
         pass
 
     # create a generation, and write file
-    gen = msgdefs.Generation()
+    gen = confs.Generation()
     gen.game = train_conf.game
     gen.with_generation = 0
     gen.num_samples = len(samples)
@@ -230,12 +230,12 @@ def create_data_samples(train_conf, sample_count=1000):
 def random_generated_conf():
     ' not a unit test - like can take over a few hours ! '
 
-    train_conf = msgdefs.TrainNNRequest()
+    train_conf = msgs.TrainNNRequest()
     train_conf.game = "reversi"
 
     train_conf.network_size = "normal"
     train_conf.generation_prefix = "v5_"
-    train_conf.store_path = os.path.join(os.environ["GGPLEARN_PATH"], "data", train_conf.game, "v5")
+    train_conf.store_path = os.path.join(os.environ["GGPZERO_PATH"], "data", train_conf.game, "v5")
 
     # uses previous network
     train_conf.use_previous = False
@@ -251,41 +251,31 @@ def random_generated_conf():
 
 
 def train(train_conf):
-    assert isinstance(train_conf, msgdefs.TrainNNRequest)
+    assert isinstance(train_conf, msgs.TrainNNRequest)
     attrutil.pprint(train_conf)
 
     # import here so can run with pypy without hitting import keras issues (XXX basically this is silly)
-    from ggplearn.training.nn_train import parse_and_train
+    from ggpzero.training.nn_train import parse_and_train
     parse_and_train(train_conf)
 
 
 def retrain_config():
-    conf = msgdefs.TrainNNRequest("breakthrough")
+    conf = msgs.TrainNNRequest("breakthrough")
 
-    conf.network_size = "large"
-    conf.generation_prefix = "v5_more_"
-    conf.store_path = os.path.join(os.environ["GGPLEARN_PATH"], "data", "breakthrough", "v5")
+    conf.network_size = "smaller"
+    conf.generation_prefix = "v5_smaller"
+    conf.store_path = os.path.join(os.environ["GGPZERO_PATH"], "data", "breakthrough", "v5")
 
     conf.use_previous = False
     conf.next_step = 76
 
     conf.validation_split = 0.9
-    conf.batch_size = 128
-    conf.epochs = 20
-    conf.max_sample_count = 500000
-    conf.starting_step = 10
+    conf.batch_size = 64
+    conf.epochs = 10
+    conf.max_sample_count = 100000
+    conf.starting_step = 12
 
     return conf
-
-
-def speed_test_helper(conf, generation):
-    ''' returns model and train_conf '''
-
-    nn = man.load_network(conf.game, generation)
-    game_info = lookup.by_name(conf.game)
-
-    train_conf = parse(conf, game_info, man.get_transformer(conf.game))
-    return nn.get_model(), train_conf
 
 
 def speed_test():
@@ -294,8 +284,8 @@ def speed_test():
 
     # import here so can run with pypy without hitting import keras issues (XXX basically this is silly)
     import numpy as np
-    from ggplearn.nn.manager import get_manager
-    from ggplearn.training.nn_train import parse
+    from ggpzero.nn.manager import get_manager
+    from ggpzero.training.nn_train import parse
 
     man = get_manager()
 
@@ -327,7 +317,6 @@ def speed_test():
         res.append(keras_model.predict(inputs, batch_size=conf.batch_size))
         print res[0]
 
-
     # start the speed test!
     def num_game_est(av_len, sims):
         return sample_count / (av_len * sims)
@@ -358,7 +347,7 @@ def speed_test():
 
 
 if __name__ == "__main__":
-    from ggplearn.util.main import main_wrap
+    from ggpzero.util.main import main_wrap
     if sys.argv[1] == "-r":
         def retrain():
             train(retrain_config())

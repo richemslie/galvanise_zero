@@ -2,7 +2,7 @@ from pprint import pprint
 
 import attr
 
-from ggplearn.util import attrutil, func, broker, runprocs
+from ggpzero.util import attrutil, func, broker, runprocs
 
 
 def setup():
@@ -28,7 +28,7 @@ def test_challenge():
     assert len(m) == 128
 
 
-@attr.s
+@attrutil.register_attrs
 class DummyMsg(object):
     what = attr.ib()
 
@@ -89,7 +89,7 @@ def test_broker_frag_msg():
     assert msg.payload.what == "hello world2!"
 
 
-@attr.s
+@attrutil.register_attrs
 class Container(object):
     x = attr.ib()
     y = attr.ib()
@@ -124,13 +124,13 @@ def test_attrs_recursive():
     assert k.z.what.x.what == 'a'
 
 
-@attr.s
+@attrutil.register_attrs
 class Sample(object):
     name = attr.ib()
     data = attr.ib(attr.Factory(list))
 
 
-@attr.s
+@attrutil.register_attrs
 class Samples(object):
     k = attr.ib()
     samples = attr.ib(attr.Factory(list))
@@ -189,3 +189,22 @@ def test_runcmds2():
 
     reactor.callLater(0.1, run_cmds.spawn)
     reactor.run()
+
+
+@attr.s
+class BadClass(object):
+    k = attr.ib()
+    z = attr.ib()
+
+
+def test_attrs_bad():
+    bc = BadClass(1, 2)
+
+    try:
+        res = attrutil.asdict_plus(bc)
+        assert False, "Do not get here %s" % res
+
+    except attrutil.SerialiseException as exc:
+        # this is what we want
+        print exc
+        pass

@@ -4,31 +4,31 @@ from ggplib.player import get
 from ggplib.player.gamemaster import GameMaster
 from ggplib.db.helper import get_gdl_for_game
 
-from ggplearn import msgdefs
-from ggplearn.player.puctplayer import PUCTPlayer
-from ggplearn.player.policyplayer import PolicyPlayer
+from ggpzero.defs import confs
+from ggpzero.player.puctplayer import PUCTPlayer
+from ggpzero.player.policyplayer import PolicyPlayer
 
 import py.test
 
 ITERATIONS = 1
 
-current_gen = "v5_gen_small_71"
+current_gen = "v5_76"
 
 # first in the run, completely random weights
-random_gen = "v5_gen_small_0"
+random_gen = "v5_0"
 
-default_puct_config = msgdefs.PUCTPlayerConf(generation=current_gen,
+default_puct_config = confs.PUCTPlayerConfig(generation=current_gen,
                                              playouts_per_iteration=42,
                                              playouts_per_iteration_noop=1)
 
-default_policy_config = msgdefs.PolicyPlayerConf(generation=current_gen)
+default_policy_config = confs.PolicyPlayerConfig(generation=current_gen)
 
 
 def setup():
     from ggplib.util.init import setup_once
     setup_once()
 
-    from ggplearn.util.keras import init
+    from ggpzero.util.keras import init
     init(data_format='channels_last')
 
 
@@ -138,7 +138,7 @@ def test_fast_plays():
     gm = GameMaster(get_gdl_for_game("breakthrough"))
 
     import attr
-    conf = msgdefs.PUCTPlayerConf(**attr.asdict(default_puct_config))
+    conf = confs.PUCTPlayerConfig(**attr.asdict(default_puct_config))
     conf.verbose = False
 
     # just checking that we haven't modified default
@@ -203,11 +203,11 @@ def test_choose_policy_random():
     ITERATIONS = 10
     gm = GameMaster(get_gdl_for_game("breakthrough"))
 
-    conf = msgdefs.PolicyPlayerConf(name="white", generation=random_gen, verbose=False)
+    conf = confs.PolicyPlayerConfig(name="white", generation=random_gen, verbose=False)
     conf.choose_exponential_scale = 0.15
     white = PolicyPlayer(conf)
 
-    conf = msgdefs.PolicyPlayerConf(name="black_", generation=random_gen, verbose=False)
+    conf = confs.PolicyPlayerConfig(name="black_", generation=random_gen, verbose=False)
     conf.choose_exponential_scale = 0.15
     black = PolicyPlayer(conf)
 

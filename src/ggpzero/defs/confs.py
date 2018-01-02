@@ -1,6 +1,9 @@
 import attr
 
+from ggpzero.util.attrutil import register_attrs
+
 # DO NOT IMPORT msgs.py
+
 
 @register_attrs
 class NNModelConfig(object):
@@ -27,6 +30,7 @@ class NNModelConfig(object):
     dropout_rate_value = attr.ib(0.5)
 
     learning_rate = attr.ib(0.001)
+
 
 @register_attrs
 class PolicyPlayerConfig(object):
@@ -106,9 +110,9 @@ class ServerConfig(object):
     generation_prefix = attr.ib("v2_")
     store_path = attr.ib("somewhere")
 
-    player_select_conf = attr.ib(default=attr.Factory(PolicyPlayerConf))
-    player_policy_conf = attr.ib(default=attr.Factory(PUCTPlayerConf))
-    player_score_conf = attr.ib(default=attr.Factory(PUCTPlayerConf))
+    player_select_conf = attr.ib(default=attr.Factory(PolicyPlayerConfig))
+    player_policy_conf = attr.ib(default=attr.Factory(PUCTPlayerConfig))
+    player_score_conf = attr.ib(default=attr.Factory(PUCTPlayerConfig))
 
     generation_size = attr.ib(1024)
     max_growth_while_training = attr.ib(0.2)

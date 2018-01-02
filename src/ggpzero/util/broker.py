@@ -12,10 +12,10 @@ import attr
 from twisted.internet import protocol, reactor
 
 from ggplib.util import log
-from ggplearn.util import attrutil, func
+from ggpzero.util import attrutil, func
 
 
-@attr.s
+@attrutil.register_attrs
 class Message(object):
     name = attr.ib()
     payload = attr.ib()

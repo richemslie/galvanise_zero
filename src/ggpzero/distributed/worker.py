@@ -9,20 +9,20 @@ from twisted.internet import reactor
 
 from ggplib.util import log
 
-from ggplearn.util import attrutil
+from ggpzero.util import attrutil
 
-from ggplearn.nn.scheduler import create_scheduler
+from ggpzero.nn.scheduler import create_scheduler
 
-from ggplearn import msgdefs
+from ggpzero.defs import msgs, confs
 
-from ggplearn.util.broker import Broker, WorkerFactory
+from ggpzero.util.broker import Broker, WorkerFactory
 
-from ggplearn.training import nn_train
-from ggplearn.training import approximate_play
+from ggpzero.training import nn_train
+from ggpzero.training import approximate_play
 
 
 def default_conf():
-    conf = msgdefs.WorkerConf(9000, "127.0.0.1")
+    conf = confs.WorkerConfig(9000, "127.0.0.1")
     conf.do_training = False
     conf.do_self_play = True
     conf.concurrent_plays = 1
@@ -36,7 +36,7 @@ class Worker(Broker):
         self.conf_filename = conf_filename
         if os.path.exists(conf_filename):
             conf = attrutil.json_to_attr(open(conf_filename).read())
-            assert isinstance(conf, msgdefs.WorkerConf)
+            assert isinstance(conf, confs.WorkerConfig)
         else:
             conf = default_conf()
 
@@ -44,12 +44,12 @@ class Worker(Broker):
         print "CONF", attrutil.pprint(conf)
         self.save_our_config()
 
-        self.register(msgdefs.Ping, self.on_ping)
-        self.register(msgdefs.RequestConfig, self.on_request_config)
+        self.register(msgs.Ping, self.on_ping)
+        self.register(msgs.RequestConfig, self.on_request_config)
 
-        self.register(msgdefs.ConfigureApproxTrainer, self.on_configure_approx_trainer)
-        self.register(msgdefs.RequestSample, self.on_request_sample)
-        self.register(msgdefs.TrainNNRequest, self.on_train_request)
+        self.register(msgs.ConfigureApproxTrainer, self.on_configure_approx_trainer)
+        self.register(msgs.RequestSample, self.on_request_sample)
+        self.register(msgs.TrainNNRequest, self.on_train_request)
 
         self.approx_players = None
         self.self_play_session = None
@@ -70,10 +70,10 @@ class Worker(Broker):
                            WorkerFactory(self))
 
     def on_ping(self, server, msg):
-        server.send_msg(msgdefs.Pong())
+        server.send_msg(msgs.Pong())
 
     def on_request_config(self, server, msg):
-        return msgdefs.WorkerConfigMsg(self.conf)
+        return msgs.WorkerConfigMsg(self.conf)
 
     def on_configure_approx_trainer(self, server, msg):
         attrutil.pprint(msg)
@@ -91,7 +91,7 @@ class Worker(Broker):
         for r in self.approx_players:
             r.patch_players(self.scheduler)
 
-        return msgdefs.Ok("configured")
+        return msgs.Ok("configured")
 
     def on_request_sample(self, server, msg):
         assert self.self_play_session is not None
@@ -120,21 +120,21 @@ class Worker(Broker):
 
         log.info("Done all samples")
 
-        m = msgdefs.RequestSampleResponse(self.self_play_session.samples,
-                                          self.self_play_session.duplicates_seen)
+        m = msgs.RequestSampleResponse(self.self_play_session.samples,
+                                       self.self_play_session.duplicates_seen)
         server.send_msg(m)
 
     def on_train_request(self, server, msg):
         log.warning("request to train %s" % msg)
         nn_train.parse_and_train(msg)
-        return msgdefs.Ok("network_trained")
+        return msgs.Ok("network_trained")
 
 
 def start_worker_factory():
     from ggplib.util.init import setup_once
     setup_once("worker")
 
-    from ggplearn.util.keras import init
+    from ggpzero.util.keras import init
     init(data_format='channels_last')
 
     broker = Worker(sys.argv[1])

@@ -10,12 +10,12 @@ from twisted.internet import reactor
 from ggplib.util import log
 from ggplib.db import lookup
 
-from ggplearn.util import attrutil, runprocs
-from ggplearn.util.broker import Broker, ServerFactory
+from ggpzero.util import attrutil, runprocs
+from ggpzero.util.broker import Broker, ServerFactory
 
-from ggplearn import msgdefs, templates
+from ggpzero.defs import msgs, confs, templates
 
-from ggplearn.nn.manager import get_manager
+from ggpzero.nn.manager import get_manager
 
 
 def critical_error(msg):
@@ -25,7 +25,7 @@ def critical_error(msg):
 
 
 def default_conf():
-    conf = msgdefs.ServerConfig()
+    conf = confs.ServerConfig()
 
     conf.port = 9000
     conf.game = "breakthrough"
@@ -33,26 +33,26 @@ def default_conf():
 
     conf.network_size = "normal"
 
-    conf.generation_prefix = "v5_"
-    conf.store_path = os.path.join(os.environ["GGPLEARN_PATH"], "data", "breakthrough", "v5")
+    conf.generation_prefix = "v5"
+    conf.store_path = os.path.join(os.environ["GGPZERO_PATH"], "data", "breakthrough", "v5")
 
     # generation set on server
-    conf.player_select_conf = msgdefs.PolicyPlayerConf(verbose=False,
+    conf.player_select_conf = confs.PolicyPlayerConfig(verbose=False,
                                                        depth_temperature_start=8,
                                                        depth_temperature_increment=0.25,
                                                        random_scale=0.85)
 
-    conf.player_policy_conf = msgdefs.PUCTPlayerConf(name="policy_puct",
+    conf.player_policy_conf = confs.PUCTPlayerConfig(name="policy_puct",
                                                      verbose=False,
                                                      playouts_per_iteration=800,
                                                      playouts_per_iteration_noop=1,
                                                      expand_root=100,
                                                      dirichlet_noise_alpha=0.2,
-                                                     cpuct_constant_first_4=3.0,
-                                                     cpuct_constant_after_4=0.75,
+                                                     puct_constant_after=3.0,
+                                                     puct_constant_before=0.75,
                                                      choose="choose_converge")
 
-    conf.player_score_conf = msgdefs.PolicyPlayerConf(verbose=False,
+    conf.player_score_conf = confs.PolicyPlayerConfig(verbose=False,
                                                       depth_temperature_start=8,
                                                       depth_temperature_increment=0.25,
                                                       random_scale=0.85)
@@ -101,7 +101,7 @@ class ServerBroker(Broker):
         self.conf_filename = conf_filename
         if os.path.exists(conf_filename):
             conf = attrutil.json_to_attr(open(conf_filename).read())
-            assert isinstance(conf, msgdefs.ServerConfig)
+            assert isinstance(conf, confs.ServerConfig)
         else:
             conf = default_conf()
 
@@ -123,12 +123,12 @@ class ServerBroker(Broker):
         self.generation = None
         self.cmds_running = None
 
-        self.register(msgdefs.Pong, self.on_pong)
+        self.register(msgs.Pong, self.on_pong)
 
-        self.register(msgdefs.Ok, self.on_ok)
-        self.register(msgdefs.WorkerConfigMsg, self.on_worker_config)
+        self.register(msgs.Ok, self.on_ok)
+        self.register(msgs.WorkerConfigMsg, self.on_worker_config)
 
-        self.register(msgdefs.RequestSampleResponse, self.on_sample_response)
+        self.register(msgs.RequestSampleResponse, self.on_sample_response)
 
         self.training_in_progress = False
 
@@ -173,9 +173,8 @@ class ServerBroker(Broker):
         pass
 
     def get_generation(self, step):
-        return "%sgen_%s_%s" % (self.conf.generation_prefix,
-                                self.conf.network_size,
-                                step)
+        return "%s_%s" % (self.conf.generation_prefix,
+                          step)
 
     def need_more_samples(self):
         return len(self.accumulated_samples) < (self.conf.generation_size +
@@ -184,8 +183,8 @@ class ServerBroker(Broker):
     def new_worker(self, worker):
         self.workers[worker] = WorkerInfo(worker, time.time())
         log.debug("New worker %s" % worker)
-        worker.send_msg(msgdefs.Ping())
-        worker.send_msg(msgdefs.RequestConfig())
+        worker.send_msg(msgs.Ping())
+        worker.send_msg(msgs.RequestConfig())
 
     def remove_worker(self, worker):
         if worker not in self.workers:
@@ -284,7 +283,7 @@ class ServerBroker(Broker):
 
         log.info("new_generation()")
 
-        gen = msgdefs.Generation()
+        gen = confs.Generation()
         gen.game = self.conf.game
         gen.with_generation = self.get_generation(self.conf.current_step)
         gen.num_samples = self.conf.generation_size
@@ -306,7 +305,7 @@ class ServerBroker(Broker):
         next_step = self.conf.current_step + 1
         log.info("create TrainNNRequest() for step %s" % next_step)
 
-        m = msgdefs.TrainNNRequest()
+        m = confs.TrainNNRequest()
         m.game = self.conf.game
         m.network_size = self.conf.network_size
         m.generation_prefix = self.conf.generation_prefix
@@ -365,7 +364,7 @@ class ServerBroker(Broker):
         self.conf.player_policy_conf.generation = generation
         self.conf.player_score_conf.generation = generation
 
-        conf = msgdefs.ConfigureApproxTrainer(self.conf.game, generation)
+        conf = msgs.ConfigureApproxTrainer(self.conf.game, generation)
         conf.player_select_conf = self.conf.player_select_conf
         conf.player_policy_conf = self.conf.player_policy_conf
         conf.player_score_conf = self.conf.player_score_conf
@@ -394,7 +393,7 @@ class ServerBroker(Broker):
             else:
                 if self.need_more_samples():
                     updates = worker_info.get_and_update(self.unique_states)
-                    m = msgdefs.RequestSample(updates)
+                    m = msgs.RequestSample(updates)
                     log.debug("sending request with %s updates" % len(updates))
                     worker_info.worker.send_msg(m)
                 else:
@@ -410,6 +409,9 @@ class ServerBroker(Broker):
 def start_server_factory():
     from ggplib.util.init import setup_once
     setup_once("server")
+
+    from ggpzero.util.keras import init
+    init(data_format='channels_last')
 
     ServerBroker(sys.argv[1])
 

@@ -5,7 +5,7 @@ import traceback
 
 from ggplib.util.init import setup_once
 from ggplib.util import log
-from ggplearn.util.keras import init
+from ggpzero.util.keras import init
 
 
 def main_wrap(main_fn, logfile_name=None, **kwds):
