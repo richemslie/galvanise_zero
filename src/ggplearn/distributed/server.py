@@ -163,7 +163,10 @@ class ServerBroker(Broker):
                 shutil.copy(self.conf_filename, self.conf_filename + "-bak")
 
         with open(self.conf_filename, 'w') as open_file:
-            open_file.write(attrutil.attr_to_json(self.conf, indent=4))
+            open_file.write(attrutil.attr_to_json(self.conf,
+                                                  sort_keys=True,
+                                                  separators=(',', ': '),
+                                                  indent=4))
 
     def get_master_by_ip(self):
         ''' spin through self play workers, and gets the first worker for a new ip.  returns list '''
