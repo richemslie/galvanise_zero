@@ -131,8 +131,6 @@ def get_network_model(conf):
                                             conf.input_channels),
                                      name="inputs_board")
 
-    inputs_other = klayers.Input(shape=(conf.input_others,), name="inputs_other")
-
     # initial conv2d /Resnet on cords
     layer = Conv2DBlock(conf.cnn_filter_size, conf.cnn_kernel_size,
                         padding='same',
@@ -156,7 +154,14 @@ def get_network_model(conf):
                              activation='relu',
                              **extra_params)(layer)
 
-    res_flat_policy = klayers.Flatten()(to_flatten)
+    flat = klayers.Flatten()(to_flatten)
+
+    # output: policy head
+    if conf.dropout_rate_policy > 0:
+        flat = klayers.Dropout(conf.dropout_rate_policy)(flat)
+
+    policy_head = klayers.Dense(conf.policy_dist_count,
+                                activation="softmax", name="policy", **extra_params)(flat)
 
     # residual net -> flattened for value head
     filters = residual_one_by_one(conf.cnn_filter_size, conf.value_hidden_size)
@@ -166,33 +171,18 @@ def get_network_model(conf):
                              activation='relu',
                              **extra_params)(layer)
 
-    res_flat_value = klayers.Flatten()(to_flatten)
-
-    # FC on other non-cord states
-    nc_layer_count = min(conf.input_others * 2, conf.max_hidden_other_size)
-    nc_layer = klayers.Dense(nc_layer_count, activation="relu",
-                             name="nc_layer", **extra_params)(inputs_other)
-    nc_layer = klayers.BatchNormalization(name="nc_layer_bn")(nc_layer)
-
-    # output: policy head
-    prelude = klayers.concatenate([res_flat_policy, nc_layer])
-    if conf.dropout_rate_policy > 0:
-        prelude = klayers.Dropout(conf.dropout_rate_policy)(prelude)
-
-    policy_head = klayers.Dense(conf.policy_dist_count,
-                                activation="softmax", name="policy", **extra_params)(prelude)
+    flat = klayers.Flatten()(to_flatten)
 
     # output: value head
-    prelude = klayers.concatenate([res_flat_value, nc_layer])
     if conf.dropout_rate_value > 0:
-        prelude = klayers.Dropout(conf.dropout_rate_value)(prelude)
+        flat = klayers.Dropout(conf.dropout_rate_value)(flat)
 
     hidden = klayers.Dense(conf.value_hidden_size, activation="relu",
-                           name="value_hidden_layer", **extra_params)(prelude)
+                           name="value_hidden_layer", **extra_params)(flat)
 
     value_head = klayers.Dense(conf.role_count,
                                activation="sigmoid", name="value", **extra_params)(hidden)
 
     # model:
-    return KerasModel(inputs=[inputs_board, inputs_other],
+    return KerasModel(inputs=[inputs_board],
                       outputs=[policy_head, value_head])

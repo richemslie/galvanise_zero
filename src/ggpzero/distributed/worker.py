@@ -135,7 +135,7 @@ def start_worker_factory():
     setup_once("worker")
 
     from ggpzero.util.keras import init
-    init(data_format='channels_last')
+    init()
 
     broker = Worker(sys.argv[1])
     broker.start()

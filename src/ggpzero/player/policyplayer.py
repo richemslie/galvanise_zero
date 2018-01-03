@@ -135,8 +135,7 @@ def main():
     from ggplib.play import play_runner
     from ggpzero.util.keras import init
 
-    # init(data_format='channels_first')
-    init(data_format='channels_last')
+    init()
 
     port = int(sys.argv[1])
     generation = sys.argv[2]

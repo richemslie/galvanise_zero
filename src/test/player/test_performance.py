@@ -17,7 +17,7 @@ def setup():
     setup_once()
 
     from ggpzero.util.keras import init
-    init(data_format='channels_last')
+    init()
 
 
 def test_speed_of_one_shot():

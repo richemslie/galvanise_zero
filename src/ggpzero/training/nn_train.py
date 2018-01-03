@@ -113,10 +113,10 @@ class SamplesHolder(object):
         print training_data[2][-120]
         print training_data[3][-120]
 
-        return confs.TrainData(inputs=training_data[:2],
-                              outputs=training_data[2:],
-                              validation_inputs=validation_data[:2],
-                              validation_outputs=validation_data[2:])
+        return confs.TrainData(inputs=training_data[:1],
+                               outputs=training_data[2:],
+                               validation_inputs=validation_data[:1],
+                               validation_outputs=validation_data[2:])
 
 
 def get_data(conf):

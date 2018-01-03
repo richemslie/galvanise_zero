@@ -411,7 +411,7 @@ def start_server_factory():
     setup_once("server")
 
     from ggpzero.util.keras import init
-    init(data_format='channels_last')
+    init()
 
     ServerBroker(sys.argv[1])
 

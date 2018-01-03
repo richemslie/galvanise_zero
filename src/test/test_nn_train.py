@@ -262,8 +262,8 @@ def train(train_conf):
 def retrain_config():
     conf = msgs.TrainNNRequest("breakthrough")
 
-    conf.network_size = "smaller"
-    conf.generation_prefix = "v5_smaller"
+    conf.network_size = "small"
+    conf.generation_prefix = "v5_small"
     conf.store_path = os.path.join(os.environ["GGPZERO_PATH"], "data", "breakthrough", "v5")
 
     conf.use_previous = False
@@ -272,7 +272,7 @@ def retrain_config():
     conf.validation_split = 0.9
     conf.batch_size = 64
     conf.epochs = 10
-    conf.max_sample_count = 100000
+    conf.max_sample_count = 150000
     conf.starting_step = 12
 
     return conf
@@ -351,10 +351,10 @@ if __name__ == "__main__":
     if sys.argv[1] == "-r":
         def retrain():
             train(retrain_config())
-        main_wrap(retrain, data_format='channels_last')
+        main_wrap(retrain)
 
     elif sys.argv[1] == "-s":
-        main_wrap(speed_test, data_format='channels_last')
+        main_wrap(speed_test)
 
     elif sys.argv[1] == "-g":
         def generate_data():

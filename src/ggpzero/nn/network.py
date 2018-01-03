@@ -170,7 +170,7 @@ class NeuralNetwork(object):
         get = self.gdl_bases_transformer.get_non_cord_input
         X_1 = np.array([get(s) for s in states])
 
-        Y = self.keras_model.predict([X_0, X_1], batch_size=num_states)
+        Y = self.keras_model.predict([X_0], batch_size=num_states)
         assert len(Y) == 2
 
         result = []
