@@ -1,9 +1,7 @@
 ''' takes forever to create data - so not a py.test '''
 
-import gc
 import os
 import sys
-import time
 import random
 
 from ggplib.util import log
@@ -262,88 +260,21 @@ def train(train_conf):
 def retrain_config():
     conf = msgs.TrainNNRequest("breakthrough")
 
-    conf.network_size = "small"
-    conf.generation_prefix = "v5_small"
+    conf.network_size = "normal"
+    conf.generation_prefix = "v5"
     conf.store_path = os.path.join(os.environ["GGPZERO_PATH"], "data", "breakthrough", "v5")
 
-    conf.use_previous = False
-    conf.next_step = 76
+    conf.use_previous = True
+    conf.next_step = 79
 
     conf.validation_split = 0.9
-    conf.batch_size = 64
-    conf.epochs = 10
-    conf.max_sample_count = 150000
+    conf.batch_size = 128
+    conf.epochs = 30
+    conf.max_sample_count = 300000
     conf.starting_step = 12
+    conf.drop_dupes_count = 3
 
     return conf
-
-
-def speed_test():
-    ''' XXX move this '''
-    ITERATIONS = 3
-
-    # import here so can run with pypy without hitting import keras issues (XXX basically this is silly)
-    import numpy as np
-    from ggpzero.nn.manager import get_manager
-    from ggpzero.training.nn_train import parse
-
-    man = get_manager()
-
-    # get data
-    conf = retrain_config()
-    assert conf.game == "breakthrough"
-    conf.next_step = 54
-    conf.starting_step = 10
-    conf.max_sample_count = 250000
-
-    game_info = lookup.by_name(conf.game)
-    train_conf = parse(conf, game_info, man.get_transformer(conf.game))
-    input_0, input_1 = train_conf.inputs[0], train_conf.inputs[1]
-
-    # get nn to test speed on
-    generation = "v5_dp_gen_normal_54"
-    keras_model = man.load_network(conf.game, generation).get_model()
-
-    res = []
-
-    batch_size = 4096
-    sample_count = len(input_0)
-
-    # warm up
-    for i in range(2):
-        idx, end_idx = i * batch_size, (i + 1) * batch_size
-        print i, idx, end_idx
-        inputs = map(np.array, (input_0[idx:end_idx], input_1[idx:end_idx]))
-        res.append(keras_model.predict(inputs, batch_size=conf.batch_size))
-        print res[0]
-
-    # start the speed test!
-    def num_game_est(av_len, sims):
-        return sample_count / (av_len * sims)
-
-    for _ in range(ITERATIONS):
-        res = []
-        times = []
-        gc.collect()
-
-        print 'Starting speed run'
-
-        num_batches = sample_count / batch_size + 1
-        for i in range(num_batches):
-            idx, end_idx = i * batch_size, (i + 1) * batch_size
-            s = time.time()
-            inputs = map(np.array, (input_0[idx:end_idx], input_1[idx:end_idx]))
-            res.append(keras_model.predict(inputs, batch_size=batch_size))
-            times.append(time.time() - s)
-
-        print "times taken", times
-        print "total_time taken", sum(times)
-        est_time_per_game = sum(times) / num_game_est(60, 800)
-        print "average per game (appox)", est_time_per_game
-
-        print "time for 25k games seconds", est_time_per_game * 25000
-        print "time for 25k games minutes", (est_time_per_game * 25000) / 60.0
-        print "time for 25k games hours", (est_time_per_game * 25000) / 3600.0
 
 
 if __name__ == "__main__":
@@ -352,9 +283,6 @@ if __name__ == "__main__":
         def retrain():
             train(retrain_config())
         main_wrap(retrain)
-
-    elif sys.argv[1] == "-s":
-        main_wrap(speed_test)
 
     elif sys.argv[1] == "-g":
         def generate_data():

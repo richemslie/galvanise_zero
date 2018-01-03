@@ -45,13 +45,17 @@ def test_config():
             return_to = transformer.channel_last
 
             transformer.channel_last = False
-            print transformer.state_to_channels(basestate.to_list(), 0)
-            print transformer.state_to_channels(basestate.to_list(), 1)
+            print transformer.state_to_channels(basestate.to_list())
+
+            # XXX advance state
+            # print transformer.state_to_channels(basestate.to_list())
 
             # illegal fishing
             transformer.channel_last = True
-            print transformer.state_to_channels(basestate.to_list(), 0)
-            print transformer.state_to_channels(basestate.to_list(), 1)
+            print transformer.state_to_channels(basestate.to_list())
+
+            # XXX advance state
+            # print transformer.state_to_channels(basestate.to_list())
         finally:
             transformer.channel_last = return_to
 
@@ -68,10 +72,11 @@ def test_net_create():
         sm = game_info.get_sm()
         basestate = sm.get_initial_state()
 
-        policy, scores = nn.predict_1(basestate.to_list(), 0)
+        policy, scores = nn.predict_1(basestate.to_list())
         print policy, scores
 
-        res = nn.predict_n([basestate.to_list(), basestate.to_list()], [1, 0])
+        # XXX advance state to have two basestates
+        res = nn.predict_n([basestate.to_list(), basestate.to_list()])
         assert len(res) == 2 and len(res[0]) == 2 and len(res[1]) == 2
         print policy, scores
 
@@ -101,7 +106,7 @@ def test_net_sizes_with_l2():
             print
             print size
             model_conf = templates.nn_model_config_template(game, size)
-            model_conf.alphazero_regularisation = True
+            model_conf.l2_regularisation = True
             model_conf.dropout_rate_value = -1
             model_conf.dropout_rate_policy = -1
             nn = man.create_new_network(game, model_conf)
