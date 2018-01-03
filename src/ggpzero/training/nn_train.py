@@ -68,24 +68,20 @@ class SamplesHolder(object):
         # transform samples -> numpy arrays as inputs/outputs to nn
 
         # input 1
-        planes = self.transformer.state_to_channels(sample.state, sample.lead_role_index)
+        planes = self.transformer.state_to_channels(sample.state)
 
         # input - planes
         data[0].append(planes)
 
-        # input - non planes
-        non_planes = self.transformer.get_non_cord_input(sample.state)
-        data[1].append(non_planes)
-
         # output - policy
-        data[2].append(self.policy_as_array(sample))
+        data[1].append(self.policy_as_array(sample))
 
         # output - best/final scores
-        data[3].append(sample.final_score)
+        data[2].append(sample.final_score)
 
     def massage_data(self):
-        training_data = [[] for _ in range(4)]
-        validation_data = [[] for _ in range(4)]
+        training_data = [[] for _ in range(3)]
+        validation_data = [[] for _ in range(3)]
 
         log.debug("massaging training samples: %s" % len(self.train_samples))
         for sample in self.train_samples:
@@ -111,12 +107,11 @@ class SamplesHolder(object):
         print training_data[0][-120]
         print training_data[1][-120]
         print training_data[2][-120]
-        print training_data[3][-120]
 
         return confs.TrainData(inputs=training_data[:1],
-                               outputs=training_data[2:],
+                               outputs=training_data[1:],
                                validation_inputs=validation_data[:1],
-                               validation_outputs=validation_data[2:])
+                               validation_outputs=validation_data[1:])
 
 
 def get_data(conf):
@@ -148,9 +143,9 @@ def parse(conf, game_info, transformer):
         # XXX should we even support this deduping?
         for g in gen_data.samples:
             s = tuple(g.state)
-            # keep the top 3 only
-            if count[s] == 4:
-                pass  # XXX continue
+            # keep the top n only?
+            if conf.drop_dupes_count > 0 and count[s] == conf.drop_dupes_count:
+                continue
 
             count[s] += 1
             samples.append(g)
@@ -187,16 +182,6 @@ def parse(conf, game_info, transformer):
     return train_conf
 
 
-def get_nn_model_conf(conf):
-    # temp here
-    nn_model_conf = templates.nn_model_config_template(conf.game, conf.network_size)
-
-    # nn_model_conf.alphazero_regularisation = True
-    attrutil.pprint(nn_model_conf)
-
-    return nn_model_conf
-
-
 def parse_and_train(conf):
     assert isinstance(conf, msgs.TrainNNRequest)
     attrutil.pprint(conf)
@@ -227,20 +212,20 @@ def parse_and_train(conf):
         else:
             log.warning("No previous generation to use...")
 
-    # XXX should be passed in
-    nn_model_conf = get_nn_model_conf(conf)
+    # XXX nn_model_conf should be passed in
+    nn_model_conf = templates.nn_model_config_template(conf.game, conf.network_size)
 
     if nn is None:
         nn = man.create_new_network(conf.game, nn_model_conf)
 
+    print attrutil.pprint(nn_model_conf)
     nn.summary()
+    nn.compile(learning_rate=nn_model_conf.learning_rate)
 
     train_conf = parse(conf, game_info, man.get_transformer(conf.game))
     train_conf.epochs = conf.epochs
     train_conf.batch_size = conf.batch_size
 
-    nn.compile(alphazero_regularisation=nn_model_conf.alphazero_regularisation,
-               learning_rate=nn_model_conf.learning_rate)
     res = nn.train(train_conf)
     man.save_network(nn, conf.game, next_generation)
 

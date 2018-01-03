@@ -115,8 +115,10 @@ class Runner(object):
         assert self.gm_policy.get_game_depth() == depth
 
         # fish for root (XXX for game specific)
+        # XXX this is annoying as we need to do this so our move probabilities sum to zero.  This
+        # is a mismatched concept from GGP -> nn, where there is only one probability distribution.
+        # There needs > 1 probabilty distribution for this to make proper sense.
         lead_role_index = 1 if self.last_move[0] == "noop" else 0
-
         player = self.gm_policy.get_player(lead_role_index)
 
         dist = [(c.legal, p) for c, p in player.get_probabilities()]
