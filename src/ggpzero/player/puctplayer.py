@@ -180,7 +180,7 @@ class PUCTEvaluator(object):
         states = [n.state for n in actual_nodes_to_predict]
         lead_role_indexs = [n.lead_role_index for n in actual_nodes_to_predict]
 
-        result = self.nn.predict_n(states, lead_role_indexs)
+        result = self.nn.predict_n(states)
 
         for node, (pred_policy, pred_final_score) in zip(actual_nodes_to_predict,
                                                          result):
@@ -253,9 +253,6 @@ class PUCTEvaluator(object):
         expanded = sum(1 for c in node.children if c.to_node is not None)
         if expanded < expansions:
             constant = self.conf.puct_constant_before
-
-        if self.conf.puct_constant_tune:
-            constant *= node.final_score[node.lead_role_index]
 
         return constant
 
@@ -672,127 +669,82 @@ class PUCTPlayer(MatchPlayer):
 
 ##############################################################################
 
-configs = dict(
-    default=confs.PUCTPlayerConfig(name="default",
-                                   verbose=True,
-                                   playouts_per_iteration=800,
-                                   playouts_per_iteration_noop=800,
-                                   expand_root=0,
-                                   dirichlet_noise_alpha=-1,
-                                   puct_before_expansions=3,
-                                   puct_before_root_expansions=6,
-                                   puct_constant_before=3.0,
-                                   puct_constant_after=0.75,
-                                   random_scale=0.5,
-                                   temperature=1.0,
-                                   depth_temperature_start=4,
-                                   depth_temperature_increment=0.5,
-                                   depth_temperature_stop=8,
-                                   choose="choose_top_visits",
-                                   max_dump_depth=1),
+def config_template(generation, name="default"):
+    configs = dict(
+        default=confs.PUCTPlayerConfig(name="default",
+                                       verbose=True,
+                                       playouts_per_iteration=800,
+                                       playouts_per_iteration_noop=800,
+                                       expand_root=0,
+                                       dirichlet_noise_alpha=-1,
+                                       puct_before_expansions=3,
+                                       puct_before_root_expansions=6,
+                                       puct_constant_before=3.0,
+                                       puct_constant_after=0.75,
+                                       random_scale=0.5,
+                                       temperature=1.0,
+                                       depth_temperature_start=4,
+                                       depth_temperature_increment=0.5,
+                                       depth_temperature_stop=8,
+                                       choose="choose_top_visits",
+                                       max_dump_depth=1),
 
-    two=confs.PUCTPlayerConfig(name="two-test",
-                               verbose=True,
-                               playouts_per_iteration=800,
-                               playouts_per_iteration_noop=800,
-                               expand_root=100,
-                               dirichlet_noise_alpha=0.1,
-                               puct_before_expansions=3,
-                               puct_before_root_expansions=3,
-                               puct_constant_before=3.0,
-                               puct_constant_after=0.75,
-                               puct_constant_tune=False,
-                               choose="choose_converge",
-                               max_dump_depth=2),
+        test=confs.PUCTPlayerConfig(name="test",
+                                    verbose=True,
+                                    playouts_per_iteration=42,
+                                    playouts_per_iteration_noop=0,
+                                    expand_root=0,
 
-    rev=confs.PUCTPlayerConfig(name="rev-test",
-                               verbose=True,
-                               playouts_per_iteration=100,
-                               playouts_per_iteration_noop=0,
-                               expand_root=0,
+                                    dirichlet_noise_alpha=0.03,
+                                    puct_before_expansions=3,
+                                    puct_before_root_expansions=5,
+                                    puct_constant_before=3.0,
+                                    puct_constant_after=0.75,
 
-                               dirichlet_noise_alpha=0.03,
-                               puct_before_expansions=3,
-                               puct_before_root_expansions=5,
-                               puct_constant_before=3.00,
-                               puct_constant_after=0.75,
-                               puct_constant_tune=False,
+                                    choose="choose_top_visits",
+                                    max_dump_depth=2),
 
-                               choose="choose_top_visits",
-                               max_dump_depth=2),
 
-    three=confs.PUCTPlayerConfig(name="three-test",
-                                 verbose=True,
-                                 playouts_per_iteration=42,
-                                 playouts_per_iteration_noop=0,
-                                 expand_root=0,
+        policy=confs.PUCTPlayerConfig(name="policy-test",
+                                      verbose=True,
+                                      playouts_per_iteration=0,
+                                      playouts_per_iteration_noop=0,
+                                      expand_root=0,
+                                      dirichlet_noise_alpha=-1,
 
-                                 dirichlet_noise_alpha=0.03,
-                                 puct_before_expansions=3,
-                                 puct_before_root_expansions=5,
-                                 puct_constant_before=3.0,
-                                 puct_constant_after=0.75,
-                                 puct_constant_tune=False,
+                                      choose="choose_top_visits",
+                                      max_dump_depth=1),
 
-                                 choose="choose_top_visits",
-                                 max_dump_depth=2),
+        max_score=confs.PUCTPlayerConfig(name="max-score",
+                                         verbose=True,
+                                         playouts_per_iteration=1,
+                                         playouts_per_iteration_noop=0,
+                                         expand_root=1000,
+                                         dirichlet_noise_alpha=-1,
+                                         puct_constant_before=0,
+                                         puct_constant_after=0,
 
-    four=confs.PUCTPlayerConfig(name="four-test",
-                                verbose=True,
-                                playouts_per_iteration=42,
-                                playouts_per_iteration_noop=0,
-                                expand_root=0,
+                                         choose="choose_top_visits",
+                                         max_dump_depth=2),
 
-                                dirichlet_noise_alpha=0.03,
+        compare=confs.PUCTPlayerConfig(name="compare",
+                                       verbose=True,
+                                       playouts_per_iteration=200,
+                                       playouts_per_iteration_noop=200,
+                                       expand_root=0,
 
-                                puct_before_expansions=3,
-                                puct_before_root_expansions=3,
-                                puct_constant_before=5.0,
-                                puct_constant_after=1.25,
-                                puct_constant_tune=True,
+                                       dirichlet_noise_alpha=0.03,
 
-                                choose="choose_top_visits",
-                                max_dump_depth=2),
+                                       puct_before_expansions=3,
+                                       puct_before_root_expansions=5,
+                                       puct_constant_before=3.0,
+                                       puct_constant_after=0.75,
 
-    policy=confs.PUCTPlayerConfig(name="policy-test",
-                                  verbose=True,
-                                  playouts_per_iteration=0,
-                                  playouts_per_iteration_noop=0,
-                                  expand_root=0,
-                                  dirichlet_noise_alpha=-1,
-
-                                  choose="choose_top_visits",
-                                  max_dump_depth=1),
-
-    max_score=confs.PUCTPlayerConfig(name="max-score",
-                                     verbose=True,
-                                     playouts_per_iteration=1,
-                                     playouts_per_iteration_noop=0,
-                                     expand_root=1000,
-                                     dirichlet_noise_alpha=-1,
-                                     puct_constant_before=0,
-                                     puct_constant_after=0,
-
-                                     choose="choose_top_visits",
-                                     max_dump_depth=2),
-
-    comp=confs.PUCTPlayerConfig(name="comp",
-                                verbose=True,
-                                playouts_per_iteration=200,
-                                playouts_per_iteration_noop=200,
-                                expand_root=0,
-
-                                dirichlet_noise_alpha=0.03,
-
-                                puct_before_expansions=3,
-                                puct_before_root_expansions=5,
-                                puct_constant_before=3.0,
-                                puct_constant_after=0.75,
-                                puct_constant_tune=False,
-
-                                choose="choose_top_visits",
-                                max_dump_depth=2))
-
+                                       choose="choose_top_visits",
+                                       max_dump_depth=2))
+    conf = configs[name]
+    conf.generation = generation
+    return conf
 
 def main():
     from ggpzero.util.keras import init
@@ -807,8 +759,7 @@ def main():
     if len(sys.argv) > 3:
         config_name = sys.argv[3]
 
-    conf = configs[config_name]
-    conf.generation = generation
+    conf = config_template(generation, config_name)
     player = PUCTPlayer(conf=conf)
 
     from ggplib.play import play_runner

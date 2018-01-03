@@ -79,3 +79,6 @@ class TrainNNRequest(object):
 
     # this is applied even if max_sample_count can't be reached
     starting_step = attr.ib(0)
+
+    # if we see duplicate states of mre than > n, drop them, keeping the most recent.  < 0 is off.
+    drop_dupes_count = attr.ib(-1)

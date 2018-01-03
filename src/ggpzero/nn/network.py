@@ -111,10 +111,6 @@ class EarlyStoppingCb(keras.callbacks.Callback):
             self.best_val_policy_acc = val_policy_acc
             self.epoch_last_set_at = epoch
 
-        # always do at least 2 epochs before starting
-        if epoch <= 2:
-            return
-
         store_retraining_weights = ((policy_acc + 0.01) < val_policy_acc and
                                     val_policy_acc > self.retrain_best_val_policy_acc)
 
@@ -123,7 +119,7 @@ class EarlyStoppingCb(keras.callbacks.Callback):
             self.retrain_best = self.model.get_weights()
             self.retrain_best_val_policy_acc = val_policy_acc
 
-        if epoch >= 5:
+        if epoch >= 3:
             # if we are overfitting
             if policy_acc - 0.02 > val_policy_acc:
                 log.info("Early stopping... since policy accuracy overfitting")
@@ -159,18 +155,14 @@ class NeuralNetwork(object):
         for l in lines:
             log.verbose(l)
 
-    def predict_n(self, states, lead_role_indexes):
+    def predict_n(self, states):
         num_states = len(states)
 
         to_channels = self.gdl_bases_transformer.state_to_channels
-        X_0 = [to_channels(s, ri) for s, ri in zip(states, lead_role_indexes)]
+        X = np.array([to_channels(s) for s in states])
 
-        X_0 = np.array(X_0)
+        Y = self.keras_model.predict(X, batch_size=num_states)
 
-        get = self.gdl_bases_transformer.get_non_cord_input
-        X_1 = np.array([get(s) for s in states])
-
-        Y = self.keras_model.predict([X_0], batch_size=num_states)
         assert len(Y) == 2
 
         result = []
@@ -180,24 +172,27 @@ class NeuralNetwork(object):
 
         return result
 
-    def predict_1(self, state, lead_role_index):
-        return self.predict_n([state], [lead_role_index])[0]
+    def predict_1(self, state):
+        return self.predict_n([state])[0]
 
-    def compile(self, alphazero_regularisation=False, learning_rate=None):
-        if alphazero_regularisation:
-            lr = 1e-2
-        else:
-            lr = 0.001
-
+    # XXX
+    def compile(self, use_sgd=False, learning_rate=None):
         if learning_rate is not None:
             lr = learning_rate
+        else:
+            if use_sgd:
+                lr = 1e-2
+            else:
+                lr = 0.001
 
-        if alphazero_regularisation:
+        if use_sgd:
             optimizer = SGD(lr=lr, momentum=0.9)
             loss = [objective_function_for_policy, "mean_squared_error"]
         else:
             loss = ['categorical_crossentropy', 'mean_squared_error']
             optimizer = Adam(lr=lr)
+
+        log.warning("Compiling with %s" % optimizer)
 
         # loss is much less on value.  it overfits really fast.
         self.keras_model.compile(loss=loss, optimizer=optimizer,

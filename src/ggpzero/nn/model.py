@@ -97,7 +97,7 @@ def residual_one_by_one(last_filter_size, reqd, dropout=-1):
     specifying it.
 
     XXX We use the size of layers being propagated through the resnet.  (this would get 1 and 2 as
-    per alpha go - but I am guessing here if this is a sane thing to do).  '''
+    per AGZ - but I am guessing here if this is a sane thing to do).  '''
 
     if dropout > 0:
         reqd *= (1 + dropout)
@@ -116,7 +116,7 @@ def get_network_model(conf):
 
     # fancy l2 regularizer stuff
     extra_params = {}
-    if conf.alphazero_regularisation:
+    if conf.l2_regularisation:
         extra_params["kernel_regularizer"] = l2(1e-4)
 
     # inputs:

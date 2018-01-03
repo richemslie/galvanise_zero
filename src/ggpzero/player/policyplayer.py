@@ -104,7 +104,7 @@ class PolicyPlayer(MatchPlayer):
             if ls.get_count() == 1:
                 return ls.get_legal(0)
 
-        policy, network_score = self.nn.predict_1(state, self.match.our_role_index)
+        policy, network_score = self.nn.predict_1(state)
         normalise_actions = self.policy_to_actions(policy)
 
         expected_prob = random.random() * self.conf.random_scale

@@ -305,7 +305,7 @@ class ServerBroker(Broker):
         next_step = self.conf.current_step + 1
         log.info("create TrainNNRequest() for step %s" % next_step)
 
-        m = confs.TrainNNRequest()
+        m = msgs.TrainNNRequest()
         m.game = self.conf.game
         m.network_size = self.conf.network_size
         m.generation_prefix = self.conf.generation_prefix
@@ -315,11 +315,13 @@ class ServerBroker(Broker):
         m.use_previous = self.conf.retrain_network if next_step % 5 != 0 else False
 
         m.next_step = next_step
+        m.overwrite_existing = False
         m.validation_split = self.conf.validation_split
         m.batch_size = self.conf.batch_size
         m.epochs = self.conf.epochs
         m.max_sample_count = self.conf.max_sample_count
         m.starting_step = self.conf.starting_step
+        m.drop_dupes_count = 3
 
         # send out message to train
         log.info("sent to the_nn_trainer")

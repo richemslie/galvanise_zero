@@ -13,9 +13,6 @@ class NNModelConfig(object):
     input_columns = attr.ib(8)
     input_channels = attr.ib(8)
 
-    input_others = attr.ib(8)
-    max_hidden_other_size = attr.ib(128)
-
     residual_layers = attr.ib(8)
     cnn_filter_size = attr.ib(64)
     cnn_kernel_size = attr.ib(3)
@@ -23,7 +20,7 @@ class NNModelConfig(object):
     value_hidden_size = attr.ib(256)
     policy_dist_count = attr.ib(2)
 
-    alphazero_regularisation = attr.ib(False)
+    l2_regularisation = attr.ib(False)
 
     # < 0 - no dropout
     dropout_rate_policy = attr.ib(0.333)
@@ -74,9 +71,6 @@ class PUCTPlayerConfig(object):
     # the puct constant.  before expansions, and after expansions are met
     puct_constant_before = attr.ib(0.75)
     puct_constant_after = attr.ib(0.75)
-
-    # tunes the puct_constant with the initial (predicted) score of the node
-    puct_constant_tune = attr.ib(False)
 
     # added to root child policy pct (less than 0 is off)
     dirichlet_noise_pct = attr.ib(0.25)
@@ -172,8 +166,11 @@ class Sample(object):
     # total length of game
     game_length = attr.ib(42)
 
-    # conceptually who's turn it is.  It is the role index (into sm.roles) if game has concept of 'turn'.  If not -1.
-    lead_role_index = attr.ib(0)
+    # conceptually who's turn it is.  It is the role index (into sm.roles) if game has concept of
+    # 'turn'.  If not -1.  XXX this is not a GGP concept.  Each player makes a move each turn (it
+    # may be a noop).  XXX we should remove this entirely.  Unfortnately we need to keep this to
+    # index into the probability distribution.
+    lead_role_index = attr.ib(-1)
 
 
 @register_attrs
