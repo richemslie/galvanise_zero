@@ -4,25 +4,33 @@ reinforcement learning related to
 and [Thinking Fast And Slow](https://arxiv.org/abs/1705.08439v4).
 
 
-ggp-zero
-========
-XXX - changing everything, huge state of flux.
+run 5 - part 2
+--------------
+After disposing of galvanise 40-0
+(these are the first 3 games, with first one running with noise accidentally)
 
-New goals:
+http://www.ggp.org/view/all/matches/8dc1d2e3baa653d0ac3e132dff0ccb12614e9a9b/
+http://www.ggp.org/view/all/matches/080595649fb1fccd323e97108bb7210c30441ede/
+http://www.ggp.org/view/all/matches/e7b646dc8d627ddcbf7cb09e79e4600badfd1020/
 
- * a faithful alpha-zero implementation (especially self play) for any game written in the General
-   Description Language (GDL)
+I was going to abandon this run.  However, I am going to finish the c++ code before starting on
+reversi or trying anything significantly different.  I am also feeling quite lazy, which is
+absolutely fine because it can keep training all on its own.  So 5 more generations (25k samples
+later), I was checking in and noticed how the policy network looked rather strong - without any
+search or using the value part of the network.  So once again up against Gurgeh, using
+only the policy part of the network - well the results speak for them self.  Not perfect play -
+there a few kamikaze moves, but some interesting tactical play that the network has learned.
 
- * move towards being more far more generic in the GDL -> neural net creation/loading/saving AND
-   input/ouput transformations, this will allow far more experimentation - which is hard to do
-   right now.
+Gurgeh is running 3 threads and for 10 seconds per turn.  That is approximately 1.5 million MCTS
+playouts/simulations per second.
 
- * adding a c++/tensorflow direct batched self play, without any python interaction.  Hoping for
-   1-2 orders of magnitude increase in speed.
+I am literally and honestly quite in shock at the results.  Thank you to people at DeepMind and
+TFAS, it is there amazing work that has got us here.
 
- * WIP
-
-Based on [GGPLib](https://github.com/ggplib/ggplib).
+http://www.ggp.org/view/all/matches/46c69cd7a742cb2c868f76215c8d9321e985eaf5/
+http://www.ggp.org/view/all/matches/f138fa208e916e98b87d6daf1b571a2a7c32a7b7/
+http://www.ggp.org/view/all/matches/c7b5942900ff8f8186b7bd0585e3f81f93c5da07/
+http://www.ggp.org/view/all/matches/03651a733b6ada03bf2c7cb141a4825393df992e/
 
 
 run 5
@@ -44,10 +52,34 @@ efforts to optimise the python code and run 128 concurrent games and batch the p
 GPU (it did speed things about 2-4 fold).
 
 
+ggp-zero
+========
+Everything is changing, huge state of flux.
+
+New todos/goals:
+
+ * add previous states to the neural network.
+
+ * adding a c++/tensorflow direct batched self play, without any python interaction.  Hoping for
+   1-2 orders of magnitude increase in speed.  To be more precise, it looks as if it will be 64
+   times faster - approximately 3-5 minutes for 5000 samples.
+
+ * a faithful alpha-zero implementation (especially self play) for any game written in the General
+   Description Language (GDL).  self play will have the feature of taking n samples, and when
+   turned off will revert to AGZ/AZ self play.  More later.
+
+ * move towards being more far more generic in the GDL -> neural net creation/loading/saving AND
+   input/ouput transformations, this will allow far more experimentation - which is hard to do
+   right now.
+
+ * WIP
+
+Based on [GGPLib](https://github.com/ggplib/ggplib).
+
 run 4
 -----
-This time I tried Reversi (Othello).  Unfortnately it just barely learned the legal moves and
-didn't conclusvely beat a random player.  Was very, very slow to train.
+This time I tried Reversi (Othello).  Unfortunately it just barely learned the legal moves and
+didn't conclusively beat a random player.  Was very, very slow to train.
 
 
 Breakthrough games - run 3
@@ -56,7 +88,7 @@ The first run was riddled with bugs and misunderstandings, the second was comple
 to bad selection of moves for training, so its 3rd time lucky I hope.  This time the entire process
 is 95% automated, and distributed - with little to none hand holding.  After 24 hours of training
 using 1 gpu and 6 cores, 25 generations was complete.  That is 155k samples (50k were provided from
-random rollouts - see below) to train the network on.  I pitched the trained network against
+random rollouts - see below) to train the network on.  I pitting the trained network against
 Gurgeh - which is a very fast MCTS player (which is doing 1.2 million tree playouts per move).  The
 matches gave the players 15 seconds thinking time per move. The network based PUCT player (which
 was set at 800 iterations) is only using a 1-3 second of.  It wins quite comfortable:
