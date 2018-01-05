@@ -1,0 +1,68 @@
+brief and probably inadequate build instructions
+================================================
+
+ggplib install instructions uses pypy, which is nice for speed to build some of large networks.
+The propnets are cached, and can then be accessed by python2.  So best to run perftest.sh in ggplib
+before going any further (as will cache breakthrough/reversi)
+
+ggp-zero uses tensorflow/keras/numpy, all things which it is better to use python2 for.
+I would highly recommend using pip and controlling your own pip installs for tensorflow, especially
+if using combination of cpu/gpu.
+
+.. code-block:: shell
+
+    # INSTALL:
+    sudo apt install python python-dev
+
+    # where you want to install tensorflow etc
+    mkdir ~/bin/install
+
+    # install tensorflow as per https://www.tensorflow.org/install/install_linux
+    virtualenv --system-site-packages ~/bin/install/py2_tf_cpu
+    virtualenv --system-site-packages ~/bin/install/py2_tf_gpu
+
+    # instructions pretty much same for both
+    . ~/bin/install/py2_tf_cpu/bin/activate
+
+    pip install twisted cffi pytest tabulate
+    pip install numpy future
+
+    # choose one of:
+    pip install --upgrade tensorflow
+    pip install --upgrade tensorflow-gpu
+
+    pip install keras h5py
+
+
+    # COMMON SETUP
+    # put these in shell script/bash alias or something.  I use two bash alias, and switch between cpu/gpu.
+
+    alias ggpzerocpu='export GGPLIB_PATH=~/ggplib && . ~/ggp-zero/bin/setup.sh && . ~/bin/install/_p2_tf/bin/activate'
+    alias ggpzerogpu='export GGPLIB_PATH=~/ggplib && . ~/ggp-zero/bin/setup.sh && . ~/bin/install/_p2_tf/bin/activate'
+
+
+    # TRAIN:
+
+    # for training server:
+    cd ggp-zero/src/ggpzero/distributed
+    python server.py somefile.conf
+
+    # ctrc-c and edit/configure somefile.conf
+    python server.py somefile.conf
+
+    # for training worker:
+    cd ggp-zero/src/ggpzero/distributed
+    python server.py worker.conf
+
+    # ctrc-c and edit/configure worker.conf
+    python server.py worker.conf
+
+
+
+    # TO RUN MODEL
+
+    cd ggp-zero/src/ggpzero/player
+    python puctplayer.py <port> <gen>
+
+    # eg:
+    python puctplayer.py 9147 v6_40
