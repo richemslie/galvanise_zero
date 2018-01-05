@@ -52,17 +52,34 @@ if using combination of cpu/gpu.
 
     # for training worker:
     cd ggp-zero/src/ggpzero/distributed
-    python server.py worker.conf
+    python worker.py worker.conf
 
     # ctrc-c and edit/configure worker.conf
-    python server.py worker.conf
-
+    python worker.py worker.conf
 
 
     # TO RUN MODEL
 
     cd ggp-zero/src/ggpzero/player
-    python puctplayer.py <port> <gen>
+    python puctplayer.py <port> <gen> <optional_config>
 
     # eg:
     python puctplayer.py 9147 v6_40
+
+
+    # DATA DIRECTORY:
+    # i am running my data directory on a seperate drive.  So I use a symbolic link.  But you need
+    # to ensure something like exists for each game
+
+    mkdir -p ggp-zero/data/breakthrough/models
+    mkdir -p ggp-zero/data/breakthrough/weights
+
+    # helpers:
+    # inside ggp-zero/tmp there are some example confs.  reversi.conf and breakthrough.conf can be
+    # used as templates for server.py
+    # work0.conf can be used as a template for worker.py
+    # copy breakthrough_v5_84.json to the models directory above
+    # copy breakthrough_v5_84.h5 to the weights directory above
+    # then can run as per above.
+
+    python puctplayer.py 9147 v5_84 test
