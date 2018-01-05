@@ -1,13 +1,24 @@
 brief and probably inadequate build instructions
 ================================================
 
-ggplib install instructions uses pypy, which is nice for speed to build some of large networks.
-The propnets are cached, and can then be accessed by python2.  So best to run perftest.sh in ggplib
-before going any further (as will cache breakthrough/reversi)
+ggp-zero uses tensorflow/keras/numpy, which are not supported/does not work with pypy.
 
-ggp-zero uses tensorflow/keras/numpy, all things which it is better to use python2 for.
+ggplib install instructions uses pypy, which is nice for the speed boost when it comes to build
+some of the large propnets.  Once the propnets are built, they are cached in locally.  These can be
+accessed via python2 with the speed hit.
+
+The best idea is to run perftest.sh in ggplib before going any further (as will cache breakthrough/reversi)
+
+
 I would highly recommend using pip and controlling your own pip installs for tensorflow, especially
-if using combination of cpu/gpu.
+if using combination of cpu/gpu.  Tested with tensorflow 1.4.1.  1.5 is coming out soon, so will
+likely break a few things.
+
+
+Note: if using cpu for training, then you want to really compile tensorflow from sources.  This is
+complicated and takes ages, but it is worth it as runs twice as fast (AVX instructions).  These
+instructions are for the binaries they provide.
+
 
 .. code-block:: shell
 
@@ -24,12 +35,12 @@ if using combination of cpu/gpu.
     # instructions pretty much same for both
     . ~/bin/install/py2_tf_cpu/bin/activate
 
-    pip install twisted cffi pytest tabulate
+    pip install twisted cffi pytest tabulate greenlet
     pip install numpy future
 
     # choose one of:
     pip install --upgrade tensorflow
-    pip install --upgrade tensorflow-gpu
+    # pip install --upgrade tensorflow-gpu
 
     pip install keras h5py
 
@@ -37,8 +48,8 @@ if using combination of cpu/gpu.
     # COMMON SETUP
     # put these in shell script/bash alias or something.  I use two bash alias, and switch between cpu/gpu.
 
-    alias ggpzerocpu='export GGPLIB_PATH=~/ggplib && . ~/ggp-zero/bin/setup.sh && . ~/bin/install/_p2_tf/bin/activate'
-    alias ggpzerogpu='export GGPLIB_PATH=~/ggplib && . ~/ggp-zero/bin/setup.sh && . ~/bin/install/_p2_tf/bin/activate'
+    alias ggpzerocpu='export GGPLIB_PATH=~/ggplib && . ~/ggp-zero/bin/setup.sh && . ~/bin/install/py2_tf_cpu/bin/activate'
+    alias ggpzerogpu='export GGPLIB_PATH=~/ggplib && . ~/ggp-zero/bin/setup.sh && . ~/bin/install/py2_tf_gpu/bin/activate'
 
 
     # TRAIN:
