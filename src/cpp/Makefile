@@ -1,5 +1,8 @@
-INCLUDE_PATHS = -I/usr/include/python2.7 -I$(GGPLIB_PATH)/src/cpp
-LIB_PATHS = -L/usr/lib/python2.7 -L$(GGPLIB_PATH)/src/cpp
+PY_INCLUDE_PATH=$(shell python -c "import sysconfig; print sysconfig.get_path('include')")
+PY_LIB_PATH=$(shell python -c "import sysconfig; print sysconfig.get_path('stdlib')")
+
+INCLUDE_PATHS = -I$(PY_INCLUDE_PATH) -I$(GGPLIB_PATH)/src/cpp
+LIB_PATHS = -L$(PY_LIB_PATH) -L$(GGPLIB_PATH)/src/cpp
 
 AR = ar
 RM = rm -f
@@ -9,7 +12,7 @@ CFLAGS = -MMD -MP -g -Wall -Werror -Woverloaded-virtual -Wnon-virtual-dtor -fno-
 LDFLAGS = -g -MMD -MP -Wall -Werror -Woverloaded-virtual -Wnon-virtual-dtor -fno-strict-aliasing -O2 -std=c++11
 
 
-SRCS = ggpzero_interface.cpp
+SRCS = puctnode.cpp pucteval.cpp ggpzero_interface.cpp
 
 CORE_OBJS = $(patsubst %.cpp, %.o, $(SRCS))
 OBJS := $(CORE_OBJS)

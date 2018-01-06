@@ -1,6 +1,9 @@
 // python includes
 #include <Python.h>
 
+#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
+#include "numpy/arrayobject.h"
+
 // local includes
 #include "pyref.h"
 
@@ -9,6 +12,13 @@
 #include <k273/logging.h>
 #include <k273/strutils.h>
 #include <k273/exception.h>
+
+// ggplib imports
+#include <statemachine/goalless_sm.h>
+#include <statemachine/combined.h>
+#include <statemachine/statemachine.h>
+#include <statemachine/propagate.h>
+#include <statemachine/legalstate.h>
 
 // std c++ includes
 #include <string>
@@ -48,12 +58,30 @@ static PyObject* AbcWrap_hello(PyObject_AbcWrap* self, PyObject* args) {
 }
 
 static PyObject* AbcWrap_add(PyObject_AbcWrap* self, PyObject* args) {
-    return Py_None;
+    static long data[4] = {0,1,2,3};
+
+    const int ND = 2;
+    const int SIZE = 2;
+    npy_intp dims[2]{SIZE, SIZE};
+
+    return PyArray_SimpleNewFromData(ND, dims, NPY_INT64, &data);
+}
+
+static PyObject* AbcWrap_test_sm(PyObject_AbcWrap* self, PyObject* args) {
+    ssize_t ptr = 0;
+
+    if (! ::PyArg_ParseTuple(args, "n", &ptr)) {
+        return nullptr;
+    }
+
+    GGPLib::StateMachine* sm = reinterpret_cast<GGPLib::StateMachine*> (ptr);
+    return PyString_FromString(sm->getGDL(42));
 }
 
 static struct PyMethodDef AbcWrap_methods[] = {
     {"hello", (PyCFunction) AbcWrap_hello, METH_VARARGS, "blablabla"},
     {"add", (PyCFunction) AbcWrap_add, METH_VARARGS, "blablabla"},
+    {"test_sm", (PyCFunction) AbcWrap_test_sm, METH_VARARGS, "blablabla"},
     {nullptr, nullptr}            /* Sentinel */
 };
 
@@ -119,10 +147,10 @@ static PyObject* ggpzero_interface_start(PyObject* self, PyObject* args) {
         return nullptr;
     }
 
+    K273::loggerSetup("XX", K273::Logger::LOG_VERBOSE);
+
     Abc* abc_test = new Abc;
-    PyObject* res = (PyObject *) PyType_AbcWrap_new(abc_test);
-    Py_INCREF(res);
-    return res;
+    return (PyObject *) PyType_AbcWrap_new(abc_test);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -155,6 +183,8 @@ extern "C" {
         ggpzero_interface_error = ::PyErr_NewException(error_name, nullptr, nullptr);
         Py_INCREF(ggpzero_interface_error);
         ::PyModule_AddObject(m, "AbcModuleError", ggpzero_interface_error);
+
+        import_array();
     }
 }
 
