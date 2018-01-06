@@ -25,42 +25,51 @@ def nn_model_config_template(game, network_size_hint="small"):
 
     # normal defaults
     conf.cnn_kernel_size = 3
-    conf.dropout_rate_policy = 0.333
+    conf.dropout_rate_policy = 0.25
     conf.dropout_rate_value = 0.5
 
-    # ideally residual_layers is the same size as board size
+    # residual_layers is the same size as max dimension of board
+    conf.residual_layers = max(transformer.num_rows, transformer.num_cols)
 
     if network_size_hint == "tiny":
-        conf.residual_layers = 4
+        conf.residual_layers = max(4, conf.residual_layers / 2)
         conf.cnn_filter_size = 32
         conf.value_hidden_size = 32
 
     elif network_size_hint == "smaller":
-        conf.residual_layers = 8
         conf.cnn_filter_size = 64
         conf.value_hidden_size = 64
 
     elif network_size_hint == "small":
-        conf.residual_layers = 8
         conf.cnn_filter_size = 96
         conf.value_hidden_size = 128
 
-    elif network_size_hint == "normal":
-        conf.residual_layers = 8
+    elif network_size_hint == "medium-small":
         conf.cnn_filter_size = 112
         conf.value_hidden_size = 128
 
-    elif network_size_hint == "large":
-        conf.residual_layers = 8
+    elif network_size_hint == "medium":
         conf.cnn_filter_size = 128
+        conf.value_hidden_size = 192
+
+    elif network_size_hint == "medium-large":
+        conf.cnn_filter_size = 160
+        conf.value_hidden_size = 192
+
+    elif network_size_hint == "large":
+        conf.cnn_filter_size = 192
         conf.value_hidden_size = 256
 
     elif network_size_hint == "larger":
-        conf.residual_layers = 8
-        conf.cnn_filter_size = 192
-        conf.value_hidden_size = 256
+        conf.cnn_filter_size = 224
+        conf.value_hidden_size = 384
+
+    elif network_size_hint == "massive":
+        # these are alphago sizes
+        conf.cnn_filter_size = 256
+        conf.value_hidden_size = 512
+
     else:
         assert False, "network_size_hint %s, not recognised" % network_size_hint
 
     return conf
-

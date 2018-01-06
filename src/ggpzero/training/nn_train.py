@@ -1,5 +1,4 @@
 import os
-import numpy as np
 
 from ggplib.util import log
 from ggplib.db import lookup
@@ -27,17 +26,14 @@ def check_sample(sample, game_model):
     assert 0 <= sample.lead_role_index <= len(game_model.roles)
 
 
-class SamplesHolder(object):
-    def __init__(self, game_info, transformer):
-        assert len(game_info.model.roles) == 2, "only 2 roles supported for now"
+class SamplesBuffer(object):
+    ''' this is suppose to be our in memory buffer.  But we throw it away everytime we train.  XXX
+    ie should we keep it in memory, or is it too big?  '''
 
-        self.game_info = game_info
+    def __init__(self, transformer):
         self.transformer = transformer
         self.train_samples = []
         self.validation_samples = []
-
-        self.policy_1_index_start = len(game_info.model.actions[0])
-        self.expected_policy_len = sum(len(actions) for actions in game_info.model.actions)
 
     def add(self, sample, validation=False):
         assert isinstance(sample, confs.Sample)
@@ -48,70 +44,28 @@ class SamplesHolder(object):
             self.train_samples.append(sample)
 
     def strip(self, train_count, validate_count):
-        # we can just cleverly use -1 * train_count, but this is clearer
-        train_index = len(self.train_samples) - train_count
-        validate_index = len(self.validation_samples) - validate_count
-        self.train_samples = self.train_samples[train_index:]
-        self.validation_samples = self.validation_samples[validate_index:]
+        ''' Needs to throw away the tail of the list '''
+        self.train_samples = self.train_samples[:train_count]
+        self.validation_samples = self.validation_samples[:validate_count]
 
-    def policy_as_array(self, sample):
-        index_start = 0 if sample.lead_role_index == 0 else self.policy_1_index_start
-        policy_outputs = np.zeros(self.expected_policy_len)
-        for idx, prob in sample.policy:
-            policy_outputs[index_start + idx] = prob
+    def create_training_conf(self):
+        conf = confs.TrainData()
 
-        return policy_outputs
-
-    def sample_to_nn_style(self, sample, data):
-        check_sample(sample, self.game_info.model)
-
-        # transform samples -> numpy arrays as inputs/outputs to nn
-
-        # input 1
-        planes = self.transformer.state_to_channels(sample.state)
-
-        # input - planes
-        data[0].append(planes)
-
-        # output - policy
-        data[1].append(self.policy_as_array(sample))
-
-        # output - best/final scores
-        data[2].append(sample.final_score)
-
-    def massage_data(self):
-        training_data = [[] for _ in range(3)]
-        validation_data = [[] for _ in range(3)]
-
-        log.debug("massaging training samples: %s" % len(self.train_samples))
+        log.debug("transforming training samples: %s" % len(self.train_samples))
         for sample in self.train_samples:
-            self.sample_to_nn_style(sample, training_data)
+            self.transformer.sample_to_nn(sample,
+                                          conf.input_channels,
+                                          conf.output_policies,
+                                          conf.output_final_scores)
 
-        log.debug("massaging validation samples: %s" % len(self.validation_samples))
+        log.debug("transforming validation samples: %s" % len(self.validation_samples))
         for sample in self.validation_samples:
-            self.sample_to_nn_style(sample, validation_data)
+            self.transformer.sample_to_nn(sample,
+                                          conf.validation_input_channels,
+                                          conf.validation_output_policies,
+                                          conf.validation_output_final_scores)
 
-        for ii, data in enumerate(training_data):
-            arr = np.array(data)
-            arr.astype('float32')
-            training_data[ii] = arr
-            log.info("Shape of training data %d: %s" % (ii, arr.shape))
-
-        for ii, data in enumerate(validation_data):
-            arr = np.array(data)
-            arr.astype('float32')
-            validation_data[ii] = arr
-            log.info("Shape of validation data %d: %s" % (ii, arr.shape))
-
-        # good always a good idea to print some outputs
-        print training_data[0][-120]
-        print training_data[1][-120]
-        print training_data[2][-120]
-
-        return confs.TrainData(inputs=training_data[:1],
-                               outputs=training_data[1:],
-                               validation_inputs=validation_data[:1],
-                               validation_outputs=validation_data[1:])
+        return conf
 
 
 def get_data(conf):
@@ -127,7 +81,7 @@ def get_data(conf):
 def parse(conf, game_info, transformer):
     assert isinstance(conf, msgs.TrainNNRequest)
 
-    samples_holder = SamplesHolder(game_info, transformer)
+    samples_buffer = SamplesBuffer(transformer)
 
     total_samples = 0
     from collections import Counter
@@ -140,7 +94,8 @@ def parse(conf, game_info, transformer):
                                                                  gen_data.num_samples))
 
         samples = []
-        # XXX should we even support this deduping?
+        # XXX is this deduping a good idea?  Once we start using prev_states, then there will be a
+        # lot less deduping?
         for g in gen_data.samples:
             s = tuple(g.state)
             # keep the top n only?
@@ -150,9 +105,7 @@ def parse(conf, game_info, transformer):
             count[s] += 1
             samples.append(g)
 
-        print "DROPPED DUPES", gen_data.num_samples - len(samples)
-
-        # assert gen_data.num_samples == len(gen_data.samples)
+        log.verbose("DROPPED DUPES %s" % (gen_data.num_samples - len(samples)))
 
         assert gen_data.game == conf.game
         num_samples = len(samples)
@@ -160,26 +113,28 @@ def parse(conf, game_info, transformer):
 
         for s in samples[:train_count]:
             check_sample(s, game_info.model)
-            samples_holder.add(s)
+            samples_buffer.add(s)
 
         for s in samples[train_count:]:
             check_sample(s, game_info.model)
-            samples_holder.add(s, validation=True)
+            samples_buffer.add(s, validation=True)
 
         total_samples += num_samples
         if total_samples > conf.max_sample_count:
             break
 
-    log.info("Total samples %s" % total_samples)
+    log.info("Number of samples %s" % total_samples)
 
     if conf.max_sample_count < total_samples:
         train_count = int(conf.max_sample_count * conf.validation_split)
         validate_count = conf.max_sample_count - train_count
-        log.info("Stripping %s samples from data set" % (total_samples - conf.max_sample_count))
-        samples_holder.strip(train_count, validate_count)
+        log.info("Stripping %s samples from data set" % (total_samples -
+                                                         conf.max_sample_count))
+        samples_buffer.strip(train_count, validate_count)
 
-    train_conf = samples_holder.massage_data()
-    return train_conf
+        log.info("Number of samples %s" % total_samples)
+
+    return samples_buffer.create_training_conf()
 
 
 def parse_and_train(conf):
@@ -196,6 +151,7 @@ def parse_and_train(conf):
     nn = None
     # check the generation does not already exist
 
+    retraining = False
     if man.can_load(conf.game, next_generation):
         msg = "Generation already exists %s / %s" % (conf.game, next_generation)
         log.error(msg)
@@ -209,6 +165,7 @@ def parse_and_train(conf):
         if man.can_load(conf.game, prev_generation):
             log.info("Previous generation found: %s" % prev_generation)
             nn = man.load_network(conf.game, prev_generation)
+            retraining = True
         else:
             log.warning("No previous generation to use...")
 
@@ -220,13 +177,12 @@ def parse_and_train(conf):
 
     print attrutil.pprint(nn_model_conf)
     nn.summary()
-    nn.compile(learning_rate=nn_model_conf.learning_rate)
 
     train_conf = parse(conf, game_info, man.get_transformer(conf.game))
     train_conf.epochs = conf.epochs
     train_conf.batch_size = conf.batch_size
 
-    res = nn.train(train_conf)
+    res = nn.train(train_conf, retraining=retraining)
     man.save_network(nn, conf.game, next_generation)
 
     ###############################################################################

@@ -32,30 +32,32 @@ class GdlBasesTransformer(object):
 
     role_count = 2
 
-    # will be updated later
-    num_unhandled_states = 0
-
-    # set in create_base_infos
-    base_infos = None
-
-    # defined subclass
+    # the following are defined subclass
     base_term = pieces = piece_term = x_term = y_term = None
     x_cords = y_cords = []
-
     control_base_term = None
+
+    # these are set in create_base_infos
+    base_infos = None
+    num_unhandled_states = 0
 
     def __init__(self, game_info, channel_last=False):
         assert isinstance(game_info, GameInfo)
         self.game_info = game_info
-
-        self.create_base_infos()
 
         # for the number of outputs of the network
         sm_model = self.game_info.model
         self.policy_dist_count = sum(len(l) for l in sm_model.actions)
         self.final_score_count = len(sm_model.roles)
 
+        # used for when we have a single policy_distribution being shared
+        assert self.role_count == 2
+        self.policy_1_index_start = len(sm_model.actions[0])
+
+        # this is the 'image' data ordering for tensorflow/keras
         self.channel_last = channel_last
+
+        self.create_base_infos()
 
     @property
     def num_rows(self):
@@ -131,6 +133,7 @@ class GdlBasesTransformer(object):
             log.warning("Number of unhandled states %d" % self.unhandled_states)
 
     def state_to_channels(self, state, prev_states=None):
+        # prev_states -> list of states
         assert prev_states is None, "unhandled for now"
 
         # create a bunch of zero channels
@@ -153,13 +156,35 @@ class GdlBasesTransformer(object):
 
         assert len(channels) == self.num_channels
 
-        channels = np.array(channels)
+        channels = np.array(channels, dtype='float32')
         if self.channel_last:
             orig = channels
             channels = np.rollaxis(channels, -1)
             channels = np.rollaxis(channels, -1)
             assert channels.shape == (orig.shape[1], orig.shape[2], orig.shape[0])
         return channels
+
+    def policy_to_array(self, policy, lead_role_index):
+        index_start = 0 if lead_role_index == 0 else self.policy_1_index_start
+        policy_outputs = np.zeros(self.policy_dist_count, dtype='float32')
+
+        for idx, prob in policy:
+            policy_outputs[index_start + idx] = prob
+
+        return policy_outputs
+
+    def sample_to_nn(self, sample, inputs, policies, finals):
+        # transform samples -> numpy arrays as inputs/outputs to nn
+
+        # input - planes
+        inputs.append(self.state_to_channels(sample.state))
+
+        # output - policy
+        policies.append(self.policy_to_array(sample.policy,
+                                             sample.lead_role_index))
+
+        # output - best/final scores
+        finals.append(np.array(sample.final_score, dtype='float32'))
 
     '''
 
@@ -268,6 +293,7 @@ class Connect4(GdlBasesTransformer):
     piece_term = 3
 
     pieces = ['red', 'black']
+    control_base_term = 'control'
 
 
 class Hex(GdlBasesTransformer):

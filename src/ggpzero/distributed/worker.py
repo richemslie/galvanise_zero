@@ -126,6 +126,7 @@ class Worker(Broker):
 
     def on_train_request(self, server, msg):
         log.warning("request to train %s" % msg)
+
         nn_train.parse_and_train(msg)
         return msgs.Ok("network_trained")
 

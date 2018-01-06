@@ -311,8 +311,7 @@ class ServerBroker(Broker):
         m.generation_prefix = self.conf.generation_prefix
         m.store_path = self.conf.store_path
 
-        # every 5 steps, force a full training from scratch
-        m.use_previous = self.conf.retrain_network if next_step % 5 != 0 else False
+        m.use_previous = self.conf.retrain_network
 
         m.next_step = next_step
         m.overwrite_existing = False
@@ -321,7 +320,7 @@ class ServerBroker(Broker):
         m.epochs = self.conf.epochs
         m.max_sample_count = self.conf.max_sample_count
         m.starting_step = self.conf.starting_step
-        m.drop_dupes_count = 3
+        m.drop_dupes_count = self.conf.drop_dupes_count
 
         # send out message to train
         log.info("sent to the_nn_trainer")

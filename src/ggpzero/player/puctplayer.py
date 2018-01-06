@@ -116,20 +116,24 @@ class PUCTEvaluator(object):
         self.choose = getattr(self, self.conf.choose)
 
         self.identifier = "%s_%s_%s" % (self.conf.name, self.conf.playouts_per_iteration, conf.generation)
+        self.sm = None
 
     def init(self, game_info):
         self.game_info = game_info
-        self.sm = game_info.get_sm()
+
+        # HACK XXXX hack memory leak fix...
+        if self.sm is None:
+            self.sm = game_info.get_sm()
+
+            # cache joint move, and basestate
+            self.joint_move = self.sm.get_joint_move()
+            self.basestate_expand_node = self.sm.new_base_state()
+            self.basestate_expanded_node = self.sm.new_base_state()
 
         # This is a performance hack, where once we get the nn/config we don't re-get it.
         # If latest is set will always get the latest
         if self.conf.generation == 'latest' or self.nn is None:
             self.nn = get_manager().load_network(game_info.game, self.conf.generation)
-
-        # cache joint move, and basestate
-        self.joint_move = self.sm.get_joint_move()
-        self.basestate_expand_node = self.sm.new_base_state()
-        self.basestate_expanded_node = self.sm.new_base_state()
 
         def get_noop_idx(actions):
             for idx, a in enumerate(actions):
@@ -149,11 +153,15 @@ class PUCTEvaluator(object):
             start_pos = len(self.game_info.model.actions[0])
 
         total = 0
+        assert len(node.children)
         for c in node.children:
             ridx = start_pos + c.legal
             c.policy_prob = pred_policy[ridx]
 
             total += c.policy_prob
+
+        if total < 0.0001:
+            total = 1.0
 
         # normalise
         for c in node.children:
@@ -178,8 +186,6 @@ class PUCTEvaluator(object):
             return
 
         states = [n.state for n in actual_nodes_to_predict]
-        lead_role_indexs = [n.lead_role_index for n in actual_nodes_to_predict]
-
         result = self.nn.predict_n(states)
 
         for node, (pred_policy, pred_final_score) in zip(actual_nodes_to_predict,
@@ -317,6 +323,10 @@ class PUCTEvaluator(object):
             if current.is_terminal:
                 scores = [s / 100.0 for s in current.terminal_scores]
                 break
+
+            if len(current.children) == 0:
+                print current.state
+                raise Exception("MESSED UP - state %s" % str(current.state))
 
             child = self.select_child(current, len(path) - 1)
 
@@ -676,18 +686,15 @@ def config_template(generation, name="default"):
                                        playouts_per_iteration=800,
                                        playouts_per_iteration_noop=800,
                                        expand_root=0,
-                                       dirichlet_noise_alpha=-1,
+                                       dirichlet_noise_alpha=0.03,
+
                                        puct_before_expansions=3,
-                                       puct_before_root_expansions=6,
+                                       puct_before_root_expansions=5,
                                        puct_constant_before=3.0,
                                        puct_constant_after=0.75,
-                                       random_scale=0.5,
-                                       temperature=1.0,
-                                       depth_temperature_start=4,
-                                       depth_temperature_increment=0.5,
-                                       depth_temperature_stop=8,
+
                                        choose="choose_top_visits",
-                                       max_dump_depth=1),
+                                       max_dump_depth=2),
 
         test=confs.PUCTPlayerConfig(name="test",
                                     verbose=True,
@@ -704,14 +711,12 @@ def config_template(generation, name="default"):
                                     choose="choose_top_visits",
                                     max_dump_depth=2),
 
-
         policy=confs.PUCTPlayerConfig(name="policy-test",
                                       verbose=True,
                                       playouts_per_iteration=0,
                                       playouts_per_iteration_noop=0,
                                       expand_root=0,
                                       dirichlet_noise_alpha=-1,
-
                                       choose="choose_top_visits",
                                       max_dump_depth=1),
 
@@ -740,11 +745,18 @@ def config_template(generation, name="default"):
                                        puct_constant_before=3.0,
                                        puct_constant_after=0.75,
 
-                                       choose="choose_top_visits",
+                                       temperature=1.0,
+                                       depth_temperature_start=4,
+                                       depth_temperature_increment=0.5,
+                                       depth_temperature_stop=12,
+                                       random_scale=0.75,
+
+                                       choose="choose_temperature",
                                        max_dump_depth=2))
     conf = configs[name]
     conf.generation = generation
     return conf
+
 
 def main():
     from ggpzero.util.keras import init

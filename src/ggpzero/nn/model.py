@@ -174,11 +174,11 @@ def get_network_model(conf):
     flat = klayers.Flatten()(to_flatten)
 
     # output: value head
-    if conf.dropout_rate_value > 0:
-        flat = klayers.Dropout(conf.dropout_rate_value)(flat)
-
     hidden = klayers.Dense(conf.value_hidden_size, activation="relu",
                            name="value_hidden_layer", **extra_params)(flat)
+
+    if conf.dropout_rate_value > 0:
+        hidden = klayers.Dropout(conf.dropout_rate_value)(hidden)
 
     value_head = klayers.Dense(conf.role_count,
                                activation="sigmoid", name="value", **extra_params)(hidden)

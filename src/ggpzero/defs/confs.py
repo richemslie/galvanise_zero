@@ -116,6 +116,7 @@ class ServerConfig(object):
     epochs = attr.ib(10)
 
     max_sample_count = attr.ib(250000)
+    drop_dupes_count = attr.ib(3)
 
     # this is applied even if max_sample_count can't be reached
     starting_step = attr.ib(0)
@@ -138,10 +139,14 @@ class WorkerConfig(object):
 # XXX not sure this should be here?
 @register_attrs
 class TrainData(object):
-    inputs = attr.ib()
-    outputs = attr.ib()
-    validation_inputs = attr.ib()
-    validation_outputs = attr.ib()
+    input_channels = attr.ib(attr.Factory(list))
+    output_policies = attr.ib(attr.Factory(list))
+    output_final_scores = attr.ib(attr.Factory(list))
+
+    validation_input_channels = attr.ib(attr.Factory(list))
+    validation_output_policies = attr.ib(attr.Factory(list))
+    validation_output_final_scores = attr.ib(attr.Factory(list))
+
     batch_size = attr.ib(512)
     epochs = attr.ib(24)
 

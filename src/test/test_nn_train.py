@@ -260,18 +260,38 @@ def train(train_conf):
 def retrain_config():
     conf = msgs.TrainNNRequest("breakthrough")
 
-    conf.network_size = "normal"
-    conf.generation_prefix = "v5"
+    conf.network_size = "medium-small"
+    conf.generation_prefix = "v5x"
     conf.store_path = os.path.join(os.environ["GGPZERO_PATH"], "data", "breakthrough", "v5")
 
-    conf.use_previous = True
+    conf.use_previous = False
     conf.next_step = 79
 
     conf.validation_split = 0.9
-    conf.batch_size = 128
+    conf.batch_size = 256
     conf.epochs = 30
     conf.max_sample_count = 300000
     conf.starting_step = 12
+    conf.drop_dupes_count = 3
+
+    return conf
+
+
+def retrain_config():
+    conf = msgs.TrainNNRequest("reversi")
+
+    conf.network_size = "medium-small"
+    conf.generation_prefix = "v6_.1"
+    conf.store_path = os.path.join(os.environ["GGPZERO_PATH"], "data", "reversi", "v6")
+
+    conf.use_previous = False
+    conf.next_step = 53
+
+    conf.validation_split = 0.9
+    conf.batch_size = 256
+    conf.epochs = 30
+    conf.max_sample_count = 250000
+    conf.starting_step = 10
     conf.drop_dupes_count = 3
 
     return conf
