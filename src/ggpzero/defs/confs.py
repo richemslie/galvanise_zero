@@ -53,6 +53,7 @@ class PolicyPlayerConfig(object):
     temperature = attr.ib(-1)
     depth_temperature_start = attr.ib(5)
     depth_temperature_increment = attr.ib(0.5)
+    depth_temperature_stop = attr.ib(-1)
 
 
 @register_attrs

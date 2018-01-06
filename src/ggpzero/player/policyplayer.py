@@ -31,6 +31,15 @@ class PolicyPlayer(MatchPlayer):
         if self.conf.generation == 'latest' or self.nn is None:
             self.nn = get_manager().load_network(game_info.game, self.conf.generation)
 
+    def do_temperature(self):
+        if self.conf.temperature < 0:
+            return False
+
+        if self.conf.depth_temperature_stop < -1:
+            return True
+
+        return self.match.game_depth < self.conf.depth_temperature_stop
+
     def policy_to_actions(self, policy):
         # only do our moves
         ls = self.match.sm.get_legal_state(self.match.our_role_index)
@@ -59,7 +68,8 @@ class PolicyPlayer(MatchPlayer):
 
         # apply temperature
         c = self.conf
-        if c.temperature > 0:
+
+        if self.do_temperature():
             before_actions = actions
             depth = (self.match.game_depth - c.depth_temperature_start) * c.depth_temperature_increment
             # XXX add 10 (the max temperature) to attrs
@@ -107,7 +117,10 @@ class PolicyPlayer(MatchPlayer):
         policy, network_score = self.nn.predict_1(state)
         normalise_actions = self.policy_to_actions(policy)
 
-        expected_prob = random.random() * self.conf.random_scale
+        if self.do_temperature():
+            expected_prob = random.random() * self.conf.random_scale
+        else:
+            expected_prob = 0.0001
 
         seen_prob = 0
         pos = 0
@@ -149,17 +162,13 @@ def main():
         'default' : confs.PolicyPlayerConfig(name="default", generation=generation,
                                              temperature=-1, random_scale=0.001),
 
-        'abc' : confs.PolicyPlayerConfig(name="abc", generation=generation,
-                                         random_scale=0.85,
-                                         temperature=1.0,
-                                         depth_temperature_start=6,
-                                         depth_temperature_increment=0.25),
-
-        'score' : confs.PolicyPlayerConfig(name="score", generation=generation,
-                                           random_scale=0.75,
-                                           temperature=0.75,
-                                           depth_temperature_start=6,
-                                           depth_temperature_increment=0.2)
+        'policytemp' : confs.PolicyPlayerConfig(name="policytemp",
+                                                generation=generation,
+                                                temperature=1.0,
+                                                depth_temperature_start=5,
+                                                depth_temperature_increment=0.1,
+                                                depth_temperature_stop=10,
+                                                random_scale=0.75,)
     }
 
     player = PolicyPlayer(some_confs[conf_name])
