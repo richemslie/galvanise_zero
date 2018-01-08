@@ -1,5 +1,5 @@
 import time
-from collections import deque
+from collections import deque, Counter
 
 import greenlet
 
@@ -7,7 +7,8 @@ from ggpzero.nn.manager import get_manager
 
 
 class NetworkScheduler(object):
-    ''' proxies a network to so that can use predict_n() which async (like really async - say goodbye to the stack '''
+    ''' proxies a network to so that can use predict_n() which async (like really async - say
+        goodbye to the stack) '''
 
     def __init__(self, nn, batch_size=256):
         self.nn = nn
@@ -25,6 +26,7 @@ class NetworkScheduler(object):
         self.acc_python_time = 0
         self.acc_predict_time = 0
         self.num_predictions = 0
+        self.predict_sizes = Counter()
 
     def add_runnable(self, fn, arg=None):
         self.runnables.append((greenlet.greenlet(fn), arg))
@@ -52,6 +54,8 @@ class NetworkScheduler(object):
                 self.acc_python_time += self.before_time - self.after_time
 
             self.num_predictions += len(next_states)
+            self.predict_sizes[len(next_states)] += 1
+
             results += self.nn.predict_n(next_states)
 
             self.after_time = time.time()
@@ -87,6 +91,7 @@ class NetworkScheduler(object):
         self.before_time = self.after_time = -1
         self.acc_predict_time = self.acc_python_time = 0
         self.num_predictions = 0
+        self.predict_sizes.clear()
 
         self.main = greenlet.getcurrent()
 
