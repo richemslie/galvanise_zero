@@ -309,9 +309,59 @@ class Hex(GdlBasesTransformer):
     pieces = ['red', 'blue']
 
 
+class BreakthroughSmall(GdlBasesTransformer):
+    game = "breakthroughSmall"
+    x_cords = "1 2 3 4 5 6".split()
+    y_cords = "1 2 3 4 5 6".split()
+
+    base_term = "cell"
+    x_term = 1
+    y_term = 2
+    piece_term = 3
+
+    pieces = ['white', 'black']
+    control_base_term = 'control'
+
+
+# class Connect5(GdlBasesTransformer):
+#     game = "connect5"
+#     x_cords = "a b c d e f g h".split()
+#     y_cords = "a b c d e f g h".split()
+#     base_term = "cell"
+#     pieces = ['x', 'o']
+
+
+# class CitTacEot(GdlBasesTransformer):
+#     game = "cittaceot"
+#     x_cords = "1 2 3 4 5".split()
+#     y_cords = "1 2 3 4 5".split()
+#     base_term = "cell"
+#     pieces = ['x', 'o']
+
+
+# class EscortLatchBack(GdlBasesTransformer):
+#     game = "escortLatch"
+#     x_cords = "a b c d e f g h".split()
+#     y_cords = "1 2 3 4 5 6 7 8".split()
+#     base_term = "cell"
+#     pieces = ['wp', 'wk', 'bp', 'bk']
+
+
+# class Checkers(GdlBasesTransformer):
+#     game = "checkers"
+#     x_cords = "a b c d e f g h".split()
+#     y_cords = "1 2 3 4 5 6 7 8".split()
+#     base_term = "cell"
+#     pieces = ['bp', 'b', 'bk', 'wk', 'wp']
+
+
+# class BreakthroughWalls(GdlBasesTransformer):
+#     game = "breakthroughWalls"
+
+
 ###############################################################################
 
 def init():
     from ggpzero.nn.manager import get_manager
-    for clz in (AtariGo_7x7, Breakthrough, Reversi, Connect4, Hex):
+    for clz in (AtariGo_7x7, BreakthroughSmall, Breakthrough, Reversi, Connect4, Hex):
         get_manager().register_transformer(clz)
