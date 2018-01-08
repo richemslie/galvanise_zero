@@ -23,7 +23,7 @@ def setup():
 
 def test_config():
     man = get_manager()
-    for game in "breakthrough connectFour reversi".split():
+    for game in "breakthroughSmall breakthrough connectFour reversi".split():
 
         # lookup game in manager
         transformer = man.get_transformer(game)
@@ -63,7 +63,7 @@ def test_config():
 def test_net_create():
     man = get_manager()
 
-    for game in "breakthrough reversi".split():
+    for game in "breakthroughSmall breakthrough reversi".split():
         # create a nn
         model_conf = templates.nn_model_config_template(game)
         nn = man.create_new_network(game, model_conf)
@@ -84,9 +84,9 @@ def test_net_create():
 def test_net_sizes():
     man = get_manager()
 
-    for game in "breakthrough reversi".split():
+    for game in "breakthroughSmall breakthrough reversi".split():
         # create a nn
-        for size in "tiny smaller small normal large".split():
+        for size in "tiny smaller small medium large".split():
             print
             print size
             model_conf = templates.nn_model_config_template(game, size)
@@ -102,7 +102,7 @@ def test_net_sizes_with_l2():
 
     for game in "breakthrough reversi".split():
         # create a nn
-        for size in "tiny small normal large".split():
+        for size in "tiny small medium large".split():
             print
             print size
             model_conf = templates.nn_model_config_template(game, size)
