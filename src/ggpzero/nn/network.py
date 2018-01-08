@@ -227,7 +227,7 @@ class NeuralNetwork(object):
 
         # loss is much less on value.  it overfits really fast.
         self.keras_model.compile(loss=loss, optimizer=optimizer,
-                                 loss_weights=[1.0, 0.1],
+                                 loss_weights=[1.0, 0.01],
                                  metrics=["acc", top_3_acc])
 
     def train(self, train_conf, retraining=False):
