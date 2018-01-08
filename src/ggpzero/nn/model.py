@@ -122,12 +122,12 @@ def get_network_model(conf):
     # inputs:
     if is_channels_first():
         inputs_board = klayers.Input(shape=(conf.input_channels,
-                                            conf.input_rows,
-                                            conf.input_columns),
+                                            conf.input_columns,
+                                            conf.input_rows),
                                      name="inputs_board")
     else:
-        inputs_board = klayers.Input(shape=(conf.input_rows,
-                                            conf.input_columns,
+        inputs_board = klayers.Input(shape=(conf.input_columns,
+                                            conf.input_rows,
                                             conf.input_channels),
                                      name="inputs_board")
 
