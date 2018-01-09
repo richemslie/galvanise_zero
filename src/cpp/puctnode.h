@@ -33,11 +33,11 @@ namespace GGPZero {
 
         uint16_t num_children;
 
+        // XXX init - propagate through code
+        uint16_t num_children_expanded;
+
         // whether this node has a finalised scores or not (can also release children if so)
         bool is_finalised;
-
-        // flag to indicate whether node has had nn predictions on it
-        bool is_predicted;
 
         // we don't really know which player it really it is for each node, but this is our best guess
         int16_t lead_role_index;
@@ -121,7 +121,6 @@ namespace GGPZero {
         }
 
         static PuctNode* create(int role_count,
-                                int our_role_index,
                                 const GGPLib::BaseState* base_state,
                                 GGPLib::StateMachineInterface* sm);
 

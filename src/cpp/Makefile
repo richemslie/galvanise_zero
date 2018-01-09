@@ -12,10 +12,11 @@ CFLAGS = -MMD -MP -g -Wall -Werror -Woverloaded-virtual -Wnon-virtual-dtor -fno-
 LDFLAGS = -g -MMD -MP -Wall -Werror -Woverloaded-virtual -Wnon-virtual-dtor -fno-strict-aliasing -O2 -std=c++11
 
 
-SRCS = puctnode.cpp pucteval.cpp ggpzero_interface.cpp
+SRCS += puctnode.cpp pucteval.cpp supervisor.cpp bases.cpp ggpzero_interface.cpp
+SRCS += greenlet/greenlet.cpp greenlet/greenlet-sys.cpp
 
 CORE_OBJS = $(patsubst %.cpp, %.o, $(SRCS))
-OBJS := $(CORE_OBJS)
+OBJS := $(CORE_OBJS) greenlet/greenlet-asm.o
 DEPS=$(SRCS:.cpp=.d)
 
 # Top level
@@ -25,7 +26,10 @@ fresh : clean all
 
 # Compiles
 ggpzero_interface.so: $(OBJS)
-	$(CPP) -shared $(CORE_OBJS) $(LDFLAGS) $(LIB_PATHS) -pthread -lrt -lpython2.7 -lggplib_cpp -o ggpzero_interface.so
+	$(CPP) -shared $(OBJS) $(LDFLAGS) $(LIB_PATHS) -pthread -lrt -lpython2.7 -lggplib_cpp -o ggpzero_interface.so
+
+greenlet/greenlet-asm.o: greenlet/greenlet-asm.S
+	gcc -fPIC -c -o $@ $<
 
 %.o : %.cpp
 	$(CPP) $(INCLUDE_PATHS) $(CFLAGS) -c -o $@ $<

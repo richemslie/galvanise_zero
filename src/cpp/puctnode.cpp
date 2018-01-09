@@ -84,7 +84,6 @@ static PuctNode* createNode(const BaseState* base_state,
     node->num_children = num_children;
 
     node->is_finalised = is_finalised;
-    node->is_predicted = false;
 
     node->lead_role_index = lead_role_index;
 
@@ -148,15 +147,14 @@ static int initialiseChildHelper(PuctNode* node, int role_index, int child_index
 
 // This is a static method.
 PuctNode* PuctNode::create(int role_count,
-                           int our_role_index,
                            const BaseState* base_state,
                            StateMachineInterface* sm) {
 
+    int lead_role_index = 0;
     sm->updateBases(base_state);
 
     bool is_finalised = true;
     int total_children = 0;
-    int lead_role_index = our_role_index;
     if (!sm->isTerminal()) {
 
         total_children = 1;

@@ -1,13 +1,19 @@
+/* Start out as a simple as co-routine implementation.  Optimize later. */
+
 #pragma once
 
-#include <statemachine/basestate.h>
-#include <statemachine/jointmove.h>
-#include <statemachine/statemachine.h>
-#include <player/path.h>
-
 #include "puctnode.h"
+#include "rng.h"
+
+#include <statemachine/basestate.h>
+#include <statemachine/statemachine.h>
+
+#include <vector>
 
 namespace GGPZero {
+
+    // forwards
+    class Supervisor;
 
     enum class ChooseFn {
         choose_top_visits, choose_converge_check, choose_temperature
@@ -15,11 +21,8 @@ namespace GGPZero {
 
     struct PUCTEvalConfig {
         std::string name;
-        bool vebose;
+        bool verbose;
         std::string generation;
-
-        int playouts_per_iteration;
-        int playouts_per_iteration_noop;
 
         int puct_before_expansions;
         int puct_before_root_expansions;
@@ -30,7 +33,6 @@ namespace GGPZero {
         double dirichlet_noise_pct;
         double dirichlet_noise_alpha;
 
-        int expand_root;
         ChooseFn choose;
         int max_dump_depth;
 
@@ -39,71 +41,64 @@ namespace GGPZero {
         int depth_temperature_start;
         double depth_temperature_increment;
         int depth_temperature_stop;
-
-
-        // these are indexes into policy array
-        int role0_start_index;
-        int role1_start_index;
-
-        // these are passed in
-        int role0_noop_legal;
-        int role1_noop_legal;
-
     };
 
-    class PUCTEvaluator {
+    class PuctEvaluator {
     public:
-        PUCTEvaluator(GGPLib::StateMachineInterface* sm, PUCTEvalConfig* config);
-        virtual ~PUCTEvaluator();
+        PuctEvaluator(PUCTEvalConfig*, Supervisor* supervisor);
+        virtual ~PuctEvaluator();
 
     private:
-        PuctNode* createNode(const GGPLib::BaseState* bs);
+        void addNode(PuctNode* new_node);
         void removeNode(PuctNode* n);
 
-        void expandChild(PuctNodeChild* child);
+        void expandChild(PuctNode* parent, PuctNodeChild* child);
+        PuctNode* createNode(GGPLib::BaseState* state);
 
         // set dirichlet noise on node
-        void setDirichletNoise(PuctNode* node, int depth);
+        bool setDirichletNoise(int depth);
         double getPuctConstant(PuctNode* node) const;
 
     public:
         void updateNodePolicy(PuctNode* node, float* array);
         // do_predictions
 
-        void selectChild(PuctNode* node, int depth);
+        PuctNodeChild* selectChild(PuctNode* node, int depth);
 
-        void backPropagate(GGPLib::Path::Selected& path,
-                           double* new_scores);
-        int treePlayout(PuctNode* node);
-        void playoutLoop(PuctNode* node, int max_iterations);
+        void backPropagate(double* new_scores);
+        int treePlayout();
+        void playoutLoop(int max_iterations);
 
-        void logDebug(double total_time_seconds);
-        void establishRoot(GGPLib::BaseState* current_state, int game_depth);
-        void advanceMove(PuctNodeChild* next);
+        PuctNode* fastApplyMove(PuctNodeChild* next);
+        void reset();
+
+        PuctNode* establishRoot(GGPLib::BaseState* current_state, int game_depth);
+        PuctNodeChild* onNextNove(int max_iterations);
+
+        void logDebug(PuctNodeChild* choice);
 
         PuctNodeChild* chooseTopVisits();
         PuctNodeChild* chooseTemperature();
 
     private:
-        GGPLib::StateMachineInterface* sm;
-        PUCTEvalConfig* conf;
+        Supervisor* supervisor;
+        PUCTEvalConfig* config;
+        int role_count;
         std::string identifier;
 
         int game_depth;
 
-        // XXX might not need all these
-        GGPLib::JointMove* joint_move;
         GGPLib::BaseState* basestate_expand_node;
-        GGPLib::BaseState* basestate_expanded_node;
 
         // tree stuff
         PuctNode* root;
         int number_of_nodes;
         long node_allocated_memory;
 
-        GGPLib::Path::Selected path;
+        std::vector <PuctNode*> path;
 
-        // XXX better random K273::Random random;
+        // random number generator
+        xoroshiro64plus32 random;
     };
 
 }
