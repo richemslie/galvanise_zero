@@ -5,6 +5,8 @@
 #include "puctnode.h"
 #include "rng.h"
 
+#include "greenlet/greenlet.h"
+
 #include <statemachine/basestate.h>
 #include <statemachine/statemachine.h>
 
@@ -13,7 +15,7 @@
 namespace GGPZero {
 
     // forwards
-    class Supervisor;
+    class SupervisorBase;
 
     enum class ChooseFn {
         choose_top_visits, choose_converge_check, choose_temperature
@@ -45,7 +47,7 @@ namespace GGPZero {
 
     class PuctEvaluator {
     public:
-        PuctEvaluator(PUCTEvalConfig*, Supervisor* supervisor);
+        PuctEvaluator(PUCTEvalConfig*, SupervisorBase* supervisor);
         virtual ~PuctEvaluator();
 
     private:
@@ -53,13 +55,17 @@ namespace GGPZero {
         void removeNode(PuctNode* n);
 
         void expandChild(PuctNode* parent, PuctNodeChild* child);
-        PuctNode* createNode(GGPLib::BaseState* state);
+        PuctNode* createNode(const GGPLib::BaseState* state);
 
         // set dirichlet noise on node
         bool setDirichletNoise(int depth);
         double getPuctConstant(PuctNode* node) const;
 
     public:
+        void setGreenlet(greenlet* self) {
+            this->ourself = self;
+        }
+
         void updateNodePolicy(PuctNode* node, float* array);
         // do_predictions
 
@@ -69,26 +75,25 @@ namespace GGPZero {
         int treePlayout();
         void playoutLoop(int max_iterations);
 
-        PuctNode* fastApplyMove(PuctNodeChild* next);
         void reset();
+        PuctNode* fastApplyMove(PuctNodeChild* next);
 
-        PuctNode* establishRoot(GGPLib::BaseState* current_state, int game_depth);
+        PuctNode* establishRoot(const GGPLib::BaseState* current_state, int game_depth);
         PuctNodeChild* onNextNove(int max_iterations);
 
-        void logDebug(PuctNodeChild* choice);
+        void logDebug();
 
-        PuctNodeChild* chooseTopVisits();
-        PuctNodeChild* chooseTemperature();
+        PuctNodeChild* chooseTopVisits(PuctNode* node);
+        PuctNodeChild* chooseTemperature(PuctNode* node);
 
     private:
-        Supervisor* supervisor;
+        SupervisorBase* supervisor;
         PUCTEvalConfig* config;
+        greenlet* ourself;
         int role_count;
         std::string identifier;
 
         int game_depth;
-
-        GGPLib::BaseState* basestate_expand_node;
 
         // tree stuff
         PuctNode* root;

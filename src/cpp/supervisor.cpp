@@ -11,10 +11,20 @@ struct Conf {
     int role1_start_index;
 };
 
-Supervisor::Supervisor(GGPLib::StateMachineInterface* sm, GdlBasesTransformer* transformer) :
-    sm(sm),
-    transformer(transformer) {
+Supervisor::Supervisor(GGPLib::StateMachineInterface* sm,
+                       GdlBasesTransformer* transformer,
+                       int batch_size) :
+    SupervisorBase(sm, transformer, batch_size),
+    basestate_expand_node(nullptr),
+    running(false),
+    num_samples(false),
+    predictions_ready(false),
+    predictions_in_progress(false) {
     this->basestate_expand_node = this->sm->newBaseState();
+}
+
+Supervisor::~Supervisor() {
+    //XXX
 }
 
 PuctNode* Supervisor::createNode(PuctEvaluator* pe, const GGPLib::BaseState* bs) {
@@ -37,10 +47,10 @@ PuctNode* Supervisor::createNode(PuctEvaluator* pe, const GGPLib::BaseState* bs)
     //  * convert it to channels
     //  * save the info
     //  * kansas is going bye bye
-    this->requestors.push_back(pe);
+    this->current_ctx->requestors.push_back(pe);
     this->transformer->toChannels(bs,
                                   std::vector <GGPLib::BaseState*>(),
-                                  this->channel_buffer + this->buffer_next_index);
+                                  this->current_ctx->channel_buffer + this->current_ctx->buffer_next_index);
 
     float* prediction_array = nullptr;  // ZZZ this->master->switch_to();
 
@@ -55,7 +65,7 @@ PuctNode* Supervisor::createNode(PuctEvaluator* pe, const GGPLib::BaseState* bs)
 
     for (int ii=0; ii<new_node->num_children; ii++) {
         PuctNodeChild* c = new_node->getNodeChild(this->sm->getRoleCount(), ii);
-        c->policy_prob = *(prediction_array + c->legal);
+        c->policy_prob = *(prediction_array + c->move.get(new_node->lead_role_index));
         total_prediction += c->policy_prob;
     }
 
@@ -79,7 +89,7 @@ PuctNode* Supervisor::createNode(PuctEvaluator* pe, const GGPLib::BaseState* bs)
 
 
 
-PuctNode* Supervisor::expandChild(PuctEvaluator* pe, PuctNode* parent, PuctNodeChild* child) {
+PuctNode* Supervisor::expandChild(PuctEvaluator* pe, const PuctNode* parent, const PuctNodeChild* child) {
     // update the statemachine
     this->sm->updateBases(parent->getBaseState());
     this->sm->nextState(&child->move, this->basestate_expand_node);

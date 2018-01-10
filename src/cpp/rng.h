@@ -50,6 +50,7 @@
 
 
 #include <cstdint>
+#include <k273/util.h>
 
 namespace xoroshiro_detail {
 
@@ -71,13 +72,10 @@ public:
     static constexpr result_type min() { return 0; }
     static constexpr result_type max() { return ~ result_type(0); }
 
-    xoroshiro(itype s0 = itype(0xc1f651c67c62c6e0),
-              itype s1 = itype(0x30d89576f866ac9f))
-        // Easter-egg seed value for Xoroshiro128+ to remind users that
-        // they should seed their PRNGs properly.
-        : s0_(s0), s1_((s0 || s1) ? s1 : 1)
-    {
-            // Nothing (else) to do.
+    xoroshiro() {
+        itype seed = K273::rdtsc() + K273::rdtsc() + K273::rdtsc();
+        s0_ = itype(0xc1f651c67c62c6e0) * seed;
+        s1_ = s0_ | itype(0x30d89576f866ac9f);
     }
 
     rtype getWithMax(const rtype max_num) {

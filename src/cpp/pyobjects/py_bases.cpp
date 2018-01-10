@@ -25,17 +25,6 @@ struct PyObject_GdlBasesTransformerWrapper {
     GdlBasesTransformer* impl;
 };
 
-// static PyObject* GdlBasesTransformerWrapper_add(PyObject_GdlBasesTransformerWrapper* self, PyObject* args) {
-//     static long data[4] = {0,1,2,3};
-
-//     const int ND = 2;
-//     const int SIZE = 2;
-//     npy_intp dims[2]{SIZE, SIZE};
-
-//     return PyArray_SimpleNewFromData(ND, dims, NPY_INT64, &data);
-// }
-
-
 static PyObject* GdlBasesTransformerWrapper_addBaseInfo(PyObject_GdlBasesTransformerWrapper* self, PyObject* args) {
     int arg0, arg1;
     if (! ::PyArg_ParseTuple(args, "ii", &arg0, &arg1)) {
@@ -59,7 +48,7 @@ static PyObject* GdlBasesTransformerWrapper_addControlState(PyObject_GdlBasesTra
 }
 
 static PyObject* GdlBasesTransformerWrapper_test(PyObject_GdlBasesTransformerWrapper* self, PyObject* args) {
-    const int MOVES = 100;
+    const int MOVES = 4096;
     static float* array_buf = nullptr;
 
     if (array_buf == nullptr) {
@@ -86,32 +75,36 @@ static PyObject* GdlBasesTransformerWrapper_test(PyObject_GdlBasesTransformerWra
     // four random moves
     xoroshiro32plus16 random;
 
-    int game_depth = 0;
-    for (int kk=0; kk<MOVES; kk++) {
+    int total_depth = 0;
+    for (int jj=0; jj<25; jj++) {
+        sm->reset();
 
-        if (sm->isTerminal()) {
-            break;
+        for (int kk=0; kk<MOVES; kk++) {
+
+            if (sm->isTerminal()) {
+                break;
+            }
+
+            // populate joint move
+            for (int ii=0; ii<sm->getRoleCount(); ii++) {
+                const GGPLib::LegalState* ls = sm->getLegalState(ii);
+                int x = random.getWithMax(ls->getCount());
+                int choice = ls->getLegal(x);
+                joint_move->set(ii, choice);
+            }
+
+            sm->nextState(joint_move, other);
+            sm->updateBases(other);
+
+            self->impl->toChannels(other, dummy, pt_array_buf);
+            pt_array_buf += self->impl->totalSize();
+            total_depth++;
         }
-
-        // populate joint move
-        for (int ii=0; ii<sm->getRoleCount(); ii++) {
-            const GGPLib::LegalState* ls = sm->getLegalState(ii);
-            int x = random.getWithMax(ls->getCount());
-            int choice = ls->getLegal(x);
-            joint_move->set(ii, choice);
-        }
-
-        sm->nextState(joint_move, other);
-        sm->updateBases(other);
-
-        self->impl->toChannels(other, dummy, pt_array_buf);
-        pt_array_buf += self->impl->totalSize();
-        game_depth++;
     }
 
 
     const int ND = 1;
-    npy_intp dims[1]{self->impl->totalSize() * game_depth};
+    npy_intp dims[1]{self->impl->totalSize() * total_depth};
 
     return PyArray_SimpleNewFromData(ND, dims, NPY_FLOAT, array_buf);
 }

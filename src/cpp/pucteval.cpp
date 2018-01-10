@@ -16,9 +16,10 @@ using namespace GGPZero;
 
 ///////////////////////////////////////////////////////////////////////////////
 
-PuctEvaluator::PuctEvaluator(PUCTEvalConfig* config, Supervisor* supervisor) :
+PuctEvaluator::PuctEvaluator(PUCTEvalConfig* config, SupervisorBase* supervisor) :
     supervisor(supervisor),
     config(config),
+    ourself(nullptr),
     role_count(supervisor->getRoleCount()),
     identifier("PuctEvaluator"),
     game_depth(0),
@@ -28,7 +29,6 @@ PuctEvaluator::PuctEvaluator(PUCTEvalConfig* config, Supervisor* supervisor) :
 }
 
 PuctEvaluator::~PuctEvaluator() {
-    free(this->basestate_expand_node);
 
     if (this->root != nullptr) {
         this->removeNode(this->root);
@@ -74,9 +74,10 @@ void PuctEvaluator::expandChild(PuctNode* parent, PuctNodeChild* child) {
     PuctNode* new_node = this->supervisor->expandChild(this, parent, child);
     this->addNode(new_node);
     child->to_node = new_node;
+    parent->num_children_expanded++;
 }
 
-PuctNode* PuctEvaluator::createNode(GGPLib::BaseState* state) {
+PuctNode* PuctEvaluator::createNode(const GGPLib::BaseState* state) {
     PuctNode* new_node = this->supervisor->createNode(this, state);
     this->addNode(new_node);
     return new_node;
@@ -255,7 +256,7 @@ void PuctEvaluator::playoutLoop(int max_iterations) {
 
     while (iterations < max_iterations) {
         int depth = this->treePlayout();
-        int max_depth = std::max(depth, max_depth);
+        max_depth = std::max(depth, max_depth);
         total_depth += depth;
 
         iterations++;
@@ -298,11 +299,13 @@ PuctNode* PuctEvaluator::fastApplyMove(PuctNodeChild* next) {
 
 void PuctEvaluator::reset() {
     // free all
-    this->removeNode(this->root);
-    this->root = nullptr;
+    if (this->root != nullptr) {
+        this->removeNode(this->root);
+        this->root = nullptr;
+    }
 }
 
-PuctNode* PuctEvaluator::establishRoot(GGPLib::BaseState* current_state, int game_depth) {
+PuctNode* PuctEvaluator::establishRoot(const GGPLib::BaseState* current_state, int game_depth) {
     // needed for temperature
     this->game_depth = game_depth;
 
@@ -321,25 +324,48 @@ PuctNode* PuctEvaluator::establishRoot(GGPLib::BaseState* current_state, int gam
 PuctNodeChild* PuctEvaluator::onNextNove(int max_iterations) {
     this->playoutLoop(max_iterations);
 
-    PuctNodeChild* choice = this->chooseTopVisits();
+    PuctNodeChild* choice = this->chooseTopVisits(this->root);
 
     if (this->config->verbose) {
-        this->logDebug(choice);
+        this->logDebug();
     }
 
     return choice;
 }
 
-void PuctEvaluator::logDebug(PuctNodeChild* choice) {
-    // XXX
+void PuctEvaluator::logDebug() {
+    PuctNode* cur = this->root;
+    for (int ii=0; ii<this->config->max_dump_depth; ii++) {
+        std::string indent = "";
+        for (int jj=ii-1; jj>=0; jj--) {
+            if (jj > 0) {
+                indent += "    ";
+            } else {
+                indent += ".   ";
+            }
+        }
+
+        PuctNodeChild* next_choice;
+        if (cur->num_children == 0) {
+            next_choice = nullptr;
+        } else {
+            next_choice = this->chooseTopVisits(cur);
+        }
+
+        this->supervisor->dumpNode(cur, next_choice, indent);
+        cur = next_choice->to_node;
+        if (cur == nullptr) {
+            break;
+        }
+    }
 }
 
-PuctNodeChild* PuctEvaluator::chooseTopVisits() {
+PuctNodeChild* PuctEvaluator::chooseTopVisits(PuctNode* node) {
     int best_visits = -1;
     PuctNodeChild* selection = nullptr;
 
-    for (int ii=0; ii<this->root->num_children; ii++) {
-        PuctNodeChild* c = this->root->getNodeChild(this->role_count, ii);
+    for (int ii=0; ii<node->num_children; ii++) {
+        PuctNodeChild* c = node->getNodeChild(this->role_count, ii);
 
         if (c->to_node != nullptr && c->to_node->visits > best_visits) {
             best_visits = c->to_node->visits;
@@ -349,7 +375,7 @@ PuctNodeChild* PuctEvaluator::chooseTopVisits() {
 
     // failsafe - random
     if (selection == nullptr) {
-        selection = this->root->getNodeChild(this->role_count, this->random.getWithMax(this->root->num_children));
+        selection = node->getNodeChild(this->role_count, this->random.getWithMax(node->num_children));
     }
 
     return selection;

@@ -1,5 +1,4 @@
 #include "pucteval.h"
-#include "player/node.h"
 
 #include "statemachine/statemachine.h"
 #include "statemachine/jointmove.h"
@@ -9,6 +8,8 @@
 #include <k273/exception.h>
 #include <k273/logging.h>
 
+#include <vector>
+#include <algorithm>
 
 using namespace std;
 using namespace GGPLib;
@@ -42,7 +43,7 @@ static string scoreString(const PuctNode* node, StateMachineInterface* sm) {
             res += " ";
         }
 
-        res += K273::fmtString("%.4f", node->getCurrentScore(ii));
+        res += K273::fmtString("%.2f", node->getCurrentScore(ii));
     }
 
     res += ")";
@@ -59,37 +60,35 @@ static PuctNode* createNode(const BaseState* base_state,
                             int num_children,
                             int role_count) {
 
-#define round_up_4(x) ((((x) / 4) + 1) * 4)
-
-    const int child_size = sizeof(NodeChild);
-    int current_score_bytes = round_up_4(role_count * sizeof(Score));
-    int final_score_bytes = round_up_4(role_count * sizeof(Score));
-    int base_state_bytes = round_up_4(sizeof(BaseState) + base_state->byte_count);
+    const int child_size = sizeof(PuctNodeChild);
+    int current_score_bytes = round_up_8(role_count * sizeof(Score));
+    int final_score_bytes = round_up_8(role_count * sizeof(Score));
+    int base_state_bytes = round_up_8(sizeof(BaseState) + base_state->byte_count);
 
     // remember that the JointMove is inline, so we only need to count the indices
-    int node_child_bytes = round_up_4(child_size + sizeof(JointMove::IndexType) * role_count);
+    int node_child_bytes = round_up_8(child_size + role_count * sizeof(JointMove::IndexType));
 
-#undef round_up_4
-    int total_bytes = sizeof(Node) + current_score_bytes + final_score_bytes + base_state_bytes + (num_children * node_child_bytes);
+    int total_bytes = (sizeof(PuctNode) + current_score_bytes + final_score_bytes +
+                       base_state_bytes + (num_children * node_child_bytes));
 
-    K273::l_debug("total_bytes %d #child %d (%d / %d / %d / %d)",
-                  total_bytes, num_children, current_score_bytes,
-                  final_score_bytes, base_state_bytes,
-                  (num_children * node_child_bytes));
+    //K273::l_debug("total_bytes %d #child %d (%d / %d / %d / %d)",
+    //              total_bytes, num_children, current_score_bytes,
+    //              final_score_bytes, base_state_bytes,
+    //             (num_children * node_child_bytes));
 
     PuctNode* node = static_cast<PuctNode*> (malloc(total_bytes));
     node->visits = 0;
 
-    node->ref_count = 1;
     node->num_children = num_children;
+    node->num_children_expanded = 0;
 
     node->is_finalised = is_finalised;
 
     node->lead_role_index = lead_role_index;
 
     node->final_score_ptr_incr = current_score_bytes;
-    node->basestate_ptr_incr = node->final_score_ptr_incr + final_score_bytes;
-    node->children_ptr_incr = node->basestate_ptr_incr + base_state_bytes;
+    node->basestate_ptr_incr = current_score_bytes + final_score_bytes;
+    node->children_ptr_incr = current_score_bytes + final_score_bytes + base_state_bytes;
 
     // store the allocated size
     node->allocated_size = total_bytes;
@@ -120,11 +119,8 @@ static int initialiseChildHelper(PuctNode* node, int role_index, int child_index
         joint_move->set(role_index, choice);
 
         if (final_role) {
-            PuctNodeChild* child = node->getNodeChild(role_count,
-                                                      child_index++);
-            child->legal = choice;
+            PuctNodeChild* child = node->getNodeChild(role_count, child_index++);
             child->to_node = nullptr;
-            child->traversals = 0;
             child->policy_prob = 0.0f;
             child->dirichlet_noise = 0.0f;
 
@@ -213,7 +209,6 @@ PuctNode* PuctNode::create(int role_count,
     return node;
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 
 void PuctNode::dumpNode(const PuctNode* node,
@@ -228,47 +223,55 @@ void PuctNode::dumpNode(const PuctNode* node,
     }
 
     string finalised_top = node->is_finalised ? "[Final]" : ".";
-    K273::l_debug("%s(%d) :: %s == %.4f / #childs %d / %s / Lead : %d",
-                  indent.c_str(),
-                  node->visits,
-                  scoreString(node, sm).c_str(),
-                  total_score,
-                  node->num_children,
-                  finalised_top.c_str(),
-                  node->lead_role_index);
+    K273::l_verbose("%s(%d) :: %s == %.4f / #childs %d / %s / Lead : %d",
+                    indent.c_str(),
+                    node->visits,
+                    scoreString(node, sm).c_str(),
+                    total_score,
+                    node->num_children,
+                    finalised_top.c_str(),
+                    node->lead_role_index);
 
+
+    vector <const PuctNodeChild*> children;
     for (int ii=0; ii<node->num_children; ii++) {
         const PuctNodeChild* child = node->getNodeChild(role_count, ii);
+        children.push_back(child);
+    }
 
+    auto f = [](const PuctNodeChild* a, const PuctNodeChild* b) {
+        int visits_a = a->to_node == nullptr ? 0 : a->to_node->visits;
+        int visits_b = b->to_node == nullptr ? 0 : b->to_node->visits;
+        return visits_a > visits_b;
+    };
+
+    std::sort(children.begin(), children.end(), f);
+
+    for (auto child : children) {
+        string finalised = "?";
+        string move = moveString(child->move, sm);
+        string score = "(----, ----)";
+        int visits = 0;
         if (child->to_node != nullptr) {
-            string finalised = child->to_node->is_finalised ? "[Final]" : ".";
+            finalised = child->to_node->is_finalised ? "F" : "*";
+            score = scoreString(child->to_node, sm);
+            visits = child->to_node->visits;
+        }
 
-            if (child == highlight) {
-                K273::l_info("%sMove %s score %s / visits %d/%d / %s",
-                             indent.c_str(),
-                             moveString(child->move, sm).c_str(),
-                             scoreString(child->to_node, sm).c_str(),
-                             child->traversals,
-                             child->to_node->visits,
-                             finalised.c_str());
-            } else {
-                K273::l_debug("%sMove %s score %s / visits %d/%d / %s",
-                              indent.c_str(),
-                              moveString(child->move, sm).c_str(),
-                              scoreString(child->to_node, sm).c_str(),
-                              child->traversals,
-                              child->to_node->visits,
-                              finalised.c_str());
-            }
+        string msg = K273::fmtString("%s %s %d:%s %.2f   %s   %.2f/%.2f",
+                                     indent.c_str(),
+                                     move.c_str(),
+                                     visits,
+                                     finalised.c_str(),
+                                     child->policy_prob * 100,
+                                     score.c_str(),
+                                     child->debug_puct_score,
+                                     child->debug_node_score + child->debug_puct_score);
 
+        if (child == highlight) {
+            K273::l_info(msg);
         } else {
-            if (child == highlight) {
-                K273::l_info("%sMove %s score - / visits - %d / .",
-                             indent.c_str(), moveString(child->move, sm).c_str(), child->traversals);
-            } else {
-                K273::l_debug("%sMove %s score - / visits - %d / .",
-                              indent.c_str(), moveString(child->move, sm).c_str(), child->traversals);
-            }
+            K273::l_debug(msg);
         }
     }
 }

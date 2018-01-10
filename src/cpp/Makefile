@@ -12,8 +12,9 @@ CFLAGS = -MMD -MP -g -Wall -Werror -Woverloaded-virtual -Wnon-virtual-dtor -fno-
 LDFLAGS = -g -MMD -MP -Wall -Werror -Woverloaded-virtual -Wnon-virtual-dtor -fno-strict-aliasing -O2 -std=c++11
 
 
-SRCS += puctnode.cpp pucteval.cpp supervisor.cpp bases.cpp ggpzero_interface.cpp
-SRCS += greenlet/greenlet.cpp greenlet/greenlet-sys.cpp
+SRCS += puctnode.cpp pucteval.cpp bases.cpp dummysupervisor.cpp supervisor.cpp selfplay.cpp
+SRCS += ggpzero_interface.cpp
+SRCS += greenlet/greenlet.cpp greenlet/greenlet-sys.cpp greenlet/mocktest.cpp
 
 CORE_OBJS = $(patsubst %.cpp, %.o, $(SRCS))
 OBJS := $(CORE_OBJS) greenlet/greenlet-asm.o

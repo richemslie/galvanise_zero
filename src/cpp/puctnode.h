@@ -7,33 +7,36 @@
 #include <k273/util.h>
 
 namespace GGPZero {
+    typedef double Score;
+
     const int LEAD_ROLE_INDEX_SIMULTANEOUS = -1;
 
     // Forwards
     struct PuctNode;
 
     struct PuctNodeChild {
-        int legal;
         PuctNode* to_node;
-        int traversals;
         float policy_prob;
         float dirichlet_noise;
 
-        double debug_node_score;
-        double debug_puct_score;
+        Score debug_node_score;
+        Score debug_puct_score;
         GGPLib::JointMove move;
     };
+
+    inline int round_up_8(int x) {
+        if (x % 8 == 0) {
+            return x;
+        }
+
+        return ((x / 8) + 1) * 8;
+    }
 
     struct PuctNode {
         // actual visits
         int visits;
 
-        // Needed for transpositions and releasing nodes.
-        uint16_t ref_count;
-
         uint16_t num_children;
-
-        // XXX init - propagate through code
         uint16_t num_children_expanded;
 
         // whether this node has a finalised scores or not (can also release children if so)
@@ -53,33 +56,33 @@ namespace GGPZero {
         uint8_t data[0];
 
 
-        double getCurrentScore(int role_index) const {
+        Score getCurrentScore(int role_index) const {
             const uint8_t* mem = this->data;
-            const double* scores = reinterpret_cast<const double*> (mem);
+            const Score* scores = reinterpret_cast<const Score*> (mem);
             return *(scores + role_index);
         }
 
-        void setCurrentScore(int role_index, double score) {
+        void setCurrentScore(int role_index, Score score) {
             uint8_t* mem = this->data;
 
-            double* scores = reinterpret_cast<double*> (mem);
+            Score* scores = reinterpret_cast<Score*> (mem);
             *(scores + role_index) = score;
         }
 
-        double getFinalScore(int role_index) const {
+        Score getFinalScore(int role_index) const {
             /* score as per predicted by NN value head, or the terminal scores */
             const uint8_t* mem = this->data;
             mem += this->final_score_ptr_incr;
-            const double* scores = reinterpret_cast<const double*> (mem);
+            const Score* scores = reinterpret_cast<const Score*> (mem);
             return *(scores + role_index);
         }
 
-        double setFinalScore(int role_index, double score) {
+        Score setFinalScore(int role_index, Score score) {
             /* score as per predicted by NN value head, or the terminal scores */
             uint8_t* mem = this->data;
             mem += this->final_score_ptr_incr;
 
-            const double* scores = reinterpret_cast<const double*> (mem);
+            const Score* scores = reinterpret_cast<const Score*> (mem);
             return *(scores + role_index);
         }
 
@@ -96,8 +99,9 @@ namespace GGPZero {
         }
 
         PuctNodeChild* getNodeChild(const int role_count, const int child_index) {
-            int node_child_bytes = sizeof(PuctNodeChild) + role_count * sizeof(GGPLib::JointMove::IndexType);
-            node_child_bytes = ((node_child_bytes / 4) + 1) * 4;
+            int node_child_bytes = (sizeof(PuctNodeChild) +
+                                    role_count * sizeof(GGPLib::JointMove::IndexType));
+            node_child_bytes = round_up_8(node_child_bytes);
 
             uint8_t* mem = this->data;
             mem += this->children_ptr_incr;
@@ -108,7 +112,7 @@ namespace GGPZero {
         const PuctNodeChild* getNodeChild(const int role_count, const int child_index) const {
             int node_child_bytes = (sizeof(PuctNodeChild) +
                                     role_count * sizeof(GGPLib::JointMove::IndexType));
-            node_child_bytes = ((node_child_bytes / 4) + 1) * 4;
+            node_child_bytes = round_up_8(node_child_bytes);
 
             const uint8_t* mem = this->data;
             mem += this->children_ptr_incr;

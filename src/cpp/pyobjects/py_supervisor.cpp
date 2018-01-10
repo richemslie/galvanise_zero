@@ -26,30 +26,38 @@ struct PyObject_SupervisorWrapper {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-static PyObject* SupervisorWrapper_add(PyObject_SupervisorWrapper* self, PyObject* args) {
-    static long data[4] = {0,1,2,3};
 
-    const int ND = 2;
-    const int SIZE = 2;
-    npy_intp dims[2]{SIZE, SIZE};
-
-    return PyArray_SimpleNewFromData(ND, dims, NPY_INT64, &data);
+static PyObject* SupervisorWrapper_sample_count(PyObject_SupervisorWrapper* self, PyObject* args) {
+    return Py_BuildValue("i", self->impl->sampleCount());
 }
 
-static PyObject* SupervisorWrapper_test_sm(PyObject_SupervisorWrapper* self, PyObject* args) {
-    ssize_t ptr = 0;
+static PyObject* SupervisorWrapper_predictions_ready(PyObject_SupervisorWrapper* self, PyObject* args) {
+    if (self->impl->predictionsReady()) {
+        Py_RETURN_TRUE;
 
-    if (! ::PyArg_ParseTuple(args, "n", &ptr)) {
-        return nullptr;
+    } else {
+        Py_RETURN_FALSE;
     }
+}
 
-    GGPLib::StateMachine* sm = reinterpret_cast<GGPLib::StateMachine*> (ptr);
-    return PyString_FromString(sm->getGDL(42));
+static PyObject* SupervisorWrapper_get_channels_to_predict(PyObject_SupervisorWrapper* self, PyObject* args) {
+    int array_size = self->impl->getChannelsSize();
+    float* array_buf = self->impl->getChannelsToPredict();
+
+    const int ND = 1;
+    npy_intp dims[1]{array_size};
+    return PyArray_SimpleNewFromData(ND, dims, NPY_FLOAT, array_buf);
+}
+
+static PyObject* SupervisorWrapper_predictions_made(PyObject_SupervisorWrapper* self, PyObject* args) {
+    Py_RETURN_NONE;
 }
 
 static struct PyMethodDef SupervisorWrapper_methods[] = {
-    {"add", (PyCFunction) SupervisorWrapper_add, METH_VARARGS, "blablabla"},
-    {"test_sm", (PyCFunction) SupervisorWrapper_test_sm, METH_VARARGS, "blablabla"},
+    {"sample_count", (PyCFunction) SupervisorWrapper_sample_count, METH_NOARGS, "sample_count"},
+    {"predictions_ready", (PyCFunction) SupervisorWrapper_predictions_ready, METH_NOARGS, "predictions_ready"},
+    {"get_channels_to_predict", (PyCFunction) SupervisorWrapper_get_channels_to_predict, METH_NOARGS, "prediction_count"},
+    {"predictions_made", (PyCFunction) SupervisorWrapper_predictions_made, METH_VARARGS, "blablabla"},
     {nullptr, nullptr}            /* Sentinel */
 };
 

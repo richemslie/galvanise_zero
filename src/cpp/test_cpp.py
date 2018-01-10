@@ -1,3 +1,8 @@
+import os
+import tensorflow as tf
+
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
 import time
 import numpy as np
 
@@ -90,6 +95,9 @@ def test_transformer():
 
         # test we can actually predict
         res = nn.get_model().predict(array, batch_size=sz)
+        # print res[0].shape
+        # print res[1].shape
+
         total_s2 += time.time() - start
 
         if verbose:
@@ -97,3 +105,62 @@ def test_transformer():
             print res
 
     print total_predictions, "time taken", [s * 1000 for s in (total_s0, total_s1, total_s2)]
+
+
+def test_cgreenlets():
+    from ggplib.util.init import setup_once
+    setup_once()
+
+    from ggpzero_interface import cgreenlet_test
+    cgreenlet_test()
+
+
+def test_dummy_supervisor():
+    from ggplib.util.init import setup_once
+    setup_once()
+
+    # game = "breakthrough"
+    # gen = "v5_84"
+    # game = "reversi"
+    # gen = "v6_65"
+    game = "breakthroughSmall"
+    gen = "v1_0"
+
+    from ggplib.db import lookup
+    game_info = lookup.by_name(game)
+    sm = game_info.get_sm()
+
+    from ggpzero.nn.manager import get_manager
+    man = get_manager()
+    t = man.get_transformer(game)
+
+    # create transformer wrapper object
+    c_transformer = create_c_transformer(t)
+
+    from ggpzero_interface import SupervisorDummy
+    d = SupervisorDummy(sm_to_ptr(sm), c_transformer, 1024,
+                        t.policy_dist_count, t.policy_1_index_start)
+
+    nn = man.load_network(game, gen)
+
+    dummy = np.zeros(0)
+    policy_dists, final_scores = dummy, dummy
+    total_preds = 0
+    acc_0 = 0
+    acc_1 = 0
+    while True:
+        s = time.time()
+        pred_array = d.test(policy_dists, final_scores)
+        if pred_array is None:
+            break
+
+        sz = len(pred_array) / (t.num_channels * t.channel_size)
+        total_preds += sz
+        pred_array = pred_array.reshape(sz, t.num_channels, t.num_cols, t.num_rows)
+        e = time.time()
+        acc_0 += e - s
+        policy_dists, final_scores = nn.get_model().predict(pred_array, batch_size=sz)
+        acc_1 += time.time() - e
+
+    print "total predictions", total_preds
+    print "times %.2f %.2f" % (acc_0, acc_1)
