@@ -189,4 +189,4 @@ class Runner(object):
 
         log.warning("Ran out of states, lots of duplicates.  Please do something about this, "
                     "shouldn't be playing with lots of duplicates.  Hack for now is to rerun.")
-        return self.generate_sample()
+        return self.generate_sample(session)
