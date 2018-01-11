@@ -74,7 +74,7 @@ class GdlBasesTransformer(object):
     @property
     def raw_channels_per_state(self):
         # one for each role to indicate turn, one for each pieces
-        return self.role_count + len(self.pieces)
+        return len(self.pieces)
 
     @property
     def num_channels(self):
