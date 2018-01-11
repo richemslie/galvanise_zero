@@ -72,8 +72,6 @@ class Node(object):
         self.is_terminal = is_terminal
         self.children = []
 
-        self.predicted = False
-
         # from NN
         self.final_score = None
 
@@ -128,7 +126,6 @@ class PUCTEvaluator(object):
             # cache joint move, and basestate
             self.joint_move = self.sm.get_joint_move()
             self.basestate_expand_node = self.sm.new_base_state()
-            self.basestate_expanded_node = self.sm.new_base_state()
 
         # This is a performance hack, where once we get the nn/config we don't re-get it.
         # If latest is set will always get the latest
@@ -144,7 +141,6 @@ class PUCTEvaluator(object):
         self.role0_noop_legal, self.role1_noop_legal = map(get_noop_idx, game_info.model.actions)
 
         self.root = None
-        self.nodes_to_predict = []
 
     def update_node_policy(self, node, pred_policy):
         if node.lead_role_index == 0:
@@ -170,31 +166,6 @@ class PUCTEvaluator(object):
         # sort the children now rather than every iteration
         node.children.sort(key=attrgetter("policy_prob"), reverse=True)
 
-    def do_predictions(self):
-        actual_nodes_to_predict = []
-        for node in self.nodes_to_predict:
-            if node.is_terminal:
-                node.mc_score = [s / 100.0 for s in node.terminal_scores]
-            else:
-                assert not node.predicted
-                actual_nodes_to_predict.append(node)
-
-        self.nodes_to_predict = []
-
-        # nothing to do
-        if not actual_nodes_to_predict:
-            return
-
-        states = [n.state for n in actual_nodes_to_predict]
-        result = self.nn.predict_n(states)
-
-        for node, (pred_policy, pred_final_score) in zip(actual_nodes_to_predict,
-                                                         result):
-            node.predicted = True
-            node.final_score = pred_final_score
-            node.mc_score = pred_final_score[:]
-            self.update_node_policy(node, pred_policy)
-
     def create_node(self, basestate):
         self.sm.update_bases(basestate)
 
@@ -211,10 +182,18 @@ class PUCTEvaluator(object):
 
         if node.is_terminal:
             node.terminal_scores = [self.sm.get_goal_value(i) for i in range(2)]
+            node.mc_score = [s / 100.0 for s in node.terminal_scores]
         else:
             legal_state = self.sm.get_legal_state(0) if lead_role_index == 0 else self.sm.get_legal_state(1)
+
             for l in legal_state.to_list():
                 node.add_child(self.sm.legal_to_move(lead_role_index, l), l)
+
+            pred_policy, pred_final_score = self.nn.predict_1(node.state)
+
+            node.final_score = pred_final_score
+            node.mc_score = pred_final_score[:]
+            self.update_node_policy(node, pred_policy)
 
         return node
 
@@ -231,9 +210,9 @@ class PUCTEvaluator(object):
             self.joint_move.set(0, self.role0_noop_legal)
 
         self.joint_move.set(node.lead_role_index, child.legal)
-        self.sm.next_state(self.joint_move, self.basestate_expanded_node)
+        self.sm.next_state(self.joint_move, self.basestate_expand_node)
 
-        child.to_node = self.create_node(self.basestate_expanded_node)
+        child.to_node = self.create_node(self.basestate_expand_node)
 
     def back_propagate(self, path, scores):
         for node in reversed(path):
@@ -270,6 +249,10 @@ class PUCTEvaluator(object):
         best_child = None
         best_score = -1
 
+        v = float(node.mc_visits + 1)
+        pre_mult = (v ** 0.5) * puct_constant
+        noise_pct = self.conf.dirichlet_noise_pct
+
         for idx, child in enumerate(node.children):
             cn = child.to_node
 
@@ -290,12 +273,9 @@ class PUCTEvaluator(object):
             child_pct = child.policy_prob
 
             if dirichlet_noise is not None:
-                noise_pct = self.conf.dirichlet_noise_pct
                 child_pct = (1 - noise_pct) * child_pct + noise_pct * dirichlet_noise[idx]
 
-            v = float(node.mc_visits + 1)
-            cv = float(child_visits + 1)
-            puct_score = puct_constant * child_pct * (v ** 0.5) / cv
+            puct_score = (pre_mult * child_pct) / (child_visits + 1.0)
 
             score = node_score + puct_score
 
@@ -324,17 +304,12 @@ class PUCTEvaluator(object):
                 scores = [s / 100.0 for s in current.terminal_scores]
                 break
 
-            if len(current.children) == 0:
-                print current.state
-                raise Exception("MESSED UP - state %s" % str(current.state))
+            assert len(current.children) != 0, "MESSED UP - state %s" % str(current.state)
 
             child = self.select_child(current, len(path) - 1)
 
             if child.to_node is None:
                 self.expand_child(child)
-                self.nodes_to_predict.append(child.to_node)
-                self.do_predictions()
-
                 scores = child.to_node.mc_score
 
                 path.append(child.to_node)
@@ -388,7 +363,11 @@ class PUCTEvaluator(object):
                 assert not found
                 self.root = next_root.to_node
                 found = True
+
             c.parent = None
+
+        assert found
+        return self.root
 
     def on_apply_move(self, joint_move):
         # need to fish for it in children?
@@ -424,11 +403,12 @@ class PUCTEvaluator(object):
             if self.conf.verbose:
                 log.verbose("ROOT FOUND: %s / %d" % (new_root, visit_count(new_root)))
 
+    def reset(self):
+        self.root = None
+
     def establish_root(self, current_state, game_depth):
         # needed for temperature
         self.game_depth = game_depth
-
-        self.sm.update_bases(current_state)
 
         if self.conf.verbose:
             log.verbose("Debug @ depth %s" % game_depth)
@@ -436,37 +416,23 @@ class PUCTEvaluator(object):
         start_time = time.time()
 
         if self.root is not None:
-            assert self.root.state == current_state.to_list()
-        else:
-            if self.conf.verbose:
-                log.info('creating root')
+            if self.root.state == current_state.to_list():
+                return self.root
+            log.error("Root differs, reseting root")
+            self.root = None
 
-            self.root = self.create_node(current_state)
-            assert not self.root.is_terminal
+        if self.conf.verbose:
+            log.info('creating root')
 
-            # predict root
-            self.nodes_to_predict.append(self.root)
-
-        # we do predictions here and dont combine with expanding some root children (if option is
-        # set), because do_predictions() will reorder the children according to the policy and thus
-        # expand the highest probabilty moves.
-        self.do_predictions()
-
-        # expand and predict some of root children
-        if self.conf.expand_root > 0:
-            for c in self.root.children[:self.conf.expand_root]:
-                if c.to_node is None:
-                    self.expand_child(c)
-                    self.nodes_to_predict.append(c.to_node)
-
-            self.do_predictions()
+        self.root = self.create_node(current_state)
+        assert not self.root.is_terminal
 
         if self.conf.verbose:
             log.debug("time taken for root %.3f" % (time.time() - start_time))
 
-    def on_next_move(self, current_state, max_iterations, finish_time):
-        self.sm.update_bases(current_state)
+        return self.root
 
+    def on_next_move(self, max_iterations, finish_time):
         self.playout_loop(self.root, max_iterations, finish_time)
 
         choice = self.choose(finish_time)
@@ -479,10 +445,10 @@ class PUCTEvaluator(object):
     def dump_node(self, node, indent=0):
         indent_str = " " * indent
         role = self.sm.get_roles()[node.lead_role_index]
-        print "%s>>> lead: %s, visits: %s, predict: %s" % (indent_str,
-                                                           role,
-                                                           node.mc_visits,
-                                                           node.final_score[node.lead_role_index])
+        print "%s>>> lead: %s, visits: %s, reward: %s" % (indent_str,
+                                                          role,
+                                                          node.mc_visits,
+                                                          node.final_score[node.lead_role_index])
 
         rows = []
         for child, prob in self.get_probabilities(node):
@@ -622,7 +588,6 @@ class PUCTEvaluator(object):
             log.debug("depth %s, temperature %s " % (depth, temp))
 
         dist = self.get_probabilities(self.root, temp)
-
         expected_prob = random.random() * self.conf.random_scale
 
         seen_prob = 0
@@ -664,7 +629,7 @@ class PUCTPlayer(MatchPlayer):
                 max_iterations = self.puct_evaluator.conf.playouts_per_iteration_noop
 
         # choice here is always based on lead_role_index, and not our_role_index
-        choice = self.puct_evaluator.on_next_move(current_state, max_iterations, finish_time)
+        choice = self.puct_evaluator.on_next_move(max_iterations, finish_time)
 
         noop_res = self.puct_evaluator.noop(self.match.our_role_index)
         if noop_res is not None:
@@ -685,7 +650,6 @@ def config_template(generation, name="default"):
                                        verbose=True,
                                        playouts_per_iteration=800,
                                        playouts_per_iteration_noop=800,
-                                       expand_root=0,
                                        dirichlet_noise_alpha=0.03,
 
                                        puct_before_expansions=3,
@@ -700,7 +664,6 @@ def config_template(generation, name="default"):
                                     verbose=True,
                                     playouts_per_iteration=42,
                                     playouts_per_iteration_noop=0,
-                                    expand_root=0,
 
                                     dirichlet_noise_alpha=0.03,
                                     puct_before_expansions=3,
@@ -711,11 +674,24 @@ def config_template(generation, name="default"):
                                     choose="choose_top_visits",
                                     max_dump_depth=2),
 
+        test2=confs.PUCTPlayerConfig(name="test2",
+                                     verbose=True,
+                                     playouts_per_iteration=800,
+                                     playouts_per_iteration_noop=800,
+
+                                     dirichlet_noise_alpha=-1,
+                                     puct_before_expansions=2,
+                                     puct_before_root_expansions=4,
+                                     puct_constant_before=1.5,
+                                     puct_constant_after=0.5,
+
+                                     choose="choose_top_visits",
+                                     max_dump_depth=2),
+
         policy=confs.PUCTPlayerConfig(name="policy-test",
                                       verbose=True,
                                       playouts_per_iteration=0,
                                       playouts_per_iteration_noop=0,
-                                      expand_root=0,
                                       dirichlet_noise_alpha=-1,
                                       choose="choose_top_visits",
                                       max_dump_depth=1),
@@ -724,7 +700,6 @@ def config_template(generation, name="default"):
                                          verbose=True,
                                          playouts_per_iteration=1,
                                          playouts_per_iteration_noop=0,
-                                         expand_root=1000,
                                          dirichlet_noise_alpha=-1,
                                          puct_constant_before=0,
                                          puct_constant_after=0,
@@ -736,7 +711,6 @@ def config_template(generation, name="default"):
                                        verbose=True,
                                        playouts_per_iteration=200,
                                        playouts_per_iteration_noop=200,
-                                       expand_root=0,
 
                                        dirichlet_noise_alpha=0.03,
 
