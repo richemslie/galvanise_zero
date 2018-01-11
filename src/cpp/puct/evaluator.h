@@ -1,53 +1,24 @@
-/* Start out as a simple as co-routine implementation.  Optimize later. */
-
 #pragma once
 
-#include "puctnode.h"
-#include "rng.h"
-
-#include "greenlet/greenlet.h"
+#include "puct/node.h"
+#include "puct/config.h"
 
 #include <statemachine/basestate.h>
 #include <statemachine/statemachine.h>
 
+#include <k273/rng.h>
+
 #include <vector>
+
 
 namespace GGPZero {
 
     // forwards
     class SupervisorBase;
 
-    enum class ChooseFn {
-        choose_top_visits, choose_converge_check, choose_temperature
-    };
-
-    struct PUCTEvalConfig {
-        std::string name;
-        bool verbose;
-        std::string generation;
-
-        int puct_before_expansions;
-        int puct_before_root_expansions;
-
-        double puct_constant_before;
-        double puct_constant_after;
-
-        double dirichlet_noise_pct;
-        double dirichlet_noise_alpha;
-
-        ChooseFn choose;
-        int max_dump_depth;
-
-        double random_scale;
-        double temperature;
-        int depth_temperature_start;
-        double depth_temperature_increment;
-        int depth_temperature_stop;
-    };
-
     class PuctEvaluator {
     public:
-        PuctEvaluator(PUCTEvalConfig*, SupervisorBase* supervisor);
+        PuctEvaluator(PuctConfig*, SupervisorBase* supervisor);
         virtual ~PuctEvaluator();
 
     private:
@@ -62,10 +33,6 @@ namespace GGPZero {
         double getPuctConstant(PuctNode* node) const;
 
     public:
-        void setGreenlet(greenlet* self) {
-            this->ourself = self;
-        }
-
         void updateNodePolicy(PuctNode* node, float* array);
         // do_predictions
 
@@ -87,9 +54,9 @@ namespace GGPZero {
         PuctNodeChild* chooseTemperature(PuctNode* node);
 
     private:
+        PuctConfig* config;
         SupervisorBase* supervisor;
-        PUCTEvalConfig* config;
-        greenlet* ourself;
+
         int role_count;
         std::string identifier;
 

@@ -2,7 +2,7 @@
 
 #include "supervisorbase.h"
 #include "bases.h"
-#include "puctnode.h"
+#include "puct/node.h"
 #include "greenlet/greenlet.h"
 
 #include <statemachine/basestate.h>
@@ -53,6 +53,9 @@ namespace GGPZero {
         }
 
     private:
+        GdlBasesTransformer* transformer;
+        const unsigned int batch_size;
+
         GGPLib::BaseState* basestate_expand_node;
         std::vector <greenlet_t*> requestors;
         std::deque <Runnable> runnables;
@@ -66,6 +69,7 @@ namespace GGPZero {
 
         float* channel_buf;
         int channel_buf_indx;
+        greenlet_t* master;
         greenlet_t* top;
     };
 }

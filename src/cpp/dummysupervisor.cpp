@@ -1,9 +1,8 @@
 #include "dummysupervisor.h"
 
-#include "greenlet/greenlet.h"
-#include "pucteval.h"
 #include "selfplay.h"
-#include "rng.h"
+#include "puct/evaluator.h"
+#include "greenlet/greenlet.h"
 
 #include <statemachine/basestate.h>
 #include <statemachine/statemachine.h>
@@ -31,7 +30,9 @@ SupervisorDummy::SupervisorDummy(GGPLib::StateMachineInterface* sm,
                                  int batch_size,
                                  int expected_policy_size,
                                  int role_1_index) :
-    SupervisorBase(sm, transformer, batch_size),
+    SupervisorBase(sm),
+    transformer(transformer),
+    batch_size(batch_size),
     basestate_expand_node(nullptr),
     expected_policy_size(expected_policy_size),
     role_1_index(role_1_index),

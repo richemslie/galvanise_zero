@@ -1,6 +1,7 @@
 #include "selfplay.h"
-#include "puctnode.h"
-#include "pucteval.h"
+
+#include "puct/node.h"
+#include "puct/evaluator.h"
 #include "supervisorbase.h"
 
 #include <statemachine/statemachine.h>
@@ -10,8 +11,8 @@
 using namespace GGPZero;
 
 
-PUCTEvalConfig* defaultConfig() {
-    PUCTEvalConfig* conf = new PUCTEvalConfig;
+PuctConfig* defaultConfig() {
+    PuctConfig* conf = new PuctConfig;
     conf->name = "test_evaluator";
     conf->verbose = false;
     conf->generation = "noone";

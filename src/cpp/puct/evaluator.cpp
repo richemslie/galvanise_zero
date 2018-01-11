@@ -1,6 +1,7 @@
-#include "pucteval.h"
-#include "puctnode.h"
-#include "supervisor.h"
+#include "puct/evaluator.h"
+#include "puct/node.h"
+
+#include "supervisorbase.h"
 
 #include <k273/util.h>
 #include <k273/logging.h>
@@ -16,10 +17,9 @@ using namespace GGPZero;
 
 ///////////////////////////////////////////////////////////////////////////////
 
-PuctEvaluator::PuctEvaluator(PUCTEvalConfig* config, SupervisorBase* supervisor) :
-    supervisor(supervisor),
+PuctEvaluator::PuctEvaluator(PuctConfig* config, SupervisorBase* supervisor) :
     config(config),
-    ourself(nullptr),
+    supervisor(supervisor),
     role_count(supervisor->getRoleCount()),
     identifier("PuctEvaluator"),
     game_depth(0),

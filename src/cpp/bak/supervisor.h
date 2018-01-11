@@ -1,9 +1,10 @@
 #pragma once
+XXX
 
 #include "supervisorbase.h"
 #include "bases.h"
 #include "sample.h"
-#include "puctnode.h"
+#include "puct/node.h"
 #include "greenlet/greenlet.h"
 
 #include <statemachine/basestate.h>
@@ -17,16 +18,6 @@
 #include <vector>
 
 namespace GGPZero {
-
-    class MasterGreenlet: public greenlet {
-        void *run(void *arg) {
-            printf("HERE1\n");
-
-            greenlet* other = (greenlet*) arg;
-            other->switch_to();
-            return nullptr;
-        }
-    };
 
     // forwards
     class PuctEvaluator;
@@ -163,6 +154,9 @@ namespace GGPZero {
         }
 
     private:
+        GdlBasesTransformer* transformer;
+        const unsigned int batch_size;
+
         GGPLib::BaseState* basestate_expand_node;
 
         bool running;
@@ -178,6 +172,8 @@ namespace GGPZero {
         // this is the array of predictions made by nn
         float* predictions_made;
 
+        std::deque <greenlet*> runnables;
+        greenlet_t* master;
         std::mutex mutex;
         std::thread* the_thread;
     };

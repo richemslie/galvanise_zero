@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "puctnode.h"
+#include "puct/node.h"
 
 #include <statemachine/basestate.h>
 #include <statemachine/statemachine.h>

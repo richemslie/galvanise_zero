@@ -1,7 +1,7 @@
 #pragma once
 
-#include "pucteval.h"
 #include "supervisorbase.h"
+#include "puct/evaluator.h"
 
 #include <statemachine/statemachine.h>
 

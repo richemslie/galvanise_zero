@@ -3,20 +3,24 @@
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include <numpy/arrayobject.h>
 
-#include "rng.h"
-#include "greenlet/mocktest.h"
-#include "dummysupervisor.h"
+// k273 testing
+#include <k273/rng.h>
 
 ///////////////////////////////////////////////////////////////////////////////
-// global variable
+// global variables
 
 PyObject* ggpzero_interface_error;
 
+///////////////////////////////////////////////////////////////////////////////
+
+// these are python objects... we include cpp files since it is hard to do any
+// other way (please if you know a way, let me know)
+
 #include "pyobjects/py_bases.cpp"
-#include "pyobjects/py_supervisor.cpp"
 #include "pyobjects/py_dummysupervisor.cpp"
 
 ///////////////////////////////////////////////////////////////////////////////
+// testing cpython:
 
 static PyObject* GGPZero_Interface_hello_test(PyObject* self, PyObject* args) {
     // XXX what is self in this context?
@@ -37,19 +41,12 @@ static PyObject* GGPZero_Interface_hello_test(PyObject* self, PyObject* args) {
     return ::Py_BuildValue("s", msg.c_str());
 }
 
-static PyObject* GGPZero_Interface_cgreenlet_test(PyObject* self, PyObject* args) {
-    GGPZero::test_cgreenlet();
-    return Py_None;
-}
-
 ///////////////////////////////////////////////////////////////////////////////
 
 PyMethodDef gi_functions[] = {
     {"hello_test", GGPZero_Interface_hello_test, METH_VARARGS, "hello_test"},
-    {"cgreenlet_test", GGPZero_Interface_cgreenlet_test, METH_VARARGS, "cgreenlet_test"},
 
     {"GdlBasesTransformer", gi_GdlBasesTransformer, METH_VARARGS, "GdlBasesTransformer"},
-    {"Supervisor", gi_Supervisor, METH_VARARGS, "Supervisor"},
     {"SupervisorDummy", gi_SupervisorDummy, METH_VARARGS, "SupervisorDummy"},
     {nullptr, nullptr, 0, nullptr}
 };
@@ -81,10 +78,8 @@ extern "C" {
         char error_name[] = "ggpzero_interface.error";
         ggpzero_interface_error = ::PyErr_NewException(error_name, nullptr, nullptr);
         Py_INCREF(ggpzero_interface_error);
-        ::PyModule_AddObject(m, "AbcModuleError", ggpzero_interface_error);
+        ::PyModule_AddObject(m, "GGPZeroInterfaceError", ggpzero_interface_error);
 
         import_array();
     }
 }
-
-

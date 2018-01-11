@@ -1,9 +1,9 @@
 #pragma once
 
-#include "../rng.h"
-#include "../bases.h"
+#include "bases.h"
 
 // k273 includes
+#include <k273/rng.h>
 #include <k273/util.h>
 #include <k273/logging.h>
 #include <k273/strutils.h>

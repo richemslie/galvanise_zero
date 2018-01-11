@@ -1,8 +1,8 @@
-#include "pucteval.h"
+#include "puct/node.h"
 
-#include "statemachine/statemachine.h"
-#include "statemachine/jointmove.h"
-#include "statemachine/basestate.h"
+#include <statemachine/statemachine.h>
+#include <statemachine/jointmove.h>
+#include <statemachine/basestate.h>
 
 #include <k273/strutils.h>
 #include <k273/exception.h>
@@ -10,6 +10,7 @@
 
 #include <vector>
 #include <algorithm>
+
 
 using namespace std;
 using namespace GGPLib;

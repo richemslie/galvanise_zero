@@ -1,7 +1,8 @@
 #include "supervisor.h"
-#include "puctnode.h"
-#include "pucteval.h"
+
 #include "bases.h"
+#include "puct/node.h"
+#include "puct/evaluator.h"
 
 using namespace GGPZero;
 
@@ -14,7 +15,9 @@ struct Conf {
 Supervisor::Supervisor(GGPLib::StateMachineInterface* sm,
                        GdlBasesTransformer* transformer,
                        int batch_size) :
-    SupervisorBase(sm, transformer, batch_size),
+    SupervisorBase(sm),
+    transformer(transformer),
+    batch_size(batch_size),
     basestate_expand_node(nullptr),
     running(false),
     num_samples(false),
