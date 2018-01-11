@@ -46,7 +46,6 @@ def default_conf():
                                                      verbose=False,
                                                      playouts_per_iteration=800,
                                                      playouts_per_iteration_noop=1,
-                                                     expand_root=100,
                                                      dirichlet_noise_alpha=0.2,
                                                      puct_constant_after=3.0,
                                                      puct_constant_before=0.75,
@@ -255,12 +254,13 @@ class ServerBroker(Broker):
         assert len(msg.samples) > 0
 
         info = self.workers[worker]
+        dupe_count = 0
         for sample in msg.samples:
             state = tuple(sample.state)
 
             # need to check it isn't a duplicate and drop it
             if state in self.unique_states_set:
-                log.warning("dropping inflight duplicate state")
+                dupe_count += 1
 
             else:
                 self.unique_states_set.add(state)
@@ -268,6 +268,9 @@ class ServerBroker(Broker):
                 self.accumulated_samples.append(sample)
 
                 assert len(self.unique_states_set) == len(self.accumulated_samples)
+
+        if dupe_count:
+            log.warning("dropping %s inflight duplicate state" % dupe_count)
 
         log.info("len accumulated_samples: %s" % len(self.accumulated_samples))
         log.info("worker saw %s duplicates" % msg.duplicates_seen)
