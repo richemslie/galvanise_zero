@@ -16,15 +16,13 @@ PyObject* ggpzero_interface_error;
 // these are python objects... we include cpp files since it is hard to do any
 // other way (please if you know a way, let me know)
 
-#include "pyobjects/py_bases.cpp"
-#include "pyobjects/py_dummysupervisor.cpp"
+#include "pyobjects/basetransformer.cpp"
+#include "pyobjects/inlinesupervisor.cpp"
 
 ///////////////////////////////////////////////////////////////////////////////
 // testing cpython:
 
 static PyObject* GGPZero_Interface_hello_test(PyObject* self, PyObject* args) {
-    // XXX what is self in this context?
-
     const char* name = nullptr;
     if (! ::PyArg_ParseTuple(args, "s", &name)) {
         return nullptr;
@@ -47,7 +45,7 @@ PyMethodDef gi_functions[] = {
     {"hello_test", GGPZero_Interface_hello_test, METH_VARARGS, "hello_test"},
 
     {"GdlBasesTransformer", gi_GdlBasesTransformer, METH_VARARGS, "GdlBasesTransformer"},
-    {"SupervisorDummy", gi_SupervisorDummy, METH_VARARGS, "SupervisorDummy"},
+    {"InlineSupervisor", gi_InlineSupervisor, METH_VARARGS, "InlineSupervisor"},
     {nullptr, nullptr, 0, nullptr}
 };
 
@@ -64,9 +62,9 @@ extern "C" {
             return;
         }
 
-        Py_TYPE(&PyType_DummySupervisorWrapper) = &PyType_Type;
+        Py_TYPE(&PyType_InlineSupervisor) = &PyType_Type;
 
-        if (::PyType_Ready(&PyType_DummySupervisorWrapper) < 0) {
+        if (::PyType_Ready(&PyType_InlineSupervisor) < 0) {
             return;
         }
 

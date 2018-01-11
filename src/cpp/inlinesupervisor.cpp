@@ -1,4 +1,4 @@
-#include "dummysupervisor.h"
+#include "inlinesupervisor.h"
 
 #include "selfplay.h"
 #include "puct/evaluator.h"
@@ -19,17 +19,17 @@ void* g_playOnce(void* arg) {
 }
 
 void* g_mainLoop(void* arg) {
-    auto f = std::mem_fn(&SupervisorDummy::mainLoop);
-    f((SupervisorDummy*) arg);
+    auto f = std::mem_fn(&InlineSupervisor::mainLoop);
+    f((InlineSupervisor*) arg);
     return nullptr;
 }
 
 
-SupervisorDummy::SupervisorDummy(GGPLib::StateMachineInterface* sm,
-                                 GdlBasesTransformer* transformer,
-                                 int batch_size,
-                                 int expected_policy_size,
-                                 int role_1_index) :
+InlineSupervisor::InlineSupervisor(GGPLib::StateMachineInterface* sm,
+                                   GdlBasesTransformer* transformer,
+                                   int batch_size,
+                                   int expected_policy_size,
+                                   int role_1_index) :
     SupervisorBase(sm),
     transformer(transformer),
     batch_size(batch_size),
@@ -51,7 +51,8 @@ SupervisorDummy::SupervisorDummy(GGPLib::StateMachineInterface* sm,
 }
 
 
-PuctNode* SupervisorDummy::expandChild(PuctEvaluator* pe, const PuctNode* parent, const PuctNodeChild* child) {
+PuctNode* InlineSupervisor::expandChild(PuctEvaluator* pe,
+                                        const PuctNode* parent, const PuctNodeChild* child) {
     // update the statemachine
     this->sm->updateBases(parent->getBaseState());
     this->sm->nextState(&child->move, this->basestate_expand_node);
@@ -61,7 +62,7 @@ PuctNode* SupervisorDummy::expandChild(PuctEvaluator* pe, const PuctNode* parent
 }
 
 
-PuctNode* SupervisorDummy::createNode(PuctEvaluator* pe, const GGPLib::BaseState* bs) {
+PuctNode* InlineSupervisor::createNode(PuctEvaluator* pe, const GGPLib::BaseState* bs) {
     static xoroshiro32plus16 random;
 
    // update the statemachine
@@ -129,11 +130,11 @@ PuctNode* SupervisorDummy::createNode(PuctEvaluator* pe, const GGPLib::BaseState
     return new_node;
 }
 
-void SupervisorDummy::finish() {
+void InlineSupervisor::finish() {
     greenlet_switch_to(this->master, nullptr);
 }
 
-void SupervisorDummy::mainLoop() {
+void InlineSupervisor::mainLoop() {
     GGPLib::BaseState* bs = this->sm->newBaseState();
     bs->assign(this->sm->getInitialState());
 
@@ -168,10 +169,10 @@ void SupervisorDummy::mainLoop() {
         }
     }
 
-    K273::l_verbose("ZZZ %zu", this->requestors.size());
+    K273::l_verbose("requestors.size at end of mainLoop() x:  %zu", this->requestors.size());
 }
 
-int SupervisorDummy::test(float* policies, float* final_scores, int pred_count) {
+int InlineSupervisor::test(float* policies, float* final_scores, int pred_count) {
     //K273::l_debug("In pred_count %d", pred_count);
 
     ASSERT (this->policies == nullptr && this->final_scores == nullptr && this->pred_count == 0);

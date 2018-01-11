@@ -25,15 +25,15 @@ namespace GGPZero {
     // forwards
     class PuctEvaluator;
 
-    class SupervisorDummy : public SupervisorBase {
+    class InlineSupervisor : public SupervisorBase {
     public:
-        SupervisorDummy(GGPLib::StateMachineInterface* sm,
+        InlineSupervisor(GGPLib::StateMachineInterface* sm,
                         GdlBasesTransformer* transformer,
                         int batch_size,
                         int expected_policy_size,
                         int role_1_index);
 
-        virtual ~SupervisorDummy() {
+        virtual ~InlineSupervisor() {
         }
 
     public:
