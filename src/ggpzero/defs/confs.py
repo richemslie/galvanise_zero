@@ -77,9 +77,6 @@ class PUCTPlayerConfig(object):
     dirichlet_noise_pct = attr.ib(0.25)
     dirichlet_noise_alpha = attr.ib(0.1)
 
-    # MAYBE useful for when small number of iterations.  otherwise pretty much the same
-    expand_root = attr.ib(-1)
-
     # looks up method() to use
     choose = attr.ib("choose_top_visits")
 
