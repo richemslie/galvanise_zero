@@ -47,7 +47,13 @@ class Manager(object):
 
         return transformer
 
-    def create_new_network(self, game, nn_model_conf):
+    def create_new_network(self, game, nn_model_conf=None):
+        from ggpzero.defs.templates import nn_model_config_template
+        if isinstance(nn_model_conf, str):
+            nn_model_conf = nn_model_config_template(game, network_size_hint=nn_model_conf)
+        elif nn_model_conf is None:
+            nn_model_conf = nn_model_config_template(game)
+
         assert isinstance(nn_model_conf, confs.NNModelConfig)
 
         transformer = self.get_transformer(game)
