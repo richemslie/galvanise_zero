@@ -15,8 +15,7 @@ LDFLAGS = -g -MMD -MP -Wall -Werror -Woverloaded-virtual -Wnon-virtual-dtor -fno
 
 
 SRCS = puct/config.cpp puct/node.cpp puct/evaluator.cpp
-SRCS += bases.cpp scheduler.cpp inlinesupervisor.cpp selfplay.cpp
-#SRCS += supervisor.cpp XXX
+SRCS += bases.cpp scheduler.cpp supervisor.cpp selfplay.cpp
 SRCS += ggpzero_interface.cpp
 SRCS += greenlet/greenlet.cpp greenlet/greenlet-sys.cpp
 

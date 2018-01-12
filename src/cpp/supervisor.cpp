@@ -1,4 +1,4 @@
-#include "inlinesupervisor.h"
+#include "supervisor.h"
 
 #include "selfplay.h"
 #include "puct/evaluator.h"
