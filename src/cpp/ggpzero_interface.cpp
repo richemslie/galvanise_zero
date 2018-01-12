@@ -36,6 +36,8 @@ static PyObject* GGPZero_Interface_hello_test(PyObject* self, PyObject* args) {
         K273::l_verbose("random/real %.4f", (random() / (double) random.max()));
     }
 
+    K273::l_critical(msg);
+
     return ::Py_BuildValue("s", msg.c_str());
 }
 

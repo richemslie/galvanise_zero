@@ -1,5 +1,8 @@
 #pragma once
 
+#include <string>
+
+
 namespace GGPZero {
 
     enum class ChooseFn {
@@ -28,6 +31,9 @@ namespace GGPZero {
         int depth_temperature_start;
         double depth_temperature_increment;
         int depth_temperature_stop;
+
+        static PuctConfig* defaultConfig();
+
     };
 
 }

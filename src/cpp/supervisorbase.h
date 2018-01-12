@@ -9,6 +9,8 @@
 #include <string>
 
 
+// XXX split up between python side and c++ interface.
+
 namespace GGPZero {
 
     // forwards
@@ -39,7 +41,6 @@ namespace GGPZero {
                                       const PuctNodeChild* child) = 0;
 
         virtual PuctNode* createNode(PuctEvaluator* pe, const GGPLib::BaseState* bs) = 0;
-        virtual void finish() = 0;
 
     protected:
         GGPLib::StateMachineInterface* sm;

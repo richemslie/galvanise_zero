@@ -4,17 +4,14 @@
 
 // k273 includes
 #include <k273/rng.h>
-#include <k273/util.h>
 #include <k273/logging.h>
-#include <k273/strutils.h>
-#include <k273/exception.h>
 
 // ggplib imports
-#include <statemachine/goalless_sm.h>
-#include <statemachine/combined.h>
-#include <statemachine/statemachine.h>
+#include <statemachine/basestate.h>
+#include <statemachine/jointmove.h>
 #include <statemachine/propagate.h>
 #include <statemachine/legalstate.h>
+#include <statemachine/statemachine.h>
 
 using namespace GGPZero;
 
@@ -76,7 +73,7 @@ static PyObject* GdlBasesTransformerWrapper_test(PyObject_GdlBasesTransformerWra
     xoroshiro32plus16 random;
 
     int total_depth = 0;
-    for (int jj=0; jj<25; jj++) {
+    for (int jj=0; jj<2; jj++) {
         sm->reset();
 
         for (int kk=0; kk<MOVES; kk++) {

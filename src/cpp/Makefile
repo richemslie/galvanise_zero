@@ -14,7 +14,7 @@ LDFLAGS = -g -MMD -MP -Wall -Werror -Woverloaded-virtual -Wnon-virtual-dtor -fno
 #LDFLAGS += $(shell python2-config --ldflags)
 
 
-SRCS  = puct/node.cpp puct/evaluator.cpp
+SRCS = puct/config.cpp puct/node.cpp puct/evaluator.cpp
 SRCS += bases.cpp supervisorbase.cpp inlinesupervisor.cpp selfplay.cpp
 #SRCS += supervisor.cpp
 SRCS += ggpzero_interface.cpp

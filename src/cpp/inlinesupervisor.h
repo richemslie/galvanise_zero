@@ -3,9 +3,12 @@
 #include "supervisorbase.h"
 #include "bases.h"
 #include "puct/node.h"
+#include "puct/config.h"
+#include "puct/evaluator.h"
 #include "greenlet/greenlet.h"
 
 #include <statemachine/basestate.h>
+#include <statemachine/jointmove.h>
 #include <statemachine/statemachine.h>
 
 #include <deque>
@@ -37,17 +40,20 @@ namespace GGPZero {
         }
 
     public:
+        // C++ side...
         PuctNode* expandChild(PuctEvaluator* pe, const PuctNode* parent, const PuctNodeChild* child);
         PuctNode* createNode(PuctEvaluator* pe, const GGPLib::BaseState* bs);
-        void finish();
+        void runScheduler();
 
-        void mainLoop();
+        // python side (add level of indirection)...
 
-        void start_greenlet(void* arg) {
-            this->mainLoop();
-        }
+        void puctPlayerStart();
+        void puctApplyMove(const GGPLib::JointMove* move);
+        void puctPlayerMove(const GGPLib::BaseState* state, int iterations, double end_time);
+        int puctPlayerGetMove(int lead_role_index);
 
-        int test(float* policies, float* final_scores, int pred_count);
+        void selfPlayTest(int num_selfplays, int base_iterations, int sample_iterations);
+        int poll(float* policies, float* final_scores, int pred_count);
         float* getBuf() const {
             return this->channel_buf;
         }
@@ -69,7 +75,10 @@ namespace GGPZero {
 
         float* channel_buf;
         int channel_buf_indx;
-        greenlet_t* master;
+
+        PuctEvaluator* player_pe;
+
         greenlet_t* top;
+        greenlet_t* scheduler;
     };
 }

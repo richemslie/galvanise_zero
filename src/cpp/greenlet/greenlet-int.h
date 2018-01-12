@@ -7,8 +7,7 @@
  * full list.
  */
 
-#ifndef GREENLET_INT_H_INCLUDED
-#define GREENLET_INT_H_INCLUDED
+#pragma once
 
 #if defined(__linux__) || defined(__WIN32__)
 # define TLS_USE___THREAD
@@ -57,5 +56,3 @@ void _greenlet_dealloc_stack(void *stack, long size);
 #ifdef __cplusplus
 }
 #endif
-
-#endif /* GREENLET_INT_H_INCLUDED */

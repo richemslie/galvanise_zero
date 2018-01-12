@@ -242,19 +242,21 @@ int PuctEvaluator::treePlayout() {
     return tree_playout_depth;
 }
 
-
-void PuctEvaluator::playoutLoop(int max_iterations) {
+void PuctEvaluator::playoutLoop(int max_iterations, double end_time) {
     int max_depth = -1;
     int total_depth = 0;
     int iterations = 0;
 
-    double start_time = K273::get_time();
     if (max_iterations < 0) {
-        // XXX sys.maxint
         max_iterations = INT_MAX;
     }
 
+    double start_time = K273::get_time();
     while (iterations < max_iterations) {
+        if (end_time > 0 && K273::get_time() > end_time) {
+            break;
+        }
+
         int depth = this->treePlayout();
         max_depth = std::max(depth, max_depth);
         total_depth += depth;
@@ -285,16 +287,25 @@ PuctNode* PuctEvaluator::fastApplyMove(PuctNodeChild* next) {
             new_root = c->to_node;
 
             // removeNode() is recursive, we must disconnect it from the tree here before calling
+            // might be nullptr
             c->to_node = nullptr;
             break;
         }
     }
 
     this->removeNode(this->root);
-
-    ASSERT(new_root);
     this->root = new_root;
     return this->root;
+}
+
+void PuctEvaluator::applyMove(const GGPLib::JointMove* move) {
+    for (int ii=0; ii<this->root->num_children; ii++) {
+        PuctNodeChild* c = this->root->getNodeChild(this->role_count, ii);
+        if (c->move.equals(move)) {
+            this->fastApplyMove(c);
+            break;
+        }
+    }
 }
 
 void PuctEvaluator::reset() {
@@ -309,10 +320,6 @@ PuctNode* PuctEvaluator::establishRoot(const GGPLib::BaseState* current_state, i
     // needed for temperature
     this->game_depth = game_depth;
 
-    if (this->config->verbose) {
-        K273::l_verbose("Debug @ depth %d", game_depth);
-    }
-
     ASSERT (this->root == nullptr);
 
     this->root = this->createNode(current_state);
@@ -321,8 +328,8 @@ PuctNode* PuctEvaluator::establishRoot(const GGPLib::BaseState* current_state, i
     return this->root;
 }
 
-PuctNodeChild* PuctEvaluator::onNextNove(int max_iterations) {
-    this->playoutLoop(max_iterations);
+PuctNodeChild* PuctEvaluator::onNextMove(int max_iterations, double end_time) {
+    this->playoutLoop(max_iterations, end_time);
 
     PuctNodeChild* choice = this->chooseTopVisits(this->root);
 
@@ -353,14 +360,23 @@ void PuctEvaluator::logDebug() {
         }
 
         this->supervisor->dumpNode(cur, next_choice, indent);
-        cur = next_choice->to_node;
-        if (cur == nullptr) {
+        if (next_choice == nullptr || next_choice->to_node == nullptr) {
             break;
         }
+
+        cur = next_choice->to_node;
     }
 }
 
 PuctNodeChild* PuctEvaluator::chooseTopVisits(PuctNode* node) {
+    if (node == nullptr) {
+        node = this->root;
+    }
+
+    if (node == nullptr) {
+        return nullptr;
+    }
+
     int best_visits = -1;
     PuctNodeChild* selection = nullptr;
 
@@ -379,4 +395,12 @@ PuctNodeChild* PuctEvaluator::chooseTopVisits(PuctNode* node) {
     }
 
     return selection;
+}
+
+PuctNodeChild* PuctEvaluator::chooseTemperature(PuctNode* node) {
+    if (node == nullptr) {
+        node = this->root;
+    }
+
+    return nullptr; // XXX todo
 }

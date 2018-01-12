@@ -1,6 +1,7 @@
 #include "selfplay.h"
 
 #include "puct/node.h"
+#include "puct/config.h"
 #include "puct/evaluator.h"
 #include "supervisorbase.h"
 
@@ -11,38 +12,13 @@
 using namespace GGPZero;
 
 
-PuctConfig* defaultConfig() {
-    PuctConfig* conf = new PuctConfig;
-    conf->name = "test_evaluator";
-    conf->verbose = false;
-    conf->generation = "noone";
-
-    conf->puct_before_expansions = 3;
-    conf->puct_before_root_expansions = 3;
-
-    conf->puct_constant_before = 5.0;
-    conf->puct_constant_after = 0.75;
-
-    conf->dirichlet_noise_pct = 0.25;
-    conf->dirichlet_noise_alpha = 0.5;
-
-    conf->choose = ChooseFn::choose_top_visits;
-
-    conf->max_dump_depth = 2;
-
-    conf->random_scale = 0.75;
-    conf->temperature = 1.0;
-    conf->depth_temperature_start = 8;
-    conf->depth_temperature_stop = 16;
-    conf->depth_temperature_increment = 0.5;
-    return conf;
-}
-
-
-TestSelfPlay::TestSelfPlay(SupervisorBase* supervisor, const GGPLib::BaseState* state) :
+TestSelfPlay::TestSelfPlay(SupervisorBase* supervisor, const GGPLib::BaseState* state,
+                           int base_iterations, int sample_iterations) :
     supervisor(supervisor),
-    pe(defaultConfig(), supervisor),
-    initial_state(state) {
+    pe(PuctConfig::defaultConfig(), supervisor),
+    initial_state(state),
+    base_iterations(base_iterations),
+    sample_iterations(sample_iterations) {
 }
 
 
@@ -61,18 +37,17 @@ void TestSelfPlay::playOnce() {
             break;
         }
 
-        int iterations = 100;
+        int iterations = this->base_iterations;
         if (game_depth >= 14 && game_depth <= 17) {
-            iterations = 800;
+            iterations = this->sample_iterations;
         }
 
-        PuctNodeChild* choice = pe.onNextNove(iterations);
+        PuctNodeChild* choice = pe.onNextMove(iterations);
         root = pe.fastApplyMove(choice);
         total_iterations += iterations;
         game_depth++;
     }
 
-    K273::l_warning("done TestSelfPlay::playOnce() depth/iterations :: %d / %d", game_depth, total_iterations);
-    this->supervisor->finish();
+    K273::l_verbose("done TestSelfPlay::playOnce() depth/iterations :: %d / %d", game_depth,
+                    total_iterations);
 }
-

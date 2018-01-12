@@ -254,7 +254,7 @@ void PuctNode::dumpNode(const PuctNode* node,
         string score = "(----, ----)";
         int visits = 0;
         if (child->to_node != nullptr) {
-            finalised = child->to_node->is_finalised ? "F" : "*";
+            finalised = child->to_node->is_finalised ? "T" : "*";
             score = scoreString(child->to_node, sm);
             visits = child->to_node->visits;
         }

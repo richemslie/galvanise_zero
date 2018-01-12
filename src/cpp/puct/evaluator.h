@@ -5,6 +5,7 @@
 
 #include <statemachine/basestate.h>
 #include <statemachine/statemachine.h>
+#include <statemachine/jointmove.h>
 
 #include <k273/rng.h>
 
@@ -40,18 +41,23 @@ namespace GGPZero {
 
         void backPropagate(double* new_scores);
         int treePlayout();
-        void playoutLoop(int max_iterations);
+        void playoutLoop(int max_iterations, double end_time);
 
         void reset();
         PuctNode* fastApplyMove(PuctNodeChild* next);
 
         PuctNode* establishRoot(const GGPLib::BaseState* current_state, int game_depth);
-        PuctNodeChild* onNextNove(int max_iterations);
+        PuctNodeChild* onNextMove(int max_iterations, double end_time=-1);
+        void applyMove(const GGPLib::JointMove* move);
 
         void logDebug();
 
-        PuctNodeChild* chooseTopVisits(PuctNode* node);
-        PuctNodeChild* chooseTemperature(PuctNode* node);
+        PuctNodeChild* chooseTopVisits(PuctNode* node=nullptr);
+        PuctNodeChild* chooseTemperature(PuctNode* node=nullptr);
+
+        bool hasRoot() const {
+            return this->root != nullptr;
+        }
 
     private:
         PuctConfig* config;

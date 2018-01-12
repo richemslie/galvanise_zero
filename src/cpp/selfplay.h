@@ -11,7 +11,8 @@ namespace GGPZero {
 
     class TestSelfPlay {
     public:
-        TestSelfPlay(SupervisorBase* supervisor, const GGPLib::BaseState* initial_state);
+        TestSelfPlay(SupervisorBase* supervisor, const GGPLib::BaseState* initial_state,
+                     int base_iterations, int sample_iterations);
         ~TestSelfPlay();
 
     public:
@@ -20,7 +21,11 @@ namespace GGPZero {
     private:
         SupervisorBase* supervisor;
         PuctEvaluator pe;
+
+        // config... XXX add config object
         const GGPLib::BaseState* initial_state;
+        int base_iterations;
+        int sample_iterations;
     };
 
 }

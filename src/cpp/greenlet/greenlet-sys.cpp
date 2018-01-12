@@ -54,7 +54,7 @@ greenlet_t *_greenlet_get_current()
     if (!_init_complete)
         return NULL;
     return pthread_getspecific(_current_greenlet);
-}   
+}
 
 void _greenlet_set_current(greenlet_t *current)
 {

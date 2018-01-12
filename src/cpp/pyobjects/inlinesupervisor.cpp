@@ -14,6 +14,8 @@
 #include <statemachine/statemachine.h>
 #include <statemachine/propagate.h>
 #include <statemachine/legalstate.h>
+#include <statemachine/basestate.h>
+#include <statemachine/jointmove.h>
 
 using namespace GGPZero;
 
@@ -26,7 +28,23 @@ struct PyObject_InlineSupervisor {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-static PyObject* InlineSupervisor_test(PyObject_InlineSupervisor* self, PyObject* args) {
+static PyObject* InlineSupervisor_start_self_play_test(PyObject_InlineSupervisor* self, PyObject* args) {
+    int num_selfplays = 0;
+    int base_iterations = 0;
+    int sample_iterations = 0;
+
+    // sm, transformer, batch_size, expected_policy_size, role_1_index
+    if (! ::PyArg_ParseTuple(args, "iii",
+                             &num_selfplays, &base_iterations, &sample_iterations)) {
+        return nullptr;
+    }
+
+    self->impl->selfPlayTest(num_selfplays, base_iterations, sample_iterations);
+
+    Py_RETURN_NONE;
+}
+
+static PyObject* InlineSupervisor_poll(PyObject_InlineSupervisor* self, PyObject* args) {
     PyArrayObject* m0 = nullptr;
     PyArrayObject* m1 = nullptr;
     if (!PyArg_ParseTuple(args, "O!O!", &PyArray_Type, &m0, &PyArray_Type, &m1)) {
@@ -62,18 +80,73 @@ static PyObject* InlineSupervisor_test(PyObject_InlineSupervisor* self, PyObject
     float* policies = (float*) PyArray_DATA(m0);
     float* final_scores = (float*) PyArray_DATA(m1);
 
-    int res = self->impl->test(policies, final_scores, sz);
+    int res = self->impl->poll(policies, final_scores, sz);
 
     if (res) {
+        // create a numpy array using our internal array
         npy_intp dims[1]{res};
         return PyArray_SimpleNewFromData(1, dims, NPY_FLOAT, self->impl->getBuf());
+
     } else {
+        // indicates we are done
         Py_RETURN_NONE;
     }
 }
 
+
+static PyObject* InlineSupervisor_player_start(PyObject_InlineSupervisor* self, PyObject* args) {
+    self->impl->puctPlayerStart();
+    Py_RETURN_NONE;
+}
+
+static PyObject* InlineSupervisor_player_apply_move(PyObject_InlineSupervisor* self, PyObject* args) {
+    ssize_t ptr = 0;
+    if (! ::PyArg_ParseTuple(args, "n", &ptr)) {
+        return nullptr;
+    }
+
+    GGPLib::JointMove* move = reinterpret_cast<GGPLib::JointMove*> (ptr);
+    self->impl->puctApplyMove(move);
+
+    Py_RETURN_NONE;
+}
+
+static PyObject* InlineSupervisor_player_move(PyObject_InlineSupervisor* self, PyObject* args) {
+    ssize_t ptr = 0;
+    int iterations = 0;
+    double end_time = 0.0;
+    if (! ::PyArg_ParseTuple(args, "nid", &ptr, &iterations, &end_time)) {
+        return nullptr;
+    }
+
+    GGPLib::BaseState* basestate = reinterpret_cast<GGPLib::BaseState*> (ptr);
+    self->impl->puctPlayerMove(basestate, iterations, end_time);
+    Py_RETURN_NONE;
+}
+
+static PyObject* InlineSupervisor_player_get_move(PyObject_InlineSupervisor* self, PyObject* args) {
+    int lead_role_index = 0;
+    if (! ::PyArg_ParseTuple(args, "i", &lead_role_index)) {
+        return nullptr;
+    }
+
+    int res = self->impl->puctPlayerGetMove(lead_role_index);
+    return ::Py_BuildValue("i", res);
+    Py_RETURN_NONE;
+}
+
+
 static struct PyMethodDef InlineSupervisor_methods[] = {
-    {"test", (PyCFunction) InlineSupervisor_test, METH_VARARGS, "test"},
+    {"start_self_play_test", (PyCFunction) InlineSupervisor_start_self_play_test, METH_VARARGS, "start_self_play_test"},
+    {"poll", (PyCFunction) InlineSupervisor_poll, METH_VARARGS, "poll"},
+
+    {"player_start", (PyCFunction) InlineSupervisor_player_start, METH_NOARGS, "player_start"},
+    {"player_apply_move", (PyCFunction) InlineSupervisor_player_apply_move, METH_VARARGS, "player_apply_move"},
+    {"player_move", (PyCFunction) InlineSupervisor_player_move, METH_VARARGS, "player_move"},
+    {"player_get_move", (PyCFunction) InlineSupervisor_player_get_move, METH_VARARGS, "player_get_move"},
+
+
+
     {nullptr, nullptr}            /* Sentinel */
 };
 

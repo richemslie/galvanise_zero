@@ -74,9 +74,6 @@ static void _greenlet_start(void *arg)
 
     _greenlet_set_current(greenlet);
     greenlet->gr_flags |= GREENLET_STARTED;
-    if (greenlet->gr_inject)
-        greenlet->gr_inject(greenlet->gr_arg);
-    greenlet->gr_inject = NULL;
     ret = greenlet->gr_start(greenlet->gr_arg);
     greenlet->gr_flags |= GREENLET_DEAD;
 
@@ -85,7 +82,7 @@ static void _greenlet_start(void *arg)
 
     greenlet->gr_arg = ret;
     _greenlet_set_current(greenlet);
-    _greenlet_switchcontext(&greenlet->gr_frame, greenlet->gr_inject, ret);
+    _greenlet_switchcontext(&greenlet->gr_frame, nullptr, ret);
 }
 
 void *greenlet_switch_to(greenlet_t *greenlet, void *arg)
@@ -94,7 +91,6 @@ void *greenlet_switch_to(greenlet_t *greenlet, void *arg)
 
     if (_greenlet_savecontext(&current->gr_frame))
     {
-        current->gr_inject = NULL;
         return current->gr_arg;
     }
 
@@ -110,12 +106,7 @@ void *greenlet_switch_to(greenlet_t *greenlet, void *arg)
 
     greenlet->gr_arg = arg;
     _greenlet_set_current(greenlet);
-    _greenlet_switchcontext(&greenlet->gr_frame, greenlet->gr_inject, arg);
-}
-
-void greenlet_inject(greenlet_t *greenlet, greenlet_inject_func_t inject_func)
-{
-    greenlet->gr_inject = inject_func;
+    _greenlet_switchcontext(&greenlet->gr_frame, nullptr, arg);
 }
 
 void greenlet_reset(greenlet_t *greenlet)
@@ -151,118 +142,55 @@ int greenlet_isdead(greenlet_t *greenlet)
     return (greenlet->gr_flags & GREENLET_DEAD) > 0;
 }
 
-greenlet::greenlet(greenlet_t *greenlet)
-{
-    _greenlet = greenlet;
-    _greenlet->gr_instance = this;
-    _start_func = greenlet->gr_start;
-    greenlet->gr_start = _run;
-    _data = new _greenlet_data;
-}
 
-greenlet::greenlet(greenlet_start_func_t start_func, greenlet *parent,
-                   int stacksize)
-{
-    greenlet_t *c_parent = parent ? parent->_greenlet->gr_parent : 0L;
 
-    _greenlet = greenlet_new(_run, c_parent, stacksize);
-    if (_greenlet == 0L)
-        throw std::bad_alloc();
-    _greenlet->gr_instance = this;
-    _start_func = start_func;
-    _data = new _greenlet_data;
-}
 
-greenlet::~greenlet()
-{
-    greenlet_destroy(_greenlet);
-    delete _data;
-}
+// greenlet::greenlet(greenlet_t *greenlet)
+// {
+//     _greenlet = greenlet;
+//     _greenlet->gr_instance = this;
+//     _start_func = greenlet->gr_start;
+//     greenlet->gr_start = _run;
+//     _data = new _greenlet_data;
+// }
 
-greenlet *greenlet::root()
-{
-    greenlet_t *c_root = greenlet_root();
-    greenlet *root = (greenlet *) c_root->gr_instance;
-    if (root == 0L)
-        root = new greenlet(c_root);
-    return root;
-}
+// greenlet::greenlet(greenlet_start_func_t start_func, greenlet *parent,
+//                    int stacksize)
+// {
+//     greenlet_t *c_parent = parent ? parent->_greenlet->gr_parent : 0L;
 
-greenlet *greenlet::current()
-{
-    greenlet_t *c_current = greenlet_current();
-    greenlet *current = (greenlet *) c_current->gr_instance;
-    if (current == 0L)
-        current = new greenlet(c_current);
-    return current;
-}
+//     _greenlet = greenlet_new(_run, c_parent, stacksize);
+//     if (_greenlet == 0L)
+//         throw std::bad_alloc();
+//     _greenlet->gr_instance = this;
+//     _start_func = start_func;
+//     _data = new _greenlet_data;
+// }
 
-greenlet *greenlet::parent()
-{
-    greenlet_t *c_parent = _greenlet->gr_parent;
-    greenlet *parent = (greenlet *) c_parent->gr_instance;
-    if (parent == 0L)
-        parent = new greenlet(c_parent);
-    return parent;
-}
+// greenlet::~greenlet()
+// {
+//     greenlet_destroy(_greenlet);
+//     delete _data;
+// }
 
-void *greenlet::switch_to(void *arg)
-{
-    return greenlet_switch_to(_greenlet, arg);
-}
+// greenlet *greenlet::root()
+// {
+//     greenlet_t *c_root = greenlet_root();
+//     greenlet *root = (greenlet *) c_root->gr_instance;
+//     if (root == 0L)
+//         root = new greenlet(c_root);
+//     return root;
+// }
 
-void greenlet::inject(greenlet_inject_func_t inject_func)
-{
-    _greenlet->gr_inject = inject_func;
-}
+// greenlet *greenlet::current()
+// {
+//     greenlet_t *c_current = greenlet_current();
+//     greenlet *current = (greenlet *) c_current->gr_instance;
+//     if (current == 0L)
+//         current = new greenlet(c_current);
+//     return current;
+// }
 
-void greenlet::reset()
-{
-    _greenlet->gr_flags = 0;
-}
-
-bool greenlet::isstarted()
-{
-    return (_greenlet->gr_flags & GREENLET_STARTED) > 0;
-}
-
-bool greenlet::isdead()
-{
-    return (_greenlet->gr_flags & GREENLET_DEAD) > 0;
-}
-
-void *greenlet::run(void *arg)
-{
-    if (_start_func == 0L)
-        return 0L;
-    return _start_func(arg);
-}
-
-void *greenlet::_run(void *arg)
-{
-    greenlet *greenlet = current();
-
-    try {
-        return greenlet->run(arg);
-    } catch (...) {
-        greenlet = greenlet->parent();
-        while (greenlet->isdead())
-            greenlet = greenlet->parent();
-        greenlet->_greenlet->gr_inject = _inject_exception;
-#ifdef HAVE_CXX11
-        greenlet->_data->exception = std::current_exception();
-#else
-        greenlet->_data->exception = new greenlet_exit();
-#endif
-        return 0L;
-    }
-}
-
-void greenlet::_inject_exception(void *arg)
-{
-#ifdef HAVE_CXX11
-    std::rethrow_exception(current()->_data->exception);
-#else
-    throw *current()->_data->exception;
-#endif
-}
+// greenlet *greenlet::parent()
+// {
+//     greenlet_t *c_parent = _greenlet->gr_parent;

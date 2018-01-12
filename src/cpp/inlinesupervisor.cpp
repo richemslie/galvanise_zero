@@ -5,25 +5,14 @@
 #include "greenlet/greenlet.h"
 
 #include <statemachine/basestate.h>
+#include <statemachine/jointmove.h>
 #include <statemachine/statemachine.h>
 
 #include <k273/logging.h>
 
+#include <functional>
+
 using namespace GGPZero;
-
-
-void* g_playOnce(void* arg) {
-    auto f = std::mem_fn(&TestSelfPlay::playOnce);
-    f((TestSelfPlay*) arg);
-    return nullptr;
-}
-
-void* g_mainLoop(void* arg) {
-    auto f = std::mem_fn(&InlineSupervisor::mainLoop);
-    f((InlineSupervisor*) arg);
-    return nullptr;
-}
-
 
 InlineSupervisor::InlineSupervisor(GGPLib::StateMachineInterface* sm,
                                    GdlBasesTransformer* transformer,
@@ -39,17 +28,19 @@ InlineSupervisor::InlineSupervisor(GGPLib::StateMachineInterface* sm,
     policies(nullptr),
     final_scores(nullptr),
     pred_count(0),
-    channel_buf_indx(0) {
+    channel_buf_indx(0),
+    top(nullptr),
+    scheduler(nullptr) {
 
     this->basestate_expand_node = this->sm->newBaseState();
-    this->master = nullptr;
 
     const int num_floats = this->transformer->totalSize() * this->batch_size;
     K273::l_debug("Creating channel_buf of size %d", num_floats);
 
     this->channel_buf = (float*) malloc(sizeof(float) * num_floats);
-}
 
+    this->top = greenlet_current();
+}
 
 PuctNode* InlineSupervisor::expandChild(PuctEvaluator* pe,
                                         const PuctNode* parent, const PuctNodeChild* child) {
@@ -90,7 +81,7 @@ PuctNode* InlineSupervisor::createNode(PuctEvaluator* pe, const GGPLib::BaseStat
     int idx = this->requestors.size();
     this->requestors.emplace_back(greenlet_current());
 
-    greenlet_switch_to(this->master, nullptr);
+    greenlet_switch_to(this->scheduler);
 
     ASSERT (this->pred_count > 0 && idx < this->pred_count);
 
@@ -114,6 +105,7 @@ PuctNode* InlineSupervisor::createNode(PuctEvaluator* pe, const GGPLib::BaseStat
             PuctNodeChild* c = new_node->getNodeChild(this->sm->getRoleCount(), ii);
             c->policy_prob /= total_prediction;
         }
+
     } else {
         for (int ii=0; ii<new_node->num_children; ii++) {
             PuctNodeChild* c = new_node->getNodeChild(this->sm->getRoleCount(), ii);
@@ -130,20 +122,89 @@ PuctNode* InlineSupervisor::createNode(PuctEvaluator* pe, const GGPLib::BaseStat
     return new_node;
 }
 
-void InlineSupervisor::finish() {
-    greenlet_switch_to(this->master, nullptr);
+void InlineSupervisor::puctPlayerStart() {
+    K273::l_verbose("InlineSupervisor::puctPlayerStart()");
+    this->player_pe = new PuctEvaluator(PuctConfig::defaultConfig(), this);
 }
 
-void InlineSupervisor::mainLoop() {
+void InlineSupervisor::puctApplyMove(const GGPLib::JointMove* move) {
+    ASSERT (this->player_pe != nullptr);
+    if (this->player_pe->hasRoot()) {
+        this->player_pe->applyMove(move);
+    }
+}
+
+void InlineSupervisor::puctPlayerMove(const GGPLib::BaseState* state, int iterations, double end_time) {
+
+    // returns the lead_role_index's legal of the root.
+
+    K273::l_verbose("InlineSupervisor::puctPlayerIterations() - %d", iterations);
+
+    ASSERT (this->scheduler == nullptr);
+
+    this->scheduler = createGreenlet([this]() {
+            return this->runScheduler();
+        });
+
+    ASSERT (this->player_pe != nullptr);
+
+    if (!this->player_pe->hasRoot()) {
+        auto f = [this, state, iterations, end_time]() {
+            this->player_pe->establishRoot(state, 0);
+            this->player_pe->onNextMove(iterations, end_time);
+        };
+
+        this->runnables.emplace_back(createGreenlet(f, this->scheduler),
+                                     nullptr);
+
+    } else {
+        auto f = [this, iterations, end_time]() {
+            this->player_pe->onNextMove(iterations, end_time);
+        };
+
+        this->runnables.emplace_back(createGreenlet(f, this->scheduler),
+                                     nullptr);
+    }
+}
+
+int InlineSupervisor::puctPlayerGetMove(int lead_role_index) {
+    ASSERT (this->player_pe != nullptr);
+    PuctNodeChild* child = this->player_pe->chooseTopVisits();
+    if (child == nullptr) {
+        return -1;
+    }
+
+    return child->move.get(lead_role_index);
+}
+
+void InlineSupervisor::selfPlayTest(int num_selfplays, int base_iterations, int sample_iterations) {
+    K273::l_verbose("InlineSupervisor::selfPlayTest(%d, %d, %d)",
+                    num_selfplays, base_iterations, sample_iterations);
+
+    ASSERT (this->scheduler == nullptr);
+
+    this->scheduler = createGreenlet([this]() {
+            return this->runScheduler();
+        });
+
     GGPLib::BaseState* bs = this->sm->newBaseState();
     bs->assign(this->sm->getInitialState());
 
-    // create a bunch of self plays (for now only 1)
-    for (unsigned int ii=0; ii<this->batch_size; ii++) {
-        TestSelfPlay* sp = new TestSelfPlay(this, bs);
-        greenlet_t *g = greenlet_new(g_playOnce, nullptr, 0);
-        this->runnables.emplace_back(g, sp);
+    // create a bunch of self plays
+    for (int ii=0; ii<num_selfplays; ii++) {
+        TestSelfPlay* sp = new TestSelfPlay(this, bs, base_iterations, sample_iterations);
+
+        auto f = [sp]() {
+            return sp->playOnce();
+        };
+
+        this->runnables.emplace_back(createGreenlet(f, this->scheduler),
+                                     nullptr);
     }
+}
+
+void InlineSupervisor::runScheduler() {
+    K273::l_verbose("entering InlineSupervisor::runScheduler()");
 
     while (true) {
         if (this->runnables.empty()) {
@@ -151,7 +212,7 @@ void InlineSupervisor::mainLoop() {
                 break;
             }
 
-            greenlet_switch_to(this->top, nullptr);
+            greenlet_switch_to(this->top);
 
             ASSERT (this->policies != nullptr && this->final_scores != nullptr);
             ASSERT (this->pred_count == (int) this->requestors.size());
@@ -169,11 +230,18 @@ void InlineSupervisor::mainLoop() {
         }
     }
 
-    K273::l_verbose("requestors.size at end of mainLoop() x:  %zu", this->requestors.size());
+    K273::l_verbose("requestors.size on exiting runScheduler():  %zu", this->requestors.size());
 }
 
-int InlineSupervisor::test(float* policies, float* final_scores, int pred_count) {
-    //K273::l_debug("In pred_count %d", pred_count);
+int InlineSupervisor::poll(float* policies, float* final_scores, int pred_count) {
+    ASSERT(!greenlet_isdead(this->top));
+
+    if (this->scheduler == nullptr) {
+        K273::l_warning("poll called with no job");
+        return 0;
+    }
+
+    ASSERT(!greenlet_isdead(this->scheduler));
 
     ASSERT (this->policies == nullptr && this->final_scores == nullptr && this->pred_count == 0);
     this->policies = policies;
@@ -181,16 +249,12 @@ int InlineSupervisor::test(float* policies, float* final_scores, int pred_count)
     this->pred_count = pred_count;
 
     this->channel_buf_indx = 0;
-    if (this->master == nullptr) {
-        this->top = greenlet_current();
-        this->master = greenlet_new(g_mainLoop, nullptr, 0);
-        greenlet_switch_to(this->master, this);
-    } else {
-        greenlet_switch_to(this->master, nullptr);
-    }
+
+    greenlet_switch_to(this->scheduler);
 
     if (this->channel_buf_indx == 0) {
-        ASSERT(greenlet_isdead(this->master));
+        ASSERT(greenlet_isdead(this->scheduler));
+        this->scheduler = nullptr;
     }
 
     this->policies = nullptr;
