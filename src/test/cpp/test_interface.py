@@ -1,3 +1,4 @@
+
 import os
 import time
 
@@ -6,11 +7,6 @@ import numpy as np
 from ggplib.db import lookup
 
 from ggpzero.nn.manager import get_manager
-
-# XXX shouldn't import this directly
-import ggpzero_interface
-from ggpzero_interface import SupervisorDummy
-
 from ggpzero.util import cppinterface
 
 
@@ -22,30 +18,19 @@ def float_formatter1(x):
     return "%.2f" % x
 
 
-def setup(self):
+def setup():
     from ggplib.util.init import setup_once
     setup_once()
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 
-def test_cffi_to_cmodule():
-    # XXX this is not a valid test anymore???
-    wrap = ggpzero_interface.start(42, 42)
-
-    info = lookup.by_name("breakthrough")
-    sm_ptr = cppinterface.sm_to_ptr(info.get_sm())
-    print sm_ptr
-
-    wrap.test_sm(sm_ptr)
+def test_call_fn():
+    import ggpzero_interface
+    ggpzero_interface.hello_test('bobthebuilder')
 
 
 def test_transformer():
-
-    # game = "breakthrough"
-    # gen = "v5_84"
-
-    game = "reversi"
-    gen = "v6_65"
+    game = "breakthrough"
 
     game_info = lookup.by_name(game)
     sm = game_info.get_sm()
@@ -56,7 +41,7 @@ def test_transformer():
     # create transformer wrapper object
     c_transformer = cppinterface.create_c_transformer(t)
 
-    nn = man.load_network(game, gen)
+    nn = man.create_new_network(game)
     verbose = False
 
     total_predictions = 0
@@ -93,57 +78,69 @@ def test_transformer():
     print total_predictions, "time taken", [s * 1000 for s in (total_s0, total_s1, total_s2)]
 
 
-def test_cgreenlets():
-    ggpzero_interface.cgreenlet_test()
-
-
-def test_dummy_supervisor():
-
-    # game = "breakthrough"
-    # gen = "v5_84"
-    game = "reversi"
-    gen = "v6_65"
-    # game = "breakthroughSmall"
-    # gen = "v1_0"
-    # game = "connectFour"
-    # gen = "v6_27"
-
-    game_info = lookup.by_name(game)
-    sm = game_info.get_sm()
+def test_inline_supervisor_creation():
+    games = "breakthrough reversi breakthroughSmall connectFour".split()
 
     man = get_manager()
-    t = man.get_transformer(game)
 
-    # create transformer wrapper object
-    c_transformer = cppinterface.create_c_transformer(t)
+    for game in games:
+        game_info = lookup.by_name(game)
 
+        # get statemachine
+        sm = game_info.get_sm()
+        nn = man.create_new_network(game)
+
+        for batch_size in (1, 128, 1024):
+            supervisor = cppinterface.SupervisorSelfPlay(sm, nn, batch_size=batch_size)
+            continue
+
+
+def test_inline_supervisor_run():
+    game = "breakthroughSmall"
+    man = get_manager()
+    nn = man.create_new_network(game, "smaller")
+
+    game_info = lookup.by_name(game)
+
+    supervisor = cppinterface.SupervisorSelfPlay(game_info.get_sm(), nn, batch_size=4096)
+    supervisor.create_job(4096, 42, 42)
+    supervisor.poll_loop(do_stats=True)
+    supervisor.dump_stats()
+
+    time.sleep(0.5)
+
+    supervisor.create_job(4096, 42, 42)
+    supervisor.poll_loop(do_stats=True)
+    supervisor.dump_stats()
+
+
+def test_inline_supervisor_speed():
+    game = "reversi"
+    gen = "v6_65"
+
+    man = get_manager()
     nn = man.load_network(game, gen)
+    print nn.summary()
+    game_info = lookup.by_name(game)
 
-    for batch_size in (1, 128, 1024):
+    supervisor = cppinterface.SupervisorSelfPlay(game_info.get_sm(), nn, batch_size=4096)
+    supervisor.create_job(1024, 500, 500)
+    supervisor.poll_loop(do_stats=True)
+    supervisor.dump_stats()
 
-        d = SupervisorDummy(cppinterface.sm_to_ptr(sm), c_transformer, batch_size,
-                            t.policy_dist_count, t.policy_1_index_start)
 
-        dummy = np.zeros(0)
-        policy_dists, final_scores = dummy, dummy
-        total_preds = 0
-        acc_0 = 0
-        acc_1 = 0
-        while True:
-            s = time.time()
-            pred_array = d.test(policy_dists, final_scores)
-            if pred_array is None:
-                break
+def test_inline_more_games():
+    ' tests where we have more games than batch_size '
+    batch_size = 128
+    games_size = 512
 
-            sz = len(pred_array) / (t.num_channels * t.channel_size)
-            total_preds += sz
-            pred_array = pred_array.reshape(sz, t.num_channels, t.num_cols, t.num_rows)
-            e = time.time()
-            acc_0 += e - s
-            policy_dists, final_scores = nn.get_model().predict(pred_array, batch_size=sz)
-            acc_1 += time.time() - e
+    game = "breakthroughSmall"
+    man = get_manager()
+    nn = man.create_new_network(game, "smaller")
 
-        print "total predictions", total_preds
-        print "times %.2f %.2f" % (acc_0, acc_1)
-        relative_time = (acc_0 + acc_1) / batch_size
-        print "relative time per game %.1f" % relative_time
+    game_info = lookup.by_name(game)
+
+    supervisor = cppinterface.SupervisorSelfPlay(game_info.get_sm(), nn, batch_size=batch_size)
+    supervisor.create_job(games_size, 21, 21)
+    supervisor.poll_loop(do_stats=True)
+    supervisor.dump_stats()

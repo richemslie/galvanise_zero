@@ -28,10 +28,9 @@ def test_speed_of_one_shot():
     conf = confs.PolicyPlayerConfig(generation=current_gen, verbose=False)
 
     white = PolicyPlayer(conf)
-    black = PolicyPlayer(conf)
 
     gm.add_player(white, "white")
-    gm.add_player(black, "black")
+    legal = get.get_player("legal")
 
     gm.reset()
     gm.start(meta_time=30, move_time=15)
@@ -58,8 +57,7 @@ def test_speed_of_one_simulation():
                                        generation=current_gen,
                                        playouts_per_iteration=800,
                                        playouts_per_iteration_noop=0,
-                                       dirichlet_noise_alpha=-1,
-                                       expand_root=-1)
+                                       dirichlet_noise_alpha=-1)
     conf_policy = confs.PolicyPlayerConfig(generation=current_gen, verbose=False)
 
     # add two players

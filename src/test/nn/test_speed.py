@@ -1,3 +1,5 @@
+''' tests raw speed of predictions on GPU. '''
+
 import gc
 import os
 import time

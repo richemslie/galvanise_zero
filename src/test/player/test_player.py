@@ -147,7 +147,6 @@ def test_fast_plays():
     conf.playouts_per_iteration = 1
     conf.playouts_per_iteration_noop = 0
     conf.dirichlet_noise_alpha = -1
-    conf.expand_root = -1
     print conf
 
     # add two players
