@@ -23,8 +23,6 @@ complicated and takes ages, but it is worth it as runs twice as fast (AVX instru
 instructions are for the binaries they provide.
 
 
-.. code-block:: shell
-
     # INSTALL:
     sudo apt install python python-dev
 
