@@ -15,11 +15,11 @@
 namespace GGPZero {
 
     // forwards
-    class SupervisorBase;
+    class NetworkScheduler;
 
     class PuctEvaluator {
     public:
-        PuctEvaluator(PuctConfig*, SupervisorBase* supervisor);
+        PuctEvaluator(PuctConfig*, NetworkScheduler* scheduler);
         virtual ~PuctEvaluator();
 
     private:
@@ -61,7 +61,7 @@ namespace GGPZero {
 
     private:
         PuctConfig* config;
-        SupervisorBase* supervisor;
+        NetworkScheduler* scheduler;
 
         int role_count;
         std::string identifier;

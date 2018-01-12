@@ -3,7 +3,6 @@
 #include "puct/node.h"
 #include "puct/config.h"
 #include "puct/evaluator.h"
-#include "supervisorbase.h"
 
 #include <statemachine/statemachine.h>
 
@@ -12,10 +11,10 @@
 using namespace GGPZero;
 
 
-TestSelfPlay::TestSelfPlay(SupervisorBase* supervisor, const GGPLib::BaseState* state,
+TestSelfPlay::TestSelfPlay(NetworkScheduler* scheduler, const GGPLib::BaseState* state,
                            int base_iterations, int sample_iterations) :
-    supervisor(supervisor),
-    pe(PuctConfig::defaultConfig(), supervisor),
+    scheduler(scheduler),
+    pe(PuctConfig::defaultConfig(), scheduler),
     initial_state(state),
     base_iterations(base_iterations),
     sample_iterations(sample_iterations) {

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "supervisorbase.h"
+#include "scheduler.h"
 #include "puct/evaluator.h"
 
 #include <statemachine/statemachine.h>
@@ -11,7 +11,7 @@ namespace GGPZero {
 
     class TestSelfPlay {
     public:
-        TestSelfPlay(SupervisorBase* supervisor, const GGPLib::BaseState* initial_state,
+        TestSelfPlay(NetworkScheduler* scheduler, const GGPLib::BaseState* initial_state,
                      int base_iterations, int sample_iterations);
         ~TestSelfPlay();
 
@@ -19,7 +19,7 @@ namespace GGPZero {
         void playOnce();
 
     private:
-        SupervisorBase* supervisor;
+        NetworkScheduler* scheduler;
         PuctEvaluator pe;
 
         // config... XXX add config object

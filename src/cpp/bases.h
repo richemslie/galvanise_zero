@@ -58,7 +58,7 @@ namespace GGPZero {
 
         void toChannels(const GGPLib::BaseState* bs,
                         const std::vector <GGPLib::BaseState*>& prev_states,
-                        float* buf);
+                        float* buf) const;
 
     private:
         int channel_size;

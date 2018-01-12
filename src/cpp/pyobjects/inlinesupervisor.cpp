@@ -23,7 +23,7 @@ using namespace GGPZero;
 
 struct PyObject_InlineSupervisor {
     PyObject_HEAD
-    InlineSupervisor* impl;
+    Supervisor* impl;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -188,7 +188,7 @@ static PyTypeObject PyType_InlineSupervisor = {
     0,                  /* tp_getset */
 };
 
-static PyObject_InlineSupervisor* PyType_InlineSupervisor_new(InlineSupervisor* impl) {
+static PyObject_InlineSupervisor* PyType_InlineSupervisor_new(Supervisor* impl) {
     PyObject_InlineSupervisor* res = PyObject_New(PyObject_InlineSupervisor,
                                                   &PyType_InlineSupervisor);
     res->impl = impl;
@@ -222,7 +222,9 @@ static PyObject* gi_InlineSupervisor(PyObject* self, PyObject* args) {
     GGPLib::StateMachine* sm = reinterpret_cast<GGPLib::StateMachine*> (ptr);
 
     // create the c++ object
-    InlineSupervisor* dummy = new InlineSupervisor(sm, py_transformer->impl, batch_size,
-                                                   expected_policy_size, role_1_index);
-    return (PyObject*) PyType_InlineSupervisor_new(dummy);
+    Supervisor* supervisor = new Supervisor(sm);
+    supervisor->createScheduler(py_transformer->impl, batch_size,
+                                expected_policy_size, role_1_index);
+
+    return (PyObject*) PyType_InlineSupervisor_new(supervisor);
 }

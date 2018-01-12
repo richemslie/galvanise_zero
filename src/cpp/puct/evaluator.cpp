@@ -1,7 +1,7 @@
 #include "puct/evaluator.h"
 #include "puct/node.h"
 
-#include "supervisorbase.h"
+#include "scheduler.h"
 
 #include <k273/util.h>
 #include <k273/logging.h>
@@ -17,10 +17,10 @@ using namespace GGPZero;
 
 ///////////////////////////////////////////////////////////////////////////////
 
-PuctEvaluator::PuctEvaluator(PuctConfig* config, SupervisorBase* supervisor) :
+PuctEvaluator::PuctEvaluator(PuctConfig* config, NetworkScheduler* scheduler) :
     config(config),
-    supervisor(supervisor),
-    role_count(supervisor->getRoleCount()),
+    scheduler(scheduler),
+    role_count(scheduler->getRoleCount()),
     identifier("PuctEvaluator"),
     game_depth(0),
     root(nullptr),
@@ -71,14 +71,14 @@ void PuctEvaluator::removeNode(PuctNode* node) {
 
 
 void PuctEvaluator::expandChild(PuctNode* parent, PuctNodeChild* child) {
-    PuctNode* new_node = this->supervisor->expandChild(this, parent, child);
+    PuctNode* new_node = this->scheduler->expandChild(this, parent, child);
     this->addNode(new_node);
     child->to_node = new_node;
     parent->num_children_expanded++;
 }
 
 PuctNode* PuctEvaluator::createNode(const GGPLib::BaseState* state) {
-    PuctNode* new_node = this->supervisor->createNode(this, state);
+    PuctNode* new_node = this->scheduler->createNode(this, state);
     this->addNode(new_node);
     return new_node;
 }
@@ -359,7 +359,7 @@ void PuctEvaluator::logDebug() {
             next_choice = this->chooseTopVisits(cur);
         }
 
-        this->supervisor->dumpNode(cur, next_choice, indent);
+        this->scheduler->dumpNode(cur, next_choice, indent);
         if (next_choice == nullptr || next_choice->to_node == nullptr) {
             break;
         }
