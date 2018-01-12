@@ -73,3 +73,91 @@ def nn_model_config_template(game, network_size_hint="small"):
         assert False, "network_size_hint %s, not recognised" % network_size_hint
 
     return conf
+
+
+def puct_config_template(generation, name="default"):
+    configs = dict(
+        default=confs.PUCTPlayerConfig(name="default",
+                                       verbose=True,
+                                       playouts_per_iteration=1600,
+                                       playouts_per_iteration_noop=800,
+                                       dirichlet_noise_alpha=0.03,
+
+                                       puct_before_expansions=3,
+                                       puct_before_root_expansions=5,
+                                       puct_constant_before=3.0,
+                                       puct_constant_after=0.75,
+
+                                       choose="choose_top_visits",
+                                       max_dump_depth=2),
+
+        test=confs.PUCTPlayerConfig(name="test",
+                                    verbose=True,
+                                    playouts_per_iteration=42,
+                                    playouts_per_iteration_noop=0,
+
+                                    dirichlet_noise_alpha=0.03,
+                                    puct_before_expansions=3,
+                                    puct_before_root_expansions=5,
+                                    puct_constant_before=3.0,
+                                    puct_constant_after=0.75,
+
+                                    choose="choose_top_visits",
+                                    max_dump_depth=2),
+
+        test2=confs.PUCTPlayerConfig(name="test2",
+                                     verbose=True,
+                                     playouts_per_iteration=100,
+                                     playouts_per_iteration_noop=100,
+
+                                     dirichlet_noise_alpha=-1,
+                                     puct_before_expansions=3,
+                                     puct_before_root_expansions=5,
+                                     puct_constant_before=3.0,
+                                     puct_constant_after=0.75,
+
+                                     choose="choose_top_visits",
+                                     max_dump_depth=2),
+
+        policy=confs.PUCTPlayerConfig(name="policy-test",
+                                      verbose=True,
+                                      playouts_per_iteration=0,
+                                      playouts_per_iteration_noop=0,
+                                      dirichlet_noise_alpha=-1,
+                                      choose="choose_top_visits",
+                                      max_dump_depth=1),
+
+        max_score=confs.PUCTPlayerConfig(name="max-score",
+                                         verbose=True,
+                                         playouts_per_iteration=1,
+                                         playouts_per_iteration_noop=0,
+                                         dirichlet_noise_alpha=-1,
+                                         puct_constant_before=0,
+                                         puct_constant_after=0,
+
+                                         choose="choose_top_visits",
+                                         max_dump_depth=2),
+
+        compare=confs.PUCTPlayerConfig(name="compare",
+                                       verbose=True,
+                                       playouts_per_iteration=200,
+                                       playouts_per_iteration_noop=200,
+
+                                       dirichlet_noise_alpha=0.03,
+
+                                       puct_before_expansions=3,
+                                       puct_before_root_expansions=5,
+                                       puct_constant_before=3.0,
+                                       puct_constant_after=0.75,
+
+                                       temperature=0.8,
+                                       depth_temperature_start=4,
+                                       depth_temperature_increment=0.5,
+                                       depth_temperature_stop=40,
+                                       random_scale=0.75,
+
+                                       choose="choose_temperature",
+                                       max_dump_depth=2))
+    conf = configs[name]
+    conf.generation = generation
+    return conf

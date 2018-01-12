@@ -1,0 +1,102 @@
+from builtins import super
+
+import sys
+import attr
+
+from ggplib.util import log
+from ggplib.player.base import MatchPlayer
+
+from ggpzero.defs import templates
+
+from ggpzero.util.cppinterface import joint_move_to_ptr, basestate_to_ptr, SupervisorPlay
+
+from ggpzero.nn.manager import get_manager
+
+
+class CppPUCTPlayer(MatchPlayer):
+    def __init__(self, conf):
+        self.conf = conf
+        self.identifier = "cpp_%s_%s_%s" % (self.conf.name,
+                                            self.conf.playouts_per_iteration,
+                                            conf.generation)
+        super().__init__(self.identifier)
+        self.sm = None
+
+    def on_meta_gaming(self, finish_time):
+        if self.conf.verbose:
+            log.info("CppPUCTPlayer, match id: %s" % self.match.match_id)
+
+        if self.sm is None:
+            game_info = self.match.game_info
+            self.sm = game_info.get_sm()
+
+            man = get_manager()
+            if man.can_load(game_info.game, self.conf.generation):
+                self.nn = man.load_network(game_info.game, self.conf.generation)
+            else:
+                self.nn = man.create_new_network(game_info.game, "smaller")
+            self.supervisor = SupervisorPlay(self.sm, self.nn)
+            self.supervisor.player_start(attr.asdict(self.conf))
+
+            def get_noop_idx(actions):
+                for idx, a in enumerate(actions):
+                    if "noop" in a:
+                        return idx
+                assert False, "did not find noop"
+
+            self.role0_noop_legal, self.role1_noop_legal = map(get_noop_idx, game_info.model.actions)
+        else:
+            self.supervisor.player_reset()
+
+    def on_apply_move(self, joint_move):
+        self.supervisor.player_apply_move(joint_move_to_ptr(joint_move))
+
+    def on_next_move(self, finish_time):
+        current_state = self.match.get_current_state()
+        self.sm.update_bases(current_state)
+
+        if (self.sm.get_legal_state(0).get_count() == 1 and
+            self.sm.get_legal_state(0).get_legal(0) == self.role0_noop_legal):
+            lead_role_index = 1
+
+        else:
+            assert (self.sm.get_legal_state(1).get_count() == 1 and
+                    self.sm.get_legal_state(1).get_legal(0) == self.role1_noop_legal)
+            lead_role_index = 0
+
+        if lead_role_index == self.match.our_role_index:
+            max_iterations = self.conf.playouts_per_iteration
+        else:
+            max_iterations = self.conf.playouts_per_iteration_noop
+
+        current_state = self.match.get_current_state()
+        self.supervisor.player_move(basestate_to_ptr(current_state), max_iterations, finish_time)
+
+        self.supervisor.poll_loop()
+        return self.supervisor.player_get_move(self.match.our_role_index)
+
+
+###############################################################################
+
+def main():
+    from ggpzero.util.keras import init
+
+    init()
+
+    port = int(sys.argv[1])
+    generation = sys.argv[2]
+
+    config_name = "default"
+
+    if len(sys.argv) > 3:
+        config_name = sys.argv[3]
+
+    conf = templates.puct_config_template(generation, config_name)
+    player = CppPUCTPlayer(conf=conf)
+
+    from ggplib.play import play_runner
+    play_runner(player, port)
+
+
+if __name__ == "__main__":
+    main()
