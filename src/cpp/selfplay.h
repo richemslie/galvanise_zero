@@ -1,31 +1,73 @@
 #pragma once
 
-#include "scheduler.h"
-#include "puct/evaluator.h"
-
 #include <statemachine/statemachine.h>
+
+#include <vector>
+
+/*
+ * never add a reference back to supervisor... the supervisor will always call us
+ */
+
 
 namespace GGPZero {
     // forwards
+    class Sample;
+    class PuctConfig;
     class PuctEvaluator;
+    class NetworkScheduler;
 
-    class TestSelfPlay {
+
+    struct SelfPlayConfig {
+        // choose a random number between 0 - expected_game_length for samples to start
+        int expected_game_length;
+
+        // a node score reaches probability of winning, start sample selection early
+        float early_sample_start_probability;
+
+        // -1 is off, and defaults to alpha-zero style
+        int max_number_of_samples;
+
+        // if the probability of losing drops below - then resign
+        float resign_score_probability;
+
+        // ignore resignation - and continue to end
+        float resign_false_positive_retry_percentage;
+
+        PuctConfig* select_puct_config;
+        int select_iterations;
+
+        PuctConfig* sample_puct_config;
+        int sample_iterations;
+
+        PuctConfig* score_puct_config;
+        int score_iterations;
+    };
+
+    class SelfPlay {
     public:
-        TestSelfPlay(NetworkScheduler* scheduler, const GGPLib::BaseState* initial_state,
-                     int base_iterations, int sample_iterations);
-        ~TestSelfPlay();
+        SelfPlay(NetworkScheduler* scheduler, const SelfPlayConfig* conf);
+        ~SelfPlay();
 
     public:
+        void configure(GGPLib::StateMachineInterface* sm);
+
         void playOnce();
+        void playGamesForever();
+
+        std::vector <Sample*>& getSamples();
 
     private:
         NetworkScheduler* scheduler;
-        PuctEvaluator pe;
+        const SelfPlayConfig* conf;
 
-        // config... XXX add config object
+        // only one evaluator -  allow to swap in/out config
+        PuctEvaluator* pe;
+
         const GGPLib::BaseState* initial_state;
-        int base_iterations;
-        int sample_iterations;
+        std::vector <Sample*> samples;
+
+    public:
+        static const int MAX_NUMBER_STATES = 500;
     };
 
 }

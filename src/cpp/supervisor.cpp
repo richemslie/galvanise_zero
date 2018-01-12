@@ -1,6 +1,7 @@
 #include "supervisor.h"
 
 #include "selfplay.h"
+#include "scheduler.h"
 #include "puct/evaluator.h"
 #include "greenlet/greenlet.h"
 
@@ -29,6 +30,7 @@ NetworkScheduler* Supervisor::createScheduler(const GdlBasesTransformer* transfo
                                               int expected_policy_size,
                                               int role_1_index) {
 
+    ASSERT(this->inline_scheduler == nullptr);
     this->inline_scheduler = new NetworkScheduler(this->sm->dupe(),
                                                   transformer,
                                                   batch_size,
@@ -37,9 +39,14 @@ NetworkScheduler* Supervisor::createScheduler(const GdlBasesTransformer* transfo
     return this->inline_scheduler;
 }
 
-void Supervisor::puctPlayerStart() {
-    K273::l_verbose("InlineSupervisor::puctPlayerStart()");
-    this->player_pe = new PuctEvaluator(PuctConfig::defaultConfig(), this->inline_scheduler);
+void Supervisor::puctPlayerStart(PuctConfig* conf) {
+    K273::l_verbose("Supervisor::puctPlayerStart()");
+    this->player_pe = new PuctEvaluator(conf, this->inline_scheduler);
+}
+
+void Supervisor::puctPlayerReset() {
+    K273::l_verbose("Supervisor::reset()");
+    this->player_pe->reset();
 }
 
 void Supervisor::puctApplyMove(const GGPLib::JointMove* move) {
@@ -50,10 +57,9 @@ void Supervisor::puctApplyMove(const GGPLib::JointMove* move) {
 }
 
 void Supervisor::puctPlayerMove(const GGPLib::BaseState* state, int iterations, double end_time) {
+    this->inline_scheduler->createMainLoop();
 
-    // returns the lead_role_index's legal of the root.
-
-    K273::l_verbose("InlineSupervisor::puctPlayerIterations() - %d", iterations);
+    K273::l_verbose("Supervisor::puctPlayerIterations() - %d", iterations);
 
     ASSERT (this->player_pe != nullptr);
 
@@ -76,7 +82,7 @@ void Supervisor::puctPlayerMove(const GGPLib::BaseState* state, int iterations, 
 
 int Supervisor::puctPlayerGetMove(int lead_role_index) {
     ASSERT (this->player_pe != nullptr);
-    PuctNodeChild* child = this->player_pe->chooseTopVisits();
+    const PuctNodeChild* child = this->player_pe->choose();
     if (child == nullptr) {
         return -1;
     }
@@ -85,18 +91,17 @@ int Supervisor::puctPlayerGetMove(int lead_role_index) {
 }
 
 void Supervisor::selfPlayTest(int num_selfplays, int base_iterations, int sample_iterations) {
-    K273::l_verbose("InlineSupervisor::selfPlayTest(%d, %d, %d)",
+    K273::l_verbose("Supervisor::selfPlayTest(%d, %d, %d)",
                     num_selfplays, base_iterations, sample_iterations);
 
     GGPLib::BaseState* bs = this->sm->newBaseState();
     bs->assign(this->sm->getInitialState());
 
+    this->inline_scheduler->createMainLoop();
+
     // create a bunch of self plays
     for (int ii=0; ii<num_selfplays; ii++) {
-        TestSelfPlay* sp = new TestSelfPlay(this->inline_scheduler,
-                                            bs,
-                                            base_iterations,
-                                            sample_iterations);
+        SelfPlay* sp = new SelfPlay(this->inline_scheduler, nullptr);
 
         auto f = [sp]() {
             return sp->playOnce();

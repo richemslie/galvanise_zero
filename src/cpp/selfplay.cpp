@@ -1,5 +1,6 @@
 #include "selfplay.h"
 
+#include "scheduler.h"
 #include "puct/node.h"
 #include "puct/config.h"
 #include "puct/evaluator.h"
@@ -11,24 +12,24 @@
 using namespace GGPZero;
 
 
-TestSelfPlay::TestSelfPlay(NetworkScheduler* scheduler, const GGPLib::BaseState* state,
-                           int base_iterations, int sample_iterations) :
+SelfPlay::SelfPlay(NetworkScheduler* scheduler, const SelfPlayConfig* conf) :
     scheduler(scheduler),
-    pe(PuctConfig::defaultConfig(), scheduler),
-    initial_state(state),
-    base_iterations(base_iterations),
-    sample_iterations(sample_iterations) {
+    conf(conf) {
+    // everything is initialised in configure()
 }
 
 
-TestSelfPlay::~TestSelfPlay() {
+SelfPlay::~SelfPlay() {
 }
 
+void SelfPlay::configure(GGPLib::StateMachineInterface* sm) {
+    // sm is available for initialising self play, but it can't hang on to it
+}
 
-void TestSelfPlay::playOnce() {
-    this->pe.reset();
+void SelfPlay::playOnce() {
+    this->pe->reset();
 
-    PuctNode* root = this->pe.establishRoot(this->initial_state, 0);
+    const PuctNode* root = this->pe->establishRoot(this->initial_state, 0);
     int game_depth = 0;
     int total_iterations = 0;
     while (true) {
@@ -36,17 +37,23 @@ void TestSelfPlay::playOnce() {
             break;
         }
 
-        int iterations = this->base_iterations;
+        int iterations = this->conf->select_iterations;
         if (game_depth >= 14 && game_depth <= 17) {
-            iterations = this->sample_iterations;
+            iterations = this->conf->sample_iterations;
         }
 
-        PuctNodeChild* choice = pe.onNextMove(iterations);
-        root = pe.fastApplyMove(choice);
+        const PuctNodeChild* choice = this->pe->onNextMove(iterations);
+        root = this->pe->fastApplyMove(choice);
         total_iterations += iterations;
         game_depth++;
     }
 
     K273::l_verbose("done TestSelfPlay::playOnce() depth/iterations :: %d / %d", game_depth,
                     total_iterations);
+}
+
+void SelfPlay::playGamesForever() {
+    while (true) {
+        this->playOnce();
+    }
 }

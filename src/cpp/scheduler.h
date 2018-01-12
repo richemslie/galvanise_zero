@@ -3,6 +3,7 @@
 #include "greenlet/greenlet.h"
 
 #include <statemachine/basestate.h>
+#include <statemachine/jointmove.h>
 #include <statemachine/statemachine.h>
 
 #include <k273/exception.h>
@@ -31,7 +32,9 @@ namespace GGPZero {
 
     public:
         // interface called back from puct evaluator:
-        void dumpNode(const PuctNode* node, const PuctNodeChild* highlight, const std::string& indent);
+        std::string moveString(const GGPLib::JointMove& move);
+        void dumpNode(const PuctNode* node, const PuctNodeChild* highlight,
+                      const std::string& indent, bool sort_by_next_probability);
 
         int getRoleCount() const {
             return this->sm->getRoleCount();
@@ -43,6 +46,7 @@ namespace GGPZero {
         PuctNode* createNode(PuctEvaluator* pe, const GGPLib::BaseState* bs);
 
 
+    public:
         // called from client:
         template <typename Callable>
         void addRunnable(Callable& f) {

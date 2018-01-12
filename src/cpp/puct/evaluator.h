@@ -19,8 +19,11 @@ namespace GGPZero {
 
     class PuctEvaluator {
     public:
-        PuctEvaluator(PuctConfig*, NetworkScheduler* scheduler);
+        PuctEvaluator(const PuctConfig* conf, NetworkScheduler* scheduler);
         virtual ~PuctEvaluator();
+
+    public:
+        void updateConf(const PuctConfig* conf);
 
     private:
         void addNode(PuctNode* new_node);
@@ -31,7 +34,7 @@ namespace GGPZero {
 
         // set dirichlet noise on node
         bool setDirichletNoise(int depth);
-        double getPuctConstant(PuctNode* node) const;
+        float getPuctConstant(PuctNode* node) const;
 
     public:
         void updateNodePolicy(PuctNode* node, float* array);
@@ -39,28 +42,31 @@ namespace GGPZero {
 
         PuctNodeChild* selectChild(PuctNode* node, int depth);
 
-        void backPropagate(double* new_scores);
+        void backPropagate(float* new_scores);
         int treePlayout();
         void playoutLoop(int max_iterations, double end_time);
 
         void reset();
-        PuctNode* fastApplyMove(PuctNodeChild* next);
+        const PuctNode* fastApplyMove(const PuctNodeChild* next);
 
-        PuctNode* establishRoot(const GGPLib::BaseState* current_state, int game_depth);
-        PuctNodeChild* onNextMove(int max_iterations, double end_time=-1);
+        const PuctNode* establishRoot(const GGPLib::BaseState* current_state, int game_depth);
+        const PuctNodeChild* onNextMove(int max_iterations, double end_time=-1);
         void applyMove(const GGPLib::JointMove* move);
 
-        void logDebug();
+        const PuctNodeChild* choose(const PuctNode* node=nullptr);
+        const PuctNodeChild* chooseTopVisits(const PuctNode* node);
+        const PuctNodeChild* chooseTemperature(const PuctNode* node);
 
-        PuctNodeChild* chooseTopVisits(PuctNode* node=nullptr);
-        PuctNodeChild* chooseTemperature(PuctNode* node=nullptr);
+        std::vector <const PuctNodeChild*> getProbabilities(PuctNode* node, float temperature);
+
+        void logDebug();
 
         bool hasRoot() const {
             return this->root != nullptr;
         }
 
     private:
-        PuctConfig* config;
+        const PuctConfig* conf;
         NetworkScheduler* scheduler;
 
         int role_count;
@@ -68,7 +74,13 @@ namespace GGPZero {
 
         int game_depth;
 
-        // tree stuff
+        // tree for the entire game
+        PuctNode* initial_root;
+
+        // not const PuctNodeChild, as we may need to fix tree
+        std::vector <PuctNodeChild*> moves;
+
+        // root for evaluation
         PuctNode* root;
         int number_of_nodes;
         long node_allocated_memory;
@@ -76,7 +88,7 @@ namespace GGPZero {
         std::vector <PuctNode*> path;
 
         // random number generator
-        xoroshiro64plus32 random;
+        xoroshiro64plus32 rng;
     };
 
 }

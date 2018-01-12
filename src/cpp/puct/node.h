@@ -6,8 +6,11 @@
 
 #include <k273/util.h>
 
+#include <string>
+#include <vector>
+
 namespace GGPZero {
-    typedef double Score;
+    typedef float Score;
 
     const int LEAD_ROLE_INDEX_SIMULTANEOUS = -1;
 
@@ -17,12 +20,16 @@ namespace GGPZero {
     struct PuctNodeChild {
         PuctNode* to_node;
         float policy_prob;
+        float next_prob;
+
         float dirichlet_noise;
 
         Score debug_node_score;
         Score debug_puct_score;
         GGPLib::JointMove move;
     };
+
+    typedef std::vector <const PuctNodeChild*> Children;
 
     inline int round_up_8(int x) {
         if (x % 8 == 0) {
@@ -54,7 +61,6 @@ namespace GGPZero {
         int allocated_size;
 
         uint8_t data[0];
-
 
         Score getCurrentScore(int role_index) const {
             const uint8_t* mem = this->data;
@@ -128,10 +134,19 @@ namespace GGPZero {
                                 const GGPLib::BaseState* base_state,
                                 GGPLib::StateMachineInterface* sm);
 
+        static std::string moveString(const GGPLib::JointMove& move,
+                               GGPLib::StateMachineInterface* sm);
+
         static void dumpNode(const PuctNode* node, const PuctNodeChild* highlight,
                              const std::string& indent,
+                             bool sort_by_next_probability,
                              GGPLib::StateMachineInterface* sm);
+
+        static Children sortedChildren(const PuctNode* node,
+                                       int role_count,
+                                       bool next_probability=false);
     };
+
 
 }
 

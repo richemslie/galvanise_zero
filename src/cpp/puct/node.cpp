@@ -11,30 +11,9 @@
 #include <vector>
 #include <algorithm>
 
-
 using namespace std;
 using namespace GGPLib;
 using namespace GGPZero;
-
-
-static string moveString(const JointMove& move, StateMachineInterface* sm) {
-    const int role_count = sm->getRoleCount();
-
-    string res = "(";
-    for (int ii=0; ii<role_count; ii++) {
-        if (ii > 0) {
-            res += " ";
-        }
-
-        int choice = move.get(ii);
-        res += sm->legalToMove(ii, choice);
-    }
-
-    res += ")";
-
-    return res;
-}
-
 
 static string scoreString(const PuctNode* node, StateMachineInterface* sm) {
     const int role_count = sm->getRoleCount();
@@ -51,7 +30,6 @@ static string scoreString(const PuctNode* node, StateMachineInterface* sm) {
 
     return res;
 }
-
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -123,6 +101,7 @@ static int initialiseChildHelper(PuctNode* node, int role_index, int child_index
             PuctNodeChild* child = node->getNodeChild(role_count, child_index++);
             child->to_node = nullptr;
             child->policy_prob = 0.0f;
+            child->next_prob = 0.0f;
             child->dirichlet_noise = 0.0f;
 
             child->debug_node_score = 0.0;
@@ -212,13 +191,33 @@ PuctNode* PuctNode::create(int role_count,
 
 ///////////////////////////////////////////////////////////////////////////////
 
+string PuctNode::moveString(const JointMove& move, StateMachineInterface* sm) {
+    const int role_count = sm->getRoleCount();
+
+    string res = "(";
+    for (int ii=0; ii<role_count; ii++) {
+        if (ii > 0) {
+            res += " ";
+        }
+
+        int choice = move.get(ii);
+        res += sm->legalToMove(ii, choice);
+    }
+
+    res += ")";
+
+    return res;
+}
+
 void PuctNode::dumpNode(const PuctNode* node,
                         const PuctNodeChild* highlight,
-                        const std::string& indent, StateMachineInterface* sm) {
+                        const std::string& indent,
+                        bool sort_by_next_probability,
+                        StateMachineInterface* sm) {
 
-    int role_count = sm->getRoleCount();
+    const int role_count = sm->getRoleCount();
 
-    double total_score = 0;
+    float total_score = 0;
     for (int ii=0; ii<role_count; ii++) {
         total_score += node->getCurrentScore(ii);
     }
@@ -234,19 +233,7 @@ void PuctNode::dumpNode(const PuctNode* node,
                     node->lead_role_index);
 
 
-    vector <const PuctNodeChild*> children;
-    for (int ii=0; ii<node->num_children; ii++) {
-        const PuctNodeChild* child = node->getNodeChild(role_count, ii);
-        children.push_back(child);
-    }
-
-    auto f = [](const PuctNodeChild* a, const PuctNodeChild* b) {
-        int visits_a = a->to_node == nullptr ? 0 : a->to_node->visits;
-        int visits_b = b->to_node == nullptr ? 0 : b->to_node->visits;
-        return visits_a > visits_b;
-    };
-
-    std::sort(children.begin(), children.end(), f);
+    auto children = PuctNode::sortedChildren(node, role_count, sort_by_next_probability);
 
     for (auto child : children) {
         string finalised = "?";
@@ -259,12 +246,13 @@ void PuctNode::dumpNode(const PuctNode* node,
             visits = child->to_node->visits;
         }
 
-        string msg = K273::fmtString("%s %s %d:%s %.2f   %s   %.2f/%.2f",
+        string msg = K273::fmtString("%s %s %d:%s %.2f/%.2f   %s   %.2f/%.2f",
                                      indent.c_str(),
                                      move.c_str(),
                                      visits,
                                      finalised.c_str(),
                                      child->policy_prob * 100,
+                                     child->next_prob * 100,
                                      score.c_str(),
                                      child->debug_puct_score,
                                      child->debug_node_score + child->debug_puct_score);
@@ -275,4 +263,31 @@ void PuctNode::dumpNode(const PuctNode* node,
             K273::l_debug(msg);
         }
     }
+}
+
+/* sorts children first by visits, then by policy_prob */
+Children PuctNode::sortedChildren(const PuctNode* node, int role_count, bool next_probability) {
+    Children children;
+    for (int ii=0; ii<node->num_children; ii++) {
+        const PuctNodeChild* child = node->getNodeChild(role_count, ii);
+        children.push_back(child);
+    }
+
+    auto f = [next_probability](const PuctNodeChild* a, const PuctNodeChild* b) {
+        int visits_a = a->to_node == nullptr ? 0 : a->to_node->visits;
+        int visits_b = b->to_node == nullptr ? 0 : b->to_node->visits;
+
+        if (visits_a == visits_b) {
+            if (next_probability) {
+                return a->next_prob > b->next_prob;
+            } else {
+                return a->policy_prob > b->policy_prob;
+            }
+        }
+
+        return visits_a > visits_b;
+    };
+
+    std::sort(children.begin(), children.end(), f);
+    return children;
 }

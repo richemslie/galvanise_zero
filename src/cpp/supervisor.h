@@ -31,7 +31,8 @@ namespace GGPZero {
                                           int role_1_index);
 
         // python side (add level of indirection)...
-        void puctPlayerStart();
+        void puctPlayerStart(PuctConfig* conf);
+        void puctPlayerReset();
         void puctApplyMove(const GGPLib::JointMove* move);
         void puctPlayerMove(const GGPLib::BaseState* state, int iterations, double end_time);
         int puctPlayerGetMove(int lead_role_index);

@@ -2,8 +2,14 @@
 
 #include "bases.h"
 
+#include <statemachine/basestate.h>
+#include <statemachine/jointmove.h>
+#include <statemachine/statemachine.h>
+
 #include <k273/logging.h>
 #include <k273/exception.h>
+
+#include <string>
 
 using namespace GGPZero;
 
@@ -41,10 +47,15 @@ NetworkScheduler::~NetworkScheduler() {
     delete this->transformer;
 }
 
+std::string NetworkScheduler::moveString(const GGPLib::JointMove& move) {
+    return PuctNode::moveString(move, this->sm);
+}
+
 void NetworkScheduler::dumpNode(const PuctNode* node,
                                 const PuctNodeChild* highlight,
-                                const std::string& indent) {
-    PuctNode::dumpNode(node, highlight, indent, this->sm);
+                                const std::string& indent,
+                                bool sort_by_next_probability) {
+    PuctNode::dumpNode(node, highlight, indent, sort_by_next_probability, this->sm);
 }
 
 PuctNode* NetworkScheduler::expandChild(PuctEvaluator* pe,
@@ -116,7 +127,7 @@ PuctNode* NetworkScheduler::createNode(PuctEvaluator* pe, const GGPLib::BaseStat
     }
 
     for (int ii=0; ii<role_count; ii++) {
-        double s = (double) *(this->final_scores + final_score_incr + ii);
+        float s = (float) *(this->final_scores + final_score_incr + ii);
         new_node->setFinalScore(ii, s);
         new_node->setCurrentScore(ii, s);
     }

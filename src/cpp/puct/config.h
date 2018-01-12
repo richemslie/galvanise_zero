@@ -17,19 +17,19 @@ namespace GGPZero {
         int puct_before_expansions;
         int puct_before_root_expansions;
 
-        double puct_constant_before;
-        double puct_constant_after;
+        float puct_constant_before;
+        float puct_constant_after;
 
-        double dirichlet_noise_pct;
-        double dirichlet_noise_alpha;
+        float dirichlet_noise_pct;
+        float dirichlet_noise_alpha;
 
         ChooseFn choose;
         int max_dump_depth;
 
-        double random_scale;
-        double temperature;
+        float random_scale;
+        float temperature;
         int depth_temperature_start;
-        double depth_temperature_increment;
+        float depth_temperature_increment;
         int depth_temperature_stop;
 
         static PuctConfig* defaultConfig();

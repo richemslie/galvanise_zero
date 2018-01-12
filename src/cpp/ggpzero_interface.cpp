@@ -33,7 +33,7 @@ static PyObject* GGPZero_Interface_hello_test(PyObject* self, PyObject* args) {
     xoroshiro32plus16 random;
     for (int ii=0; ii<10000; ii++) {
         K273::l_verbose("random/42 %d", random.getWithMax(42));
-        K273::l_verbose("random/real %.4f", (random() / (double) random.max()));
+        K273::l_verbose("random/float %.4f", (random() / (double) random.max()));
     }
 
     K273::l_critical(msg);
@@ -47,7 +47,7 @@ PyMethodDef gi_functions[] = {
     {"hello_test", GGPZero_Interface_hello_test, METH_VARARGS, "hello_test"},
 
     {"GdlBasesTransformer", gi_GdlBasesTransformer, METH_VARARGS, "GdlBasesTransformer"},
-    {"InlineSupervisor", gi_InlineSupervisor, METH_VARARGS, "InlineSupervisor"},
+    {"Supervisor", gi_Supervisor, METH_VARARGS, "Supervisor"},
     {nullptr, nullptr, 0, nullptr}
 };
 
@@ -64,9 +64,9 @@ extern "C" {
             return;
         }
 
-        Py_TYPE(&PyType_InlineSupervisor) = &PyType_Type;
+        Py_TYPE(&PyType_Supervisor) = &PyType_Type;
 
-        if (::PyType_Ready(&PyType_InlineSupervisor) < 0) {
+        if (::PyType_Ready(&PyType_Supervisor) < 0) {
             return;
         }
 
