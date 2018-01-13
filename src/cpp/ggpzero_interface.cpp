@@ -16,7 +16,7 @@ PyObject* ggpzero_interface_error;
 // these are python objects... we include cpp files since it is hard to do any
 // other way (please if you know a way, let me know)
 
-#include "pyobjects/basetransformer_impl.cpp"
+#include "pyobjects/gdltransformer_impl.cpp"
 #include "pyobjects/supervisor_impl.cpp"
 
 ///////////////////////////////////////////////////////////////////////////////

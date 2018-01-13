@@ -1,6 +1,6 @@
 #pragma once
 
-#include "bases.h"
+#include "gdltransformer.h"
 
 // k273 includes
 #include <k273/rng.h>
@@ -167,11 +167,11 @@ static void GdlBasesTransformerWrapper_dealloc(PyObject* ptr) {
 ///////////////////////////////////////////////////////////////////////////////
 
 static PyObject* gi_GdlBasesTransformer(PyObject* self, PyObject* args) {
-    int arg0, arg1;
-    if (! ::PyArg_ParseTuple(args, "ii", &arg0, &arg1)) {
+    int arg0, arg1, arg2, arg3;
+    if (! ::PyArg_ParseTuple(args, "iiii", &arg0, &arg1, &arg2, &arg3)) {
         return nullptr;
     }
 
-    GdlBasesTransformer* transformer = new GdlBasesTransformer(arg0, arg1);
+    GdlBasesTransformer* transformer = new GdlBasesTransformer(arg0, arg1, arg2, arg3);
     return (PyObject *) PyType_GdlBasesTransformerWrapper_new(transformer);
 }

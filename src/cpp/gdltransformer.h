@@ -38,9 +38,11 @@ namespace GGPZero {
 
     class GdlBasesTransformer {
     public:
-        GdlBasesTransformer(int channel_size, int control_states_start) :
+        GdlBasesTransformer(int channel_size, int control_states_start, int expected_policy_size, int role_1_index) :
             channel_size(channel_size),
-            control_states_start(control_states_start) {
+            control_states_start(control_states_start),
+            expected_policy_size(expected_policy_size),
+            role_1_index(role_1_index) {
         }
 
     public:
@@ -60,9 +62,19 @@ namespace GGPZero {
                         const std::vector <GGPLib::BaseState*>& prev_states,
                         float* buf) const;
 
+        int getPolicySize() const {
+            return this->expected_policy_size;
+        }
+
+        int getRole1Index() const {
+            return this->role_1_index;
+        }
+
     private:
-        int channel_size;
-        int control_states_start;
+        const int channel_size;
+        const int control_states_start;
+        const int expected_policy_size;
+        const int role_1_index;
         std::vector <int> control_states;
         std::vector <BaseInfo> base_infos;
     };

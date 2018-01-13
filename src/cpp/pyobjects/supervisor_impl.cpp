@@ -1,5 +1,7 @@
 #pragma once
 
+#include "sample.h"
+#include "selfplay.h"
 #include "supervisor.h"
 
 // k273 includes
@@ -18,37 +20,6 @@
 #include <statemachine/jointmove.h>
 
 #include <string>
-
-#include <type_traits>
-#include <typeinfo>
-#include <cxxabi.h>
-
-template <class T>
-std::string
-type_name()
-{
-    typedef typename std::remove_reference<T>::type TR;
-    std::unique_ptr<char, void(*)(void*)> own
-           (
-#ifndef _MSC_VER
-                abi::__cxa_demangle(typeid(TR).name(), nullptr,
-                                           nullptr, nullptr),
-#else
-                nullptr,
-#endif
-                std::free
-           );
-    std::string r = own != nullptr ? own.get() : typeid(TR).name();
-    if (std::is_const<TR>::value)
-        r += " const";
-    if (std::is_volatile<TR>::value)
-        r += " volatile";
-    if (std::is_lvalue_reference<T>::value)
-        r += "&";
-    else if (std::is_rvalue_reference<T>::value)
-        r += "&&";
-    return r;
-}
 
 using namespace GGPZero;
 
@@ -76,26 +47,187 @@ struct PyObject_Supervisor {
     Supervisor* impl;
 };
 
+PuctConfig* createPuctConfig(PyObject* dict) {
+    PuctConfig* config = new PuctConfig;
+
+    auto asInt = [dict] (const char* name) {
+        PyObject* borrowed = PyDict_GetItemString(dict, name);
+        return PyInt_AsLong(borrowed);
+    };
+
+    auto asString = [dict] (const char* name) {
+        PyObject* borrowed = PyDict_GetItemString(dict, name);
+        return PyString_AsString(borrowed);
+    };
+
+    auto asFloat = [dict] (const char* name) {
+        PyObject* borrowed = PyDict_GetItemString(dict, name);
+        return (float) PyFloat_AsDouble(borrowed);
+    };
+
+    config->name = asString("name");
+    config->verbose = asInt("verbose");
+    config->generation = asString("generation");
+    config->puct_before_expansions = asInt("puct_before_expansions");
+    config->puct_before_root_expansions = asInt("puct_before_root_expansions");
+    config->puct_constant_before = asFloat("puct_constant_before");
+    config->puct_constant_after = asFloat("puct_constant_after");
+    config->dirichlet_noise_pct = asFloat("dirichlet_noise_pct");
+    config->dirichlet_noise_alpha = asFloat("dirichlet_noise_alpha");
+    config->max_dump_depth = asInt("max_dump_depth");
+    config->random_scale = asFloat("random_scale");
+    config->temperature = asFloat("temperature");
+    config->depth_temperature_start = asInt("depth_temperature_start");
+    config->depth_temperature_increment = asFloat("depth_temperature_increment");
+    config->depth_temperature_stop = asInt("depth_temperature_stop");
+
+    std::string choose_method = asString("choose");
+    if (choose_method == "choose_top_visits") {
+        config->choose = ChooseFn::choose_top_visits;
+
+    } else if (choose_method == "choose_temperature") {
+        config->choose = ChooseFn::choose_temperature;
+
+    } else {
+        K273::l_error("Choose method unknown: '%s', setting to top visits", choose_method.c_str());
+        config->choose = ChooseFn::choose_top_visits;
+    }
+
+    return config;
+}
+
+SelfPlayConfig* createSelfPlayConfig(PyObject* dict) {
+    SelfPlayConfig* config = new SelfPlayConfig;
+
+    auto asInt = [dict] (const char* name) {
+        PyObject* borrowed = PyDict_GetItemString(dict, name);
+        return PyInt_AsLong(borrowed);
+    };
+
+    auto asFloat = [dict] (const char* name) {
+        PyObject* borrowed = PyDict_GetItemString(dict, name);
+        return (float) PyFloat_AsDouble(borrowed);
+    };
+
+    auto asDict = [dict] (const char* name) {
+        PyObject* borrowed = PyDict_GetItemString(dict, name);
+        ASSERT(PyDict_Check(borrowed));
+        return borrowed;
+    };
+
+    config->expected_game_length = asInt("expected_game_length");
+    config->early_sample_start_probability = asFloat("early_sample_start_probability");
+    config->max_number_of_samples = asInt("max_number_of_samples");
+
+    config->resign_score_probability = asFloat("resign_score_probability");
+    config->resign_false_positive_retry_percentage = asFloat("resign_false_positive_retry_percentage");
+
+    config->select_puct_config = ::createPuctConfig(asDict("select_puct_config"));
+    config->select_iterations = asInt("select_iterations");
+
+    config->sample_puct_config = ::createPuctConfig(asDict("sample_puct_config"));
+    config->sample_iterations = asInt("sample_iterations");
+
+    config->score_puct_config = ::createPuctConfig(asDict("score_puct_config"));
+    config->score_iterations = asInt("score_iterations");
+
+    return config;
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 
-static PyObject* Supervisor_start_self_play_test(PyObject_Supervisor* self, PyObject* args) {
-    int num_selfplays = 0;
-    int base_iterations = 0;
-    int sample_iterations = 0;
-
-    // sm, transformer, batch_size, expected_policy_size, role_1_index
-    if (! ::PyArg_ParseTuple(args, "iii",
-                             &num_selfplays, &base_iterations, &sample_iterations)) {
+static PyObject* Supervisor_start_self_play(PyObject_Supervisor* self, PyObject* args) {
+    PyObject* dict;
+    if (! PyArg_ParseTuple(args, "O!", &PyDict_Type, &dict)) {
         return nullptr;
     }
 
-    self->impl->selfPlayTest(num_selfplays, base_iterations, sample_iterations);
+    SelfPlayConfig* config = ::createSelfPlayConfig(dict);
+    self->impl->startSelfPlay(config);
 
     Py_RETURN_NONE;
 }
 
+PyObject* stateToList(const GGPLib::BaseState* bs) {
+    // ref counts all stolen :)
+    PyObject* state_as_list = PyList_New(bs->size);
+    for (int ii=0; ii<bs->size; ii++) {
+        PyList_SetItem(state_as_list, ii, PyInt_FromLong(bs->get(ii)));
+    }
+
+    return state_as_list;
+}
+
+PyObject* policyElementToTuple(std::pair<int, float>& e) {
+    // ref counts all stolen :)
+    PyObject* tup = PyTuple_New(2);
+    PyTuple_SetItem(tup, 0, PyInt_FromLong(e.first));
+    PyTuple_SetItem(tup, 1, PyFloat_FromDouble((double) e.second));
+    return tup;
+}
+
+void PyDict_setNewItem(PyObject* d, const char* name, PyObject* o) {
+    /* steals ref */
+    ASSERT(PyDict_SetItemString(d, name, o) == 0);
+    Py_DECREF(o);
+}
+
+PyObject* sampleToDict(Sample* sample) {
+    // this is basically FML - trying to steal as much ref counts as possible
+    PyObject* sample_as_dict = PyDict_New();
+
+    // easy one first
+    PyDict_setNewItem(sample_as_dict, "state", stateToList(sample->state));
+    PyDict_setNewItem(sample_as_dict, "depth", PyInt_FromLong(sample->depth));
+    PyDict_setNewItem(sample_as_dict, "game_length", PyInt_FromLong(sample->game_length));
+    PyDict_setNewItem(sample_as_dict, "lead_role_index", PyInt_FromLong(sample->lead_role_index));
+
+    // same pattern, could abstract it out if my template skills were better
+    {
+        int num_prev_states = sample->prev_states.size();
+        PyObject* prev_states = PyList_New(num_prev_states);
+        for (int ii=0; ii<num_prev_states; ii++) {
+            PyList_SetItem(prev_states, ii, stateToList(sample->prev_states[ii]));
+        }
+        PyDict_setNewItem(sample_as_dict, "prev_state", prev_states);
+    }
+
+    {
+        int num_final_score = sample->final_score.size();
+        PyObject* final_score = PyList_New(num_final_score);
+        for (int ii=0; ii<num_final_score; ii++) {
+            PyList_SetItem(final_score, ii, PyFloat_FromDouble((double) sample->final_score[ii]));
+        }
+
+        PyDict_setNewItem(sample_as_dict, "final_score", final_score);
+    }
+
+    {
+        int num_policy = sample->policy.size();
+        PyObject* policy = PyList_New(num_policy);
+        for (int ii=0; ii<num_policy; ii++) {
+            PyList_SetItem(policy, ii, policyElementToTuple(sample->policy[ii]));
+        }
+
+        PyDict_setNewItem(sample_as_dict, "policy", policy);
+    }
+
+    return sample_as_dict;
+}
+
 static PyObject* Supervisor_fetch_samples(PyObject_Supervisor* self, PyObject* args) {
-    // fetch samples
+    std::vector <Sample*> samples = self->impl->getSamples();
+
+    if (!samples.empty()) {
+        int sample_count = samples.size();
+        PyObject* py_samples = PyList_New(sample_count);
+        for (int ii=0; ii<sample_count; ii++) {
+            PyList_SetItem(py_samples, ii, sampleToDict(samples[ii]));
+        }
+
+        return py_samples;
+    }
+
     Py_RETURN_NONE;
 }
 
@@ -165,60 +297,14 @@ static PyObject* Supervisor_poll(PyObject_Supervisor* self, PyObject* args) {
     }
 }
 
-
 static PyObject* Supervisor_player_start(PyObject_Supervisor* self, PyObject* args) {
     PyObject* dict;
     if (! PyArg_ParseTuple(args, "O!", &PyDict_Type, &dict)) {
         return nullptr;
     }
 
-    auto asInt = [dict] (const char* name) {
-        PyObject* borrowed = PyDict_GetItemString(dict, name);
-        return PyInt_AsLong(borrowed);
-    };
-
-    auto asString = [dict] (const char* name) {
-        PyObject* borrowed = PyDict_GetItemString(dict, name);
-        return PyString_AsString(borrowed);
-    };
-
-    auto asFloat = [dict] (const char* name) {
-        PyObject* borrowed = PyDict_GetItemString(dict, name);
-        return (float) PyFloat_AsDouble(borrowed);
-    };
-
-    K273::l_warning("type of asFloat is %s", type_name<decltype(asFloat)>().c_str());
-
-    PuctConfig* conf = new PuctConfig;
-    conf->name = asString("name");
-    conf->verbose = asInt("verbose");
-    conf->generation = asString("generation");
-    conf->puct_before_expansions = asInt("puct_before_expansions");
-    conf->puct_before_root_expansions = asInt("puct_before_root_expansions");
-    conf->puct_constant_before = asFloat("puct_constant_before");
-    conf->puct_constant_after = asFloat("puct_constant_after");
-    conf->dirichlet_noise_pct = asFloat("dirichlet_noise_pct");
-    conf->dirichlet_noise_alpha = asFloat("dirichlet_noise_alpha");
-    conf->max_dump_depth = asInt("max_dump_depth");
-    conf->random_scale = asFloat("random_scale");
-    conf->temperature = asFloat("temperature");
-    conf->depth_temperature_start = asInt("depth_temperature_start");
-    conf->depth_temperature_increment = asFloat("depth_temperature_increment");
-    conf->depth_temperature_stop = asInt("depth_temperature_stop");
-
-    std::string choose_method = asString("choose");
-    if (choose_method == "choose_top_visits") {
-        conf->choose = ChooseFn::choose_top_visits;
-
-    } else if (choose_method == "choose_temperature") {
-        conf->choose = ChooseFn::choose_temperature;
-
-    } else {
-        K273::l_error("Choose method unknown: '%s', setting to top visits", choose_method.c_str());
-        conf->choose = ChooseFn::choose_top_visits;
-    }
-
-    self->impl->puctPlayerStart(conf);
+    PuctConfig* config = createPuctConfig(dict);
+    self->impl->puctPlayerStart(config);
 
     Py_RETURN_NONE;
 }
@@ -266,7 +352,7 @@ static PyObject* Supervisor_player_get_move(PyObject_Supervisor* self, PyObject*
 
 
 static struct PyMethodDef Supervisor_methods[] = {
-    {"start_self_play_test", (PyCFunction) Supervisor_start_self_play_test, METH_VARARGS, "start_self_play_test"},
+    {"start_self_play", (PyCFunction) Supervisor_start_self_play, METH_VARARGS, "start_self_play"},
     {"fetch_samples", (PyCFunction) Supervisor_fetch_samples, METH_NOARGS, "fetch_samples"},
 
     {"poll", (PyCFunction) Supervisor_poll, METH_VARARGS, "poll"},

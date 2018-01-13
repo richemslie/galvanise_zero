@@ -2,6 +2,8 @@
 
 #include <statemachine/statemachine.h>
 
+#include <k273/rng.h>
+
 #include <vector>
 
 /*
@@ -15,7 +17,6 @@ namespace GGPZero {
     class PuctConfig;
     class PuctEvaluator;
     class NetworkScheduler;
-
 
     struct SelfPlayConfig {
         // choose a random number between 0 - expected_game_length for samples to start
@@ -45,16 +46,17 @@ namespace GGPZero {
 
     class SelfPlay {
     public:
-        SelfPlay(NetworkScheduler* scheduler, const SelfPlayConfig* conf);
+        SelfPlay(NetworkScheduler* scheduler, const SelfPlayConfig* conf,
+                 GGPLib::StateMachineInterface* sm);
         ~SelfPlay();
 
     public:
-        void configure(GGPLib::StateMachineInterface* sm);
-
         void playOnce();
         void playGamesForever();
 
-        std::vector <Sample*>& getSamples();
+        std::vector <Sample*>& getSamples() {
+            return samples;
+        }
 
     private:
         NetworkScheduler* scheduler;
@@ -66,8 +68,8 @@ namespace GGPZero {
         const GGPLib::BaseState* initial_state;
         std::vector <Sample*> samples;
 
-    public:
-        static const int MAX_NUMBER_STATES = 500;
+        // random number generator
+        xoroshiro64plus32 rng;
     };
 
 }

@@ -17,7 +17,7 @@ using namespace GGPZero;
 Supervisor::Supervisor(GGPLib::StateMachineInterface* sm) :
     sm(sm->dupe()),
     player_pe(nullptr),
-    self_play_manager(nullptr),
+    first_play(false),
     inline_scheduler(nullptr) {
 }
 
@@ -39,6 +39,21 @@ NetworkScheduler* Supervisor::createScheduler(const GdlBasesTransformer* transfo
     return this->inline_scheduler;
 }
 
+
+int Supervisor::poll(float* policies, float* final_scores, int pred_count) {
+    return this->inline_scheduler->poll(policies, final_scores, pred_count);
+}
+
+float* Supervisor::getBuf() const {
+    return this->inline_scheduler->getBuf();
+}
+
+
+
+
+
+
+
 void Supervisor::puctPlayerStart(PuctConfig* conf) {
     K273::l_verbose("Supervisor::puctPlayerStart()");
     this->player_pe = new PuctEvaluator(conf, this->inline_scheduler);
@@ -47,13 +62,19 @@ void Supervisor::puctPlayerStart(PuctConfig* conf) {
 void Supervisor::puctPlayerReset() {
     K273::l_verbose("Supervisor::reset()");
     this->player_pe->reset();
+    this->first_play = true;
 }
 
 void Supervisor::puctApplyMove(const GGPLib::JointMove* move) {
     ASSERT (this->player_pe != nullptr);
-    if (this->player_pe->hasRoot()) {
+
+    this->inline_scheduler->createMainLoop();
+
+    auto f = [this, move]() {
         this->player_pe->applyMove(move);
-    }
+    };
+
+    this->inline_scheduler->addRunnable(f);
 }
 
 void Supervisor::puctPlayerMove(const GGPLib::BaseState* state, int iterations, double end_time) {
@@ -63,7 +84,9 @@ void Supervisor::puctPlayerMove(const GGPLib::BaseState* state, int iterations, 
 
     ASSERT (this->player_pe != nullptr);
 
-    if (!this->player_pe->hasRoot()) {
+    // this should only happen as first move in the game
+    if (this->first_play) {
+        this->first_play = false;
         auto f = [this, state, iterations, end_time]() {
             this->player_pe->establishRoot(state, 0);
             this->player_pe->onNextMove(iterations, end_time);
@@ -90,31 +113,43 @@ int Supervisor::puctPlayerGetMove(int lead_role_index) {
     return child->move.get(lead_role_index);
 }
 
-void Supervisor::selfPlayTest(int num_selfplays, int base_iterations, int sample_iterations) {
-    K273::l_verbose("Supervisor::selfPlayTest(%d, %d, %d)",
-                    num_selfplays, base_iterations, sample_iterations);
 
-    GGPLib::BaseState* bs = this->sm->newBaseState();
-    bs->assign(this->sm->getInitialState());
 
+
+
+
+
+
+
+void Supervisor::startSelfPlay(const SelfPlayConfig* config) {
     this->inline_scheduler->createMainLoop();
 
     // create a bunch of self plays
-    for (int ii=0; ii<num_selfplays; ii++) {
-        SelfPlay* sp = new SelfPlay(this->inline_scheduler, nullptr);
+    for (int ii=0; ii<1; ii++) {
+        SelfPlay* sp = new SelfPlay(this->inline_scheduler, config, this->sm);
+        this->self_plays.push_back(sp);
 
         auto f = [sp]() {
-            return sp->playOnce();
+            sp->playGamesForever();
         };
 
         this->inline_scheduler->addRunnable(f);
     }
 }
 
-int Supervisor::poll(float* policies, float* final_scores, int pred_count) {
-    return this->inline_scheduler->poll(policies, final_scores, pred_count);
+std::vector <Sample*> Supervisor::getSamples() {
+    std::vector <Sample*> result;
+
+    for (auto sp : this->self_plays) {
+        std::vector <Sample*>& sp_samples = sp->getSamples();
+        if (!sp_samples.empty()) {
+            result.insert(result.end(),
+                          sp_samples.begin(),
+                          sp_samples.end());
+            sp_samples.clear();
+        }
+    }
+
+    return result;
 }
 
-float* Supervisor::getBuf() const {
-    return this->inline_scheduler->getBuf();
-}

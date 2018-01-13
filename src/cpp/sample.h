@@ -1,20 +1,23 @@
 #pragma once
 
-#include <vector>
-
 #include <statemachine/basestate.h>
 #include <statemachine/statemachine.h>
+
+#include <vector>
+#include <utility>
 
 namespace GGPZero {
 
     struct Sample {
         GGPLib::BaseState* state;
         std::vector <GGPLib::BaseState*> prev_states;
-        std::vector <float*> policy;
-        std::vector <int> final_score;
+        std::vector <std::pair <int, float>> policy;
         int depth;
-        int game_length;
         int lead_role_index;
+
+        // update at end of game
+        int game_length;
+        std::vector <float> final_score;
     };
 
 }

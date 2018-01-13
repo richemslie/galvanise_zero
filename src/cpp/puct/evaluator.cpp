@@ -67,7 +67,6 @@ void PuctEvaluator::removeNode(PuctNode* node) {
     this->number_of_nodes--;
 }
 
-
 void PuctEvaluator::expandChild(PuctNode* parent, PuctNodeChild* child) {
     PuctNode* new_node = this->scheduler->expandChild(this, parent, child);
     this->addNode(new_node);
@@ -292,9 +291,11 @@ void PuctEvaluator::playoutLoop(int max_iterations, double end_time) {
     }
 }
 
-const PuctNode* PuctEvaluator::fastApplyMove(const PuctNodeChild* next) {
+PuctNode* PuctEvaluator::fastApplyMove(const PuctNodeChild* next) {
     ASSERT(this->initial_root != nullptr);
     ASSERT(this->root != nullptr);
+
+    this->all_nodes.push_back(this->root);
 
     PuctNode* new_root = nullptr;
     for (int ii=0; ii<this->root->num_children; ii++) {
@@ -302,7 +303,12 @@ const PuctNode* PuctEvaluator::fastApplyMove(const PuctNodeChild* next) {
 
         if (c == next) {
             ASSERT(new_root == nullptr);
+            if (c->to_node == nullptr) {
+                this->expandChild(this->root, c);
+            }
+
             this->moves.push_back(c);
+
             new_root = c->to_node;
 
         } else {
@@ -315,12 +321,11 @@ const PuctNode* PuctEvaluator::fastApplyMove(const PuctNodeChild* next) {
         }
     }
 
-    this->root = new_root;
-    if (this->root == nullptr) {
-        K273::l_warning("root is now null");
-    }
+    ASSERT(new_root != nullptr);
 
+    this->root = new_root;
     this->game_depth++;
+
     return this->root;
 }
 
@@ -333,7 +338,9 @@ void PuctEvaluator::applyMove(const GGPLib::JointMove* move) {
         }
     }
 
-    if (this->root != nullptr && this->root->isTerminal()) {
+    ASSERT(this->root != nullptr);
+
+    if (this->root->isTerminal()) {
         for (auto child : this->moves) {
             K273::l_info("Move made %s", this->scheduler->moveString(child->move).c_str());
         }
@@ -357,36 +364,27 @@ void PuctEvaluator::reset() {
     }
 
     this->game_depth = 0;
+
+    // these dont own the memory, so can just clear
     this->moves.clear();
+    this->all_nodes.clear();
 }
 
-const PuctNode* PuctEvaluator::establishRoot(const GGPLib::BaseState* current_state, int game_depth) {
+PuctNode* PuctEvaluator::establishRoot(const GGPLib::BaseState* current_state, int game_depth) {
     // needed for temperature
     this->game_depth = game_depth;
 
-    ASSERT(this->root == nullptr);
+    ASSERT(this->root == nullptr && this->initial_root == nullptr);
 
-    this->root = this->createNode(current_state);
+    this->initial_root = this->root = this->createNode(current_state);
+
     ASSERT(!this->root->isTerminal());
-
-    if (this->initial_root == nullptr) {
-        K273::l_warning("initial_root root is set");
-        this->initial_root = this->root;
-    } else {
-        ASSERT(this->moves.size() > 0);
-
-        // check our last move
-        PuctNodeChild* last = this->moves.back();
-        if (last->to_node == nullptr) {
-            K273::l_warning("fixing our global tree");
-            last->to_node = this->root;
-        }
-    }
-
     return this->root;
 }
 
 const PuctNodeChild* PuctEvaluator::onNextMove(int max_iterations, double end_time) {
+    ASSERT(this->root != nullptr && this->initial_root != nullptr);
+
     this->playoutLoop(max_iterations, end_time);
 
     if (this->conf->verbose) {
@@ -494,7 +492,6 @@ Children PuctEvaluator::getProbabilities(PuctNode* node, float temperature) {
     return PuctNode::sortedChildren(node, this->role_count, true);
 }
 
-
 void PuctEvaluator::logDebug() {
     PuctNode* cur = this->root;
     for (int ii=0; ii<this->conf->max_dump_depth; ii++) {
@@ -535,4 +532,11 @@ void PuctEvaluator::logDebug() {
 
         cur = next_choice->to_node;
     }
+}
+
+PuctNode* PuctEvaluator::backupRoot(int count) {
+    int index = this->all_nodes.size() - count;
+    index = std::max(0, index);
+    this->root = this->all_nodes[index];
+    return this->root;
 }

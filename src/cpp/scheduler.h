@@ -1,6 +1,7 @@
 #pragma once
 
 #include "greenlet/greenlet.h"
+#include "puct/node.h"
 
 #include <statemachine/basestate.h>
 #include <statemachine/jointmove.h>
@@ -16,9 +17,8 @@
 namespace GGPZero {
 
     // forwards
-    class PuctNode;
+    class Sample;
     class PuctEvaluator;
-    class PuctNodeChild;
     class GdlBasesTransformer;
 
     class NetworkScheduler {
@@ -35,6 +35,8 @@ namespace GGPZero {
         std::string moveString(const GGPLib::JointMove& move);
         void dumpNode(const PuctNode* node, const PuctNodeChild* highlight,
                       const std::string& indent, bool sort_by_next_probability);
+
+        Sample* createSample(const PuctNode* node);
 
         int getRoleCount() const {
             return this->sm->getRoleCount();

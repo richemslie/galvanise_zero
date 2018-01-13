@@ -1,6 +1,8 @@
 #include "scheduler.h"
 
-#include "bases.h"
+#include "sample.h"
+#include "puct/node.h"
+#include "gdltransformer.h"
 
 #include <statemachine/basestate.h>
 #include <statemachine/jointmove.h>
@@ -56,6 +58,24 @@ void NetworkScheduler::dumpNode(const PuctNode* node,
                                 const std::string& indent,
                                 bool sort_by_next_probability) {
     PuctNode::dumpNode(node, highlight, indent, sort_by_next_probability, this->sm);
+}
+
+
+// will create a new sample based on the root tree
+Sample* NetworkScheduler::createSample(const PuctNode* node) {
+    Sample* sample = new Sample;
+    sample->state = this->sm->newBaseState();
+    sample->state->assign(node->getBaseState());
+
+    for (int ii=0; ii<node->num_children; ii++) {
+        const PuctNodeChild* child = node->getNodeChild(this->getRoleCount(), ii);
+        sample->policy.emplace_back(child->move.get(node->lead_role_index),
+                                    child->next_prob);
+    }
+
+    sample->lead_role_index = node->lead_role_index;
+
+    return sample;
 }
 
 PuctNode* NetworkScheduler::expandChild(PuctEvaluator* pe,

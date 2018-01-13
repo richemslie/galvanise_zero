@@ -15,6 +15,7 @@
 namespace GGPZero {
 
     // forwards
+    class Sample;
     class NetworkScheduler;
 
     class PuctEvaluator {
@@ -47,9 +48,9 @@ namespace GGPZero {
         void playoutLoop(int max_iterations, double end_time);
 
         void reset();
-        const PuctNode* fastApplyMove(const PuctNodeChild* next);
+        PuctNode* fastApplyMove(const PuctNodeChild* next);
+        PuctNode* establishRoot(const GGPLib::BaseState* current_state, int game_depth);
 
-        const PuctNode* establishRoot(const GGPLib::BaseState* current_state, int game_depth);
         const PuctNodeChild* onNextMove(int max_iterations, double end_time=-1);
         void applyMove(const GGPLib::JointMove* move);
 
@@ -57,13 +58,11 @@ namespace GGPZero {
         const PuctNodeChild* chooseTopVisits(const PuctNode* node);
         const PuctNodeChild* chooseTemperature(const PuctNode* node);
 
-        std::vector <const PuctNodeChild*> getProbabilities(PuctNode* node, float temperature);
+        Children getProbabilities(PuctNode* node, float temperature);
 
         void logDebug();
 
-        bool hasRoot() const {
-            return this->root != nullptr;
-        }
+        PuctNode* backupRoot(int count);
 
     private:
         const PuctConfig* conf;
@@ -78,6 +77,7 @@ namespace GGPZero {
         PuctNode* initial_root;
 
         // not const PuctNodeChild, as we may need to fix tree
+        std::vector <PuctNode*> all_nodes;
         std::vector <PuctNodeChild*> moves;
 
         // root for evaluation

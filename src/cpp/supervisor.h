@@ -1,9 +1,10 @@
 #pragma once
 
-#include "bases.h"
 #include "puct/node.h"
 #include "puct/config.h"
 #include "puct/evaluator.h"
+#include "gdltransformer.h"
+
 #include "greenlet/greenlet.h"
 
 #include <statemachine/basestate.h>
@@ -17,6 +18,8 @@ namespace GGPZero {
 
     // forwards
     class PuctEvaluator;
+    class SelfPlay;
+    class SelfPlayConfig;
 
     class Supervisor {
     public:
@@ -37,7 +40,8 @@ namespace GGPZero {
         void puctPlayerMove(const GGPLib::BaseState* state, int iterations, double end_time);
         int puctPlayerGetMove(int lead_role_index);
 
-        void selfPlayTest(int num_selfplays, int base_iterations, int sample_iterations);
+        void startSelfPlay(const SelfPlayConfig* config);
+        std::vector <Sample*> getSamples();
 
         int poll(float* policies, float* final_scores, int pred_count);
 
@@ -46,7 +50,10 @@ namespace GGPZero {
     private:
         GGPLib::StateMachineInterface* sm;
         PuctEvaluator* player_pe;
-        void* self_play_manager;
+        bool first_play;
+
+        // inline only XXX
+        std::vector <SelfPlay*> self_plays;
 
         // workers/pools of schedulers XXX
 
