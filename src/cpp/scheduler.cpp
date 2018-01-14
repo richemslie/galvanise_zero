@@ -17,14 +17,10 @@ using namespace GGPZero;
 
 NetworkScheduler::NetworkScheduler(GGPLib::StateMachineInterface* sm,
                                    const GdlBasesTransformer* transformer,
-                                   int batch_size,
-                                   int expected_policy_size,
-                                   int role_1_index) :
+                                   int batch_size) :
     sm(sm),
     transformer(transformer),
     batch_size(batch_size),
-    expected_policy_size(expected_policy_size),
-    role_1_index(role_1_index),
     basestate_expand_node(nullptr),
     main_loop(nullptr),
     top(nullptr),
@@ -118,8 +114,8 @@ PuctNode* NetworkScheduler::createNode(PuctEvaluator* pe, const GGPLib::BaseStat
 
     ASSERT (this->pred_count > 0 && idx < this->pred_count);
 
-    int policy_incr = new_node->lead_role_index ? this->role_1_index : 0;
-    policy_incr += idx * this->expected_policy_size;
+    int policy_incr = new_node->lead_role_index ? this->transformer->getRole1Index() : 0;
+    policy_incr += idx * this->transformer->getPolicySize();
 
     int final_score_incr = idx * role_count;
 

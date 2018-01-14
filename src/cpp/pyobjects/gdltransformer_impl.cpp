@@ -70,7 +70,7 @@ static PyObject* GdlBasesTransformerWrapper_test(PyObject_GdlBasesTransformerWra
     float* pt_array_buf = array_buf;
 
     // four random moves
-    xoroshiro32plus16 random;
+    K273::xoroshiro128plus32 random;
 
     int total_depth = 0;
     for (int jj=0; jj<2; jj++) {

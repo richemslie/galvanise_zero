@@ -15,8 +15,8 @@ LDFLAGS = -g -MMD -MP -Wall -Werror -Woverloaded-virtual -Wnon-virtual-dtor -fno
 
 
 SRCS = puct/config.cpp puct/node.cpp puct/evaluator.cpp
-SRCS += gdltransformer.cpp scheduler.cpp supervisor.cpp selfplay.cpp
-SRCS += ggpzero_interface.cpp
+SRCS += gdltransformer.cpp scheduler.cpp selfplay.cpp selfplaymanager.cpp
+SRCS += player.cpp supervisor.cpp ggpzero_interface.cpp
 SRCS += greenlet/greenlet.cpp greenlet/greenlet-sys.cpp
 
 CORE_OBJS = $(patsubst %.cpp, %.o, $(SRCS))

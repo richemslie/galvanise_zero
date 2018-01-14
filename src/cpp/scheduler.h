@@ -25,9 +25,7 @@ namespace GGPZero {
     public:
         NetworkScheduler(GGPLib::StateMachineInterface* sm,
                          const GdlBasesTransformer* transformer,
-                         int batch_size,
-                         int expected_policy_size,
-                         int role_1_index);
+                         int batch_size);
         ~NetworkScheduler();
 
     public:
@@ -75,10 +73,7 @@ namespace GGPZero {
     private:
         GGPLib::StateMachineInterface* sm;
         const GdlBasesTransformer* transformer;
-
         const unsigned int batch_size;
-        const int expected_policy_size;
-        const int role_1_index;
 
         GGPLib::BaseState* basestate_expand_node;
         std::vector <greenlet_t*> requestors;

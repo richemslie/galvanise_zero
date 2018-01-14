@@ -1,15 +1,11 @@
 #pragma once
 
+#include <statemachine/basestate.h>
 #include <statemachine/statemachine.h>
 
 #include <k273/rng.h>
 
 #include <vector>
-
-/*
- * never add a reference back to supervisor... the supervisor will always call us
- */
-
 
 namespace GGPZero {
     // forwards
@@ -17,14 +13,9 @@ namespace GGPZero {
     class PuctConfig;
     class PuctEvaluator;
     class NetworkScheduler;
+    class SelfPlayManager;
 
     struct SelfPlayConfig {
-        // choose a random number between 0 - expected_game_length for samples to start
-        int expected_game_length;
-
-        // a node score reaches probability of winning, start sample selection early
-        float early_sample_start_probability;
-
         // -1 is off, and defaults to alpha-zero style
         int max_number_of_samples;
 
@@ -47,29 +38,24 @@ namespace GGPZero {
     class SelfPlay {
     public:
         SelfPlay(NetworkScheduler* scheduler, const SelfPlayConfig* conf,
-                 GGPLib::StateMachineInterface* sm);
+                 SelfPlayManager* manager, const GGPLib::BaseState* initial_state);
         ~SelfPlay();
 
     public:
         void playOnce();
         void playGamesForever();
 
-        std::vector <Sample*>& getSamples() {
-            return samples;
-        }
-
     private:
         NetworkScheduler* scheduler;
         const SelfPlayConfig* conf;
+        SelfPlayManager* manager;
+        const GGPLib::BaseState* initial_state;
 
         // only one evaluator -  allow to swap in/out config
         PuctEvaluator* pe;
 
-        const GGPLib::BaseState* initial_state;
-        std::vector <Sample*> samples;
-
         // random number generator
-        xoroshiro64plus32 rng;
+        K273::xoroshiro128plus32 rng;
     };
 
 }

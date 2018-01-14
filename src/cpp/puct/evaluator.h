@@ -62,7 +62,7 @@ namespace GGPZero {
 
         void logDebug();
 
-        PuctNode* backupRoot(int count);
+        PuctNode* jumpRoot(int count);
 
     private:
         const PuctConfig* conf;
@@ -88,7 +88,7 @@ namespace GGPZero {
         std::vector <PuctNode*> path;
 
         // random number generator
-        xoroshiro64plus32 rng;
+        K273::xoroshiro128plus32 rng;
     };
 
 }

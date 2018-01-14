@@ -534,9 +534,8 @@ void PuctEvaluator::logDebug() {
     }
 }
 
-PuctNode* PuctEvaluator::backupRoot(int count) {
-    int index = this->all_nodes.size() - count;
-    index = std::max(0, index);
-    this->root = this->all_nodes[index];
+PuctNode* PuctEvaluator::jumpRoot(int pos) {
+    ASSERT(pos >=0 && pos < (int) this->all_nodes.size());
+    this->root = this->all_nodes[pos];
     return this->root;
 }
