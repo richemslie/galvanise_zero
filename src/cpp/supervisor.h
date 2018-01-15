@@ -11,6 +11,8 @@
 
 #include <vector>
 
+#include <k273/util.h>
+
 namespace GGPZero {
 
     // forwards
@@ -18,6 +20,46 @@ namespace GGPZero {
     class SelfPlay;
     class SelfPlayConfig;
     class SelfPlayManager;
+
+    typedef K273::LockedQueue <SelfPlayManager*> ReadyQueue;
+
+    class SelfPlayWorker : public K273::WorkerInterface {
+    public:
+        SelfPlayWorker(std::vector <SelfPlayManager*> self_players) :
+            managers_available(self_players) {
+        }
+
+        virtual ~SelfPlayWorker();
+
+    private:
+        void doWork();
+
+    public:
+        // supervisor side:
+        SelfPlayManager* pull() {
+            if (!this->outbound_queue.empty()) {
+                return this->outbound_queue.pop();
+            }
+
+            return nullptr;
+        }
+
+        // supervisor side:
+        void push(SelfPlayManager* manager) {
+            this->inbound_queue.push(manager);
+            this->getThread()->promptWorker();
+        }
+
+    private:
+        std::vector <SelfPlayManager*> managers_available;
+
+        // worker pulls from here when no more workers available
+        ReadyQueue inbound_queue;
+
+        // worker pushes on here when done
+        ReadyQueue outbound_queue;
+    };
+
 
     class Supervisor {
     public:
@@ -45,8 +87,7 @@ namespace GGPZero {
 
         SelfPlayManager* inline_sp_manager;
 
-        // XXX worker thread
-
-        std::vector <SelfPlayManager*> self_play_managers;
+        std::vector <SelfPlayWorker*> self_play_workers;
+        SelfPlayManager* current;
     };
 }

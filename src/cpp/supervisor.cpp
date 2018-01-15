@@ -19,7 +19,8 @@ Supervisor::Supervisor(GGPLib::StateMachineInterface* sm,
     sm(sm->dupe()),
     transformer(transformer),
     batch_size(batch_size),
-    inline_sp_manager(nullptr) {
+    inline_sp_manager(nullptr),
+    current(nullptr) {
 }
 
 Supervisor::~Supervisor() {
