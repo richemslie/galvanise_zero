@@ -8,28 +8,36 @@ and [Thinking Fast And Slow](https://arxiv.org/abs/1705.08439v4) methods.
 
 Based on [GGPLib](https://github.com/ggplib/ggplib).
 
+Current games in training:
+
+ * connect four
+ * breakthrough
+ * reversi
+ * hex
+
+connect four / breakthrough and reversi are all a good bit stronger than baseline MCTS player - which does 3-4 orders of magnitude in
+playouts that ggp-zero.
+
+hex is in early stages of training.
 
 roadmap
 -------
+ * add evaluator stage 'game master', with visualisation and pretty elo graphs
 
- * test new fast self play which uses thread/coroutines/c++ to attempt to saturate GPU.
+ * train c4/bt/hex/reversi in parallel (cycle a generation each)
 
- * network training redux.  add self modifying weighting for value/reward head, better previous
-   network, better callbacks and tensorboard.  Still with keras.
+ * need some other players to judge progress (other alpha-zero projects?)
 
- * support more ggp games
+ * update install instructions.  finish refactoring & quick polish up.  write a little about how it works.  post first working version.
 
-   * automate the creation of configs
-   * save the configs in json, rather in python classes
+ * add a non-zero sum game to the mix (skirmish variant)
 
- * create a generation object with each network - has options
+ * experiment with adding previous states
 
-    * previous states to the neural network (option)
-    * add multiple policy heads to neural network (option).
-    * the data_format used for convolutions
+ * experiment with multiple policy heads
 
+ * reuse network from skirmish variant for chess (just to try something different)
 
- * test a non-zero sum game (skirmish variant)
 
 other
 -----
