@@ -1,7 +1,9 @@
 import os
+import glob
 
 from keras.models import model_from_json
 
+from ggplib.util import log
 from ggplib.db import lookup
 
 from ggpzero.defs import confs
@@ -68,7 +70,24 @@ class Manager(object):
         nn.get_model().save_weights(weights_path(game, generation),
                                     overwrite=True)
 
+    def load_latest_generation(self, game, generation):
+        path = model_path(game, generation)
+        filename = None
+        latest = None
+        for f in glob.glob(path):
+            if "prev" in path:
+                continue
+
+            if latest is None and os.stat(f).st_ctime > latest:
+                latest = os.stat(f).st_ctime
+                filename = f
+
+        return self.load_network_from_filename(game, filename)
+
     def load_network(self, game, generation):
+        if "*" in generation:
+            generation = self.get_latest_generation()
+
         json_str = open(model_path(game, generation)).read()
         keras_model = model_from_json(json_str)
         keras_model.load_weights(weights_path(game, generation))

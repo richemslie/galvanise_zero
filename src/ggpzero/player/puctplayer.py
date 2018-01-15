@@ -11,7 +11,8 @@ from tabulate import tabulate
 from ggplib.util import log
 from ggplib.player.base import MatchPlayer
 
-from ggpzero.util.bt import pretty_print_board
+#from ggpzero.util.bt import pretty_print_board
+from ggpzero.util.atarigo import pretty_print_board
 
 from ggpzero.defs import confs, templates
 
@@ -480,7 +481,7 @@ class PUCTEvaluator(object):
             print indent_str + line
 
     def debug_output(self, choice):
-        if self.game_info.game == "breakthrough":
+        if self.game_info.game == "atariGo_7x7":
             pretty_print_board(self.sm, self.root.state)
             print
 

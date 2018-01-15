@@ -1,4 +1,7 @@
+from builtins import super
+
 import numpy as np
+
 from keras import metrics
 from keras.optimizers import SGD, Adam
 from keras.utils.generic_utils import Progbar
@@ -21,8 +24,11 @@ def objective_function_for_policy(y_true, y_pred):
 
 class TrainingLoggerCb(keras.callbacks.Callback):
     ''' simple progress bar.  default was breaking with too much metrics '''
-    def on_train_begin(self, logs=None):
-        self.epochs = self.params['epochs']
+
+    def __init__(self, num_epochs):
+        super().__init__()
+        self.at_epoch = 0
+        self.num_epochs = num_epochs
 
     def on_batch_begin(self, batch, logs=None):
         if self.seen < self.target:
@@ -39,7 +45,8 @@ class TrainingLoggerCb(keras.callbacks.Callback):
         self.progbar.update(self.seen, self.log_values)
 
     def on_epoch_begin(self, epoch, logs=None):
-        log.info('Epoch %d/%d' % (epoch + 1, self.epochs))
+        self.at_epoch += 1
+        log.info('Epoch %d/%d' % (self.at_epoch, self.num_epochs))
 
         self.target = self.params['samples']
 
@@ -53,7 +60,6 @@ class TrainingLoggerCb(keras.callbacks.Callback):
         assert logs
 
         epoch += 1
-        log.debug("Epoch %s/%s" % (epoch, self.epochs))
 
         def str_by_name(names, dp=3):
             fmt = "%%s = %%.%df" % dp
@@ -85,15 +91,17 @@ class TrainingLoggerCb(keras.callbacks.Callback):
             log.info("%s : %s" % (output, str_by_name(val_acc)))
 
 
-class EarlyStoppingCb(keras.callbacks.Callback):
+class TrainingController(keras.callbacks.Callback):
     ''' custom callback to do nice logging and early stopping '''
 
-    def __init__(self, network, retraining):
-        self.network = network
+    def __init__(self, retraining):
         self.retraining = retraining
-        self.recompiled = False
 
-    def on_train_begin(self, logs=None):
+        self.stop_training = False
+        self.at_epoch = 0
+
+        self.reduce_value_weight = False
+
         self.best = None
         self.best_val_policy_acc = -1
 
@@ -101,26 +109,21 @@ class EarlyStoppingCb(keras.callbacks.Callback):
         self.retrain_best_val_policy_acc = -1
         self.epoch_last_set_at = None
 
-        self.epochs = self.params['epochs']
-
     def check_value_overfitting(self, logs):
-        if self.recompiled:
-            return
-
         loss = logs['value_loss']
         val_loss = logs['val_value_loss']
 
-        if loss - 0.001 < val_loss:
-            # XXX doesn't work
-            #self.network.compile(value_loss=0.01)
-            self.recompiled = True
+        # catch it early
+        if loss - 0.005 < val_loss:
+            self.reduce_value_weight = True
 
-    def on_epoch_end(self, epoch, logs=None):
-        assert logs
-        epoch += 1
+    def on_epoch_begin(self, epoch, logs=None):
+        self.at_epoch += 1
 
-        # XXX doesnt work
-        # self.check_value_overfitting(logs)
+    def on_epoch_end(self, _, logs=None):
+        epoch = self.at_epoch
+
+        self.check_value_overfitting(logs)
 
         policy_acc = logs['policy_acc']
         val_policy_acc = logs['val_policy_acc']
@@ -140,20 +143,23 @@ class EarlyStoppingCb(keras.callbacks.Callback):
             self.retrain_best = self.model.get_weights()
             self.retrain_best_val_policy_acc = val_policy_acc
 
-        # seems the first time around we should it give it chance (for breakthrough we didnt need,
-        # with reversi it takes at 10 epochs to stablize in the training).
-        if ((not self.retraining and epoch >= 16) or
+        # seems the first time around we should it give it chance (for breakthrough we didnt need
+        # to, with reversi it takes at 10 epochs to stablize in the training).
+        if ((not self.retraining and epoch >= 10) or
             (self.retraining and epoch >= 3)):
 
             # if we are overfitting
             if policy_acc - 0.02 > val_policy_acc:
                 log.info("Early stopping... since policy accuracy overfitting")
-                self.model.stop_training = True
+                self.stop_training = True
 
             # if things havent got better - STOP.  We can go on forever without improving.
             if self.epoch_last_set_at is not None and epoch > self.epoch_last_set_at + 4:
                 log.info("Early stopping... since not improving")
-                self.model.stop_training = True
+                self.stop_training = True
+
+        # always stop the model from continueing, so can gain control
+        self.model.stop_training = True
 
     def on_train_end(self, logs=None):
         if self.best:
@@ -207,7 +213,7 @@ class NeuralNetwork(object):
         else:
             return self.predict_n([state])[0]
 
-    def compile(self, use_sgd=False, learning_rate=None):
+    def compile(self, use_sgd=False, learning_rate=None, value_weight=1.0):
         if learning_rate is not None:
             lr = learning_rate
         else:
@@ -223,11 +229,11 @@ class NeuralNetwork(object):
             loss = ['categorical_crossentropy', 'mean_squared_error']
             optimizer = Adam(lr=lr)
 
-        log.warning("Compiling with %s" % optimizer)
+        log.warning("Compiling with %s (value_weight=%.3f)" % (optimizer, value_weight))
 
         # loss is much less on value.  it overfits really fast.
         self.keras_model.compile(loss=loss, optimizer=optimizer,
-                                 loss_weights=[1.0, 0.01],
+                                 loss_weights=[1.0, value_weight],
                                  metrics=["acc", top_3_acc])
 
     def train(self, train_conf, retraining=False):
@@ -249,22 +255,34 @@ class NeuralNetwork(object):
                            [train_conf.validation_output_policies,
                             train_conf.validation_output_final_scores]]
 
-        early_stopping_cb = EarlyStoppingCb(self, retraining)
+        training_logger = TrainingLoggerCb(train_conf.epochs)
+        controller = TrainingController(retraining)
 
-        # compile the model XXX pass in config options
-        self.compile()
+        value_weight = 0.1 if retraining else 1.0
+        self.compile(value_weight=value_weight)
+        for _ in range(train_conf.epochs):
+            if controller.stop_training:
+                log.warning("Stop training early via controller")
+                break
 
-        log.warning("self.keras_model.fit()")
-        self.keras_model.fit(train_conf.input_channels,
-                             outputs,
-                             verbose=0,
-                             batch_size=train_conf.batch_size,
-                             epochs=train_conf.epochs,
-                             validation_data=validation_data,
-                             callbacks=[TrainingLoggerCb(), early_stopping_cb],
-                             shuffle=True)
+            if controller.reduce_value_weight:
+                controller.reduce_value_weight = False
+                orig_weight = value_weight
+                value_weight *= 0.25
+                value_weight = max(0.01, value_weight)
+                if value_weight + 0.0001 < orig_weight:
+                    self.compile(value_weight=value_weight)
 
-        return early_stopping_cb
+            self.keras_model.fit(train_conf.input_channels,
+                                 outputs,
+                                 verbose=0,
+                                 batch_size=train_conf.batch_size,
+                                 epochs=1,
+                                 validation_data=validation_data,
+                                 callbacks=[training_logger, controller],
+                                 shuffle=True)
+
+        return controller
 
     def get_model(self):
         assert self.keras_model is not None

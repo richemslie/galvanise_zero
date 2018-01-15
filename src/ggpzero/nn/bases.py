@@ -14,7 +14,8 @@ from ggplib.db.lookup import GameInfo
 
 
 class BaseInfo(object):
-    def __init__(self, gdl_str, symbols):
+    def __init__(self, index, gdl_str, symbols):
+        self.index = index
         self.gdl_str = gdl_str
         self.symbols = symbols
 
@@ -25,7 +26,7 @@ class BaseInfo(object):
         self.channel = None
         self.x_idx = None
         self.y_idx = None
-
+        self.control_state = None
 
 class GdlBasesTransformer(object):
     game = None
@@ -40,6 +41,7 @@ class GdlBasesTransformer(object):
     # these are set in create_base_infos
     base_infos = None
     num_unhandled_states = 0
+    ignore_terms = []
 
     def __init__(self, game_info, channel_last=False):
         assert isinstance(game_info, GameInfo)
@@ -86,7 +88,7 @@ class GdlBasesTransformer(object):
         # base_infos (this part anyway) should probably be done in the StateMachineModel
         symbol_factory = SymbolFactory()
         sm_model = self.game_info.model
-        self.base_infos = [BaseInfo(s, symbol_factory.symbolize(s)) for s in sm_model.bases]
+        self.base_infos = [BaseInfo(idx, s, symbol_factory.symbolize(s)) for idx, s in enumerate(sm_model.bases)]
         # ########### XXX
 
         all_cords = []
@@ -116,10 +118,10 @@ class GdlBasesTransformer(object):
         assert self.control_base_term is not None
         self.num_of_base_controls = 0
         self.control_states = []
-        for idx, b in enumerate(self.base_infos):
+        for b in self.base_infos:
             if b.terms[0] == self.control_base_term:
                 self.num_of_base_controls += 1
-                self.control_states.append(idx)
+                self.control_states.append(b.index)
                 b.control_state = True
         log.info("Number of control states %s" % self.num_of_base_controls)
 
@@ -129,8 +131,10 @@ class GdlBasesTransformer(object):
             if b_info.channel is None and b_info.control_state is None:
                 self.num_unhandled_states += 1
 
+        self.channel_base_infos = [bi for bi in self.base_infos if bi.channel is not None]
+
         if self.num_unhandled_states:
-            log.warning("Number of unhandled states %d" % self.unhandled_states)
+            log.warning("Number of unhandled states %d" % self.num_unhandled_states)
 
     def state_to_channels(self, state, prev_states=None):
         # prev_states -> list of states
@@ -141,10 +145,8 @@ class GdlBasesTransformer(object):
                     for _ in range(self.num_channels)]
 
         # simply add to channel
-        for b_info, base_value in zip(self.base_infos, state):
-            assert isinstance(base_value, int)
-
-            if base_value and b_info.channel is not None:
+        for b_info in self.channel_base_infos:
+            if state[b_info.index]:
                 channels[b_info.channel][b_info.y_idx][b_info.x_idx] = 1
 
         # set who's turn it is by setting entire channel to 1
@@ -172,6 +174,16 @@ class GdlBasesTransformer(object):
             policy_outputs[index_start + idx] = prob
 
         return policy_outputs
+
+    def check_sample(self, sample):
+        assert len(sample.state) == len(self.base_infos)
+        assert len(sample.final_score) == self.final_score_count
+
+        for legal, p in sample.policy:
+            assert 0 <= legal < self.policy_dist_count
+            assert -0.01 < p < 1.01
+
+        assert 0 <= sample.lead_role_index <= self.role_count
 
     def sample_to_nn(self, sample, inputs, policies, finals):
         # transform samples -> numpy arrays as inputs/outputs to nn
@@ -242,9 +254,9 @@ class AmazonsSuicide_10x10(BasesConfig):
 ###############################################################################
 
 class AtariGo_7x7(GdlBasesTransformer):
-    game = "atariGo_7x7"
-    x_cords = "1 2 3 4 5 6 7".split()
-    y_cords = "1 2 3 4 5 6 7".split()
+    game = 'atariGo_7x7'
+    x_cords = '1 2 3 4 5 6 7'.split()
+    y_cords = '1 2 3 4 5 6 7'.split()
 
     base_term = "cell"
     x_term = 1
@@ -252,6 +264,8 @@ class AtariGo_7x7(GdlBasesTransformer):
     piece_term = 3
 
     pieces = ['black', 'white']
+    ignore_terms = ['group']
+    control_base_term = 'control'
 
 
 class Breakthrough(GdlBasesTransformer):
@@ -307,6 +321,7 @@ class Hex(GdlBasesTransformer):
     piece_term = 3
 
     pieces = ['red', 'blue']
+    control_base_term = 'control'
 
 
 class BreakthroughSmall(GdlBasesTransformer):

@@ -24,56 +24,13 @@ def critical_error(msg):
     sys.exit(1)
 
 
-def default_conf():
-    conf = confs.ServerConfig()
-
-    conf.port = 9000
-    conf.game = "breakthrough"
-    conf.current_step = 0
-
-    conf.network_size = "normal"
-
-    conf.generation_prefix = "v5"
-    conf.store_path = os.path.join(os.environ["GGPZERO_PATH"], "data", "breakthrough", "v5")
-
-    # generation set on server
-    conf.player_select_conf = confs.PolicyPlayerConfig(verbose=False,
-                                                       depth_temperature_start=8,
-                                                       depth_temperature_increment=0.25,
-                                                       random_scale=0.85)
-
-    conf.player_policy_conf = confs.PUCTPlayerConfig(name="policy_puct",
-                                                     verbose=False,
-                                                     playouts_per_iteration=800,
-                                                     playouts_per_iteration_noop=1,
-                                                     dirichlet_noise_alpha=0.2,
-                                                     puct_constant_after=3.0,
-                                                     puct_constant_before=0.75,
-                                                     choose="choose_converge")
-
-    conf.player_score_conf = confs.PolicyPlayerConfig(verbose=False,
-                                                      depth_temperature_start=8,
-                                                      depth_temperature_increment=0.25,
-                                                      random_scale=0.85)
-
-    conf.generation_size = 5000
-    conf.max_growth_while_training = 0.25
-
-    conf.validation_split = 0.8
-    conf.batch_size = 64
-    conf.epochs = 20
-    conf.max_sample_count = 250000
-    conf.run_post_training_cmds = []
-
-    return conf
-
-
 class WorkerInfo(object):
     def __init__(self, worker, ping_time):
         self.worker = worker
         self.valid = True
         self.ping_time_sent = ping_time
         self.conf = None
+        self.self_play_configured = None
         self.reset()
 
     def reset(self):
@@ -94,16 +51,15 @@ class WorkerInfo(object):
 
 
 class ServerBroker(Broker):
-    def __init__(self, conf_filename):
+    def __init__(self, conf_filename, conf=None):
         Broker.__init__(self)
 
         self.conf_filename = conf_filename
-        if os.path.exists(conf_filename):
+        if conf is None:
+            assert os.path.exists(conf_filename)
             conf = attrutil.json_to_attr(open(conf_filename).read())
-            assert isinstance(conf, confs.ServerConfig)
-        else:
-            conf = default_conf()
 
+        assert isinstance(conf, confs.ServerConfig)
         attrutil.pprint(conf)
 
         self.conf = conf
@@ -132,7 +88,7 @@ class ServerBroker(Broker):
         self.training_in_progress = False
 
         self.check_nn_generations_exist()
-        self.create_approx_config()
+        self.create_self_play_config()
         self.save_our_config()
 
         # finally start listening on port
@@ -217,8 +173,8 @@ class ServerBroker(Broker):
             self.the_nn_trainer = info
 
         if info.conf.do_self_play:
-            if info.conf.concurrent_plays < 1:
-                raise Exception("self play and concurrent_plays < 1 (%d)" % self.concurrent_plays)
+            if info.conf.self_play_batch_size < 1:
+                raise Exception("self play and self_play_batch_size < 1 (%d)" % self.concurrent_plays)
 
             info.reset()
 
@@ -270,7 +226,7 @@ class ServerBroker(Broker):
                 assert len(self.unique_states_set) == len(self.accumulated_samples)
 
         if dupe_count:
-            log.warning("dropping %s inflight duplicate state" % dupe_count)
+            log.warning("dropping %s inflight duplicate state(s)" % dupe_count)
 
         log.info("len accumulated_samples: %s" % len(self.accumulated_samples))
         log.info("worker saw %s duplicates" % msg.duplicates_seen)
@@ -339,7 +295,7 @@ class ServerBroker(Broker):
         for _, info in self.workers.items():
             info.reset()
 
-        self.create_approx_config()
+        self.create_self_play_config()
 
         # rotate these
         self.accumulated_samples = self.accumulated_samples[self.conf.generation_size:]
@@ -354,26 +310,21 @@ class ServerBroker(Broker):
 
         self.generation = None
         self.training_in_progress = False
-        self.free_players.append(self.the_nn_trainer)
+
+        if self.the_nn_trainer.conf.do_self_play:
+            self.free_players.append(self.the_nn_trainer)
 
         log.warning("roll_generation() complete.  We have %s samples leftover" % len(self.accumulated_samples))
 
         self.schedule_players()
 
-    def create_approx_config(self):
+    def create_self_play_config(self):
         # we use score_gen for select also XXX we should probably just go to one
         generation = self.get_generation(self.conf.current_step)
 
-        self.conf.player_select_conf.generation = generation
-        self.conf.player_policy_conf.generation = generation
-        self.conf.player_score_conf.generation = generation
-
-        conf = msgs.ConfigureApproxTrainer(self.conf.game, generation)
-        conf.player_select_conf = self.conf.player_select_conf
-        conf.player_policy_conf = self.conf.player_policy_conf
-        conf.player_score_conf = self.conf.player_score_conf
-
-        self.approx_play_config = conf
+        self.configure_selfplay_msg = msgs.ConfigureSelfPlay(self.conf.game,
+                                                             generation,
+                                                             self.conf.self_play_config)
 
     def schedule_players(self):
         if len(self.accumulated_samples) > self.conf.generation_size:
@@ -392,12 +343,12 @@ class ServerBroker(Broker):
                 continue
 
             if not worker_info.self_play_configured:
-                worker_info.worker.send_msg(self.approx_play_config)
+                worker_info.worker.send_msg(self.configure_selfplay_msg)
 
             else:
                 if self.need_more_samples():
                     updates = worker_info.get_and_update(self.unique_states)
-                    m = msgs.RequestSample(updates)
+                    m = msgs.RequestSamples(updates)
                     log.debug("sending request with %s updates" % len(updates))
                     worker_info.worker.send_msg(m)
                 else:
@@ -417,7 +368,14 @@ def start_server_factory():
     from ggpzero.util.keras import init
     init()
 
-    ServerBroker(sys.argv[1])
+    if sys.argv[1] == "-c":
+        conf = templates.server_config_template(sys.argv[2], sys.argv[3])
+        ServerBroker(sys.argv[4], conf)
+
+    else:
+        filename = sys.argv[1]
+        assert os.path.exists(filename)
+        ServerBroker(filename)
 
     reactor.run()
 

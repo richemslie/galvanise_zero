@@ -2,7 +2,7 @@ import attr
 
 from ggpzero.util.attrutil import register_attrs
 
-from ggpzero.defs.confs import PUCTPlayerConfig, PolicyPlayerConfig, WorkerConfig
+from ggpzero.defs import confs
 
 
 @register_attrs
@@ -27,20 +27,18 @@ class RequestConfig(object):
 
 @register_attrs
 class WorkerConfigMsg(object):
-    conf = attr.ib(default=attr.Factory(WorkerConfig))
+    conf = attr.ib(default=attr.Factory(confs.WorkerConfig))
 
 
 @register_attrs
-class ConfigureApproxTrainer(object):
+class ConfigureSelfPlay(object):
     game = attr.ib("game")
     generation = attr.ib("gen0")
-    player_select_conf = attr.ib(default=attr.Factory(PolicyPlayerConfig))
-    player_policy_conf = attr.ib(default=attr.Factory(PUCTPlayerConfig))
-    player_score_conf = attr.ib(default=attr.Factory(PUCTPlayerConfig))
+    self_play_conf = attr.ib(default=attr.Factory(confs.SelfPlayConfig))
 
 
 @register_attrs
-class RequestSample(object):
+class RequestSamples(object):
     # list of states (0/1 tuples) - to reduce duplicates
     new_states = attr.ib(default=attr.Factory(list))
 
@@ -52,6 +50,7 @@ class RequestSampleResponse(object):
     duplicates_seen = attr.ib(0)
 
 
+# this is a config, not a message.  fix XXX
 @register_attrs
 class TrainNNRequest(object):
     game = attr.ib("game")
@@ -68,7 +67,7 @@ class TrainNNRequest(object):
 
     # uses previous network?
     use_previous = attr.ib(True)
-    next_step = attr.ib("42")
+    next_step = attr.ib(42)
     overwrite_existing = attr.ib(False)
     validation_split = attr.ib(0.8)
     batch_size = attr.ib(32)

@@ -8,24 +8,24 @@ import shutil
 from twisted.internet import reactor
 
 from ggplib.util import log
+from ggplib.db import lookup
 
 from ggpzero.util import attrutil
-
-from ggpzero.nn.scheduler import create_scheduler
 
 from ggpzero.defs import msgs, confs
 
 from ggpzero.util.broker import Broker, WorkerFactory
+from ggpzero.util import cppinterface
 
 from ggpzero.training import nn_train
-from ggpzero.training import approximate_play
+from ggpzero.nn.manager import get_manager
 
 
 def default_conf():
     conf = confs.WorkerConfig(9000, "127.0.0.1")
     conf.do_training = False
     conf.do_self_play = True
-    conf.concurrent_plays = 1
+    conf.self_play_batch_size = 1024
     return conf
 
 
@@ -47,12 +47,14 @@ class Worker(Broker):
         self.register(msgs.Ping, self.on_ping)
         self.register(msgs.RequestConfig, self.on_request_config)
 
-        self.register(msgs.ConfigureApproxTrainer, self.on_configure_approx_trainer)
-        self.register(msgs.RequestSample, self.on_request_sample)
+        self.register(msgs.ConfigureSelfPlay, self.on_configure)
+        self.register(msgs.RequestSamples, self.on_request_samples)
         self.register(msgs.TrainNNRequest, self.on_train_request)
 
-        self.approx_players = None
-        self.self_play_session = None
+        self.game_info = None
+        self.sm = None
+        self.nn = None
+        self.supervisor = None
 
         # connect to server
         reactor.callLater(0, self.connect)
@@ -75,53 +77,59 @@ class Worker(Broker):
     def on_request_config(self, server, msg):
         return msgs.WorkerConfigMsg(self.conf)
 
-    def on_configure_approx_trainer(self, server, msg):
+    def on_configure(self, server, msg):
         attrutil.pprint(msg)
 
-        # crate a new session and scheduler
-        self.self_play_session = approximate_play.Session()
-        self.scheduler = create_scheduler(msg.game, msg.generation, batch_size=1024)
+        if self.game_info is None:
+            self.game_info = lookup.by_name(msg.game)
+            self.sm = self.game_info.get_sm()
+        else:
+            self.game_info.game == msg.game
 
-        for player_conf in msg.player_select_conf, msg.player_policy_conf, msg.player_score_conf:
-            assert player_conf.generation == msg.generation
+        self.nn = get_manager().load_network(msg.game, msg.generation)
 
-        if self.approx_players is None:
-            self.approx_players = [approximate_play.Runner(msg) for _ in range(self.conf.concurrent_plays)]
-
-        for r in self.approx_players:
-            r.patch_players(self.scheduler)
+        if self.supervisor is None:
+            self.supervisor = cppinterface.Supervisor(self.sm, self.nn,
+                                                      batch_size=self.conf.self_play_batch_size,
+                                                      sleep_between_poll=self.conf.sleep_between_poll)
+            self.supervisor.start_self_play(msg.self_play_conf)
+        else:
+            self.supervisor.update_nn(self.nn)
+            self.supervisor.clear_unique_states()
 
         return msgs.Ok("configured")
 
-    def on_request_sample(self, server, msg):
-        assert self.self_play_session is not None
-        assert self.scheduler is not None
+    def cb_from_superviser(self):
+        new_samples = self.supervisor.fetch_samples()
+        if new_samples:
+            self.samples += [confs.Sample(**d) for d in new_samples]
+            # XXX self.conf.min_num_samples configure
+            if len(self.samples) > 128:
+                return True
+
+    def on_request_samples(self, server, msg):
+        assert self.supervisor is not None
+        self.samples = []
+        self.supervisor.reset_stats()
 
         log.debug("Got request for sample with number unique states %s" % len(msg.new_states))
 
         # update duplicates
-        self.self_play_session.reset()
         for s in msg.new_states:
-            self.self_play_session.add_to_unique_states(tuple(s))
+            self.supervisor.add_unique_state(s)
 
-        for r in self.approx_players:
-            self.scheduler.add_runnable(self.self_play_session.start_and_record, r)
+        start_time = time.time()
+        self.supervisor.poll_loop(do_stats=True, cb=self.cb_from_superviser)
 
-        log.info("Running scheduler")
-
-        s = time.time()
-        self.scheduler.run()
-
-        log.info("Number of samples %s, predictions %d" % (len(self.self_play_session.samples),
-                                                           self.scheduler.num_predictions))
-        log.info("time takens python/predict/all %.2f / %.2f / %.2f" % (self.scheduler.acc_python_time,
-                                                                        self.scheduler.acc_predict_time,
-                                                                        time.time() - s))
+        log.info("Number of samples %s, predictions %d" % (len(self.samples),
+                                                           self.supervisor.total_predictions))
+        log.info("time takens python/predict/all %.2f / %.2f / %.2f" % (self.supervisor.acc_time_polling,
+                                                                        self.supervisor.acc_time_prediction,
+                                                                        time.time() - start_time))
 
         log.info("Done all samples")
 
-        m = msgs.RequestSampleResponse(self.self_play_session.samples,
-                                       self.self_play_session.duplicates_seen)
+        m = msgs.RequestSampleResponse(self.samples, 0)
         server.send_msg(m)
 
     def on_train_request(self, server, msg):

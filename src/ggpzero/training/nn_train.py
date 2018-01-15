@@ -10,120 +10,169 @@ from ggpzero.defs import msgs, confs, templates
 from ggpzero.nn.manager import get_manager
 
 
+# XXX general jumping through hoops to cache samples.  The right thing to do is store samples in an
+# efficient and preprocessed format.
+
+
 class TrainException(Exception):
     pass
 
 
-def check_sample(sample, game_model):
-    assert len(sample.state) == len(game_model.bases)
-    assert len(sample.final_score) == len(game_model.roles)
+class GenerationSamples(object):
+    def __init__(self, game, with_generation, num_samples):
+        self.game = game
+        self.with_generation = with_generation
+        self.num_samples = num_samples
 
-    num_actions = sum(len(actions) for actions in game_model.actions)
-    for legal, p in sample.policy:
-        assert 0 <= legal < num_actions
-        assert -0.01 < p < 1.01
+        self.samples = []
 
-    assert 0 <= sample.lead_role_index <= len(game_model.roles)
+        self.states = []
+        self.input_channels = []
+        self.output_policies = []
+        self.output_final_scores = []
+        self.transformed = False
+
+    def add_sample(self, sample):
+        self.samples.append(sample)
+
+    def transform_all(self, transformer):
+        for sample in self.samples:
+            self.states.append(tuple(sample.state))
+            transformer.check_sample(sample)
+            transformer.sample_to_nn(sample,
+                                     self.input_channels,
+                                     self.output_policies,
+                                     self.output_final_scores)
+        self.transformed = True
+
+        # free up memory
+        self.samples = []
+
+    def __iter__(self):
+        assert self.transformed
+        for s, ins, pol_head, val_head in zip(self.states, self.input_channels,
+                                              self.output_policies, self.output_final_scores):
+            yield s, ins, [pol_head, val_head]
 
 
 class SamplesBuffer(object):
     ''' this is suppose to be our in memory buffer.  But we throw it away everytime we train.  XXX
     ie should we keep it in memory, or is it too big?  '''
 
-    def __init__(self, transformer):
-        self.transformer = transformer
-        self.train_samples = []
-        self.validation_samples = []
+    def __init__(self):
+        self.conf = confs.TrainData()
 
-    def add(self, sample, validation=False):
-        assert isinstance(sample, confs.Sample)
+    gen_data_cache = {}
 
+    @classmethod
+    def files_to_gen_samples(cls, conf):
+        assert isinstance(conf, msgs.TrainNNRequest)
+
+        step = conf.next_step - 1
+        while step >= conf.starting_step:
+            fn = os.path.join(conf.store_path, "gendata_%s_%s.json" % (conf.game, step))
+            if fn not in cls.gen_data_cache:
+
+                raw_data = attrutil.json_to_attr(open(fn).read())
+                gen_samples = GenerationSamples(raw_data.game,
+                                                raw_data.with_generation,
+                                                raw_data.num_samples)
+
+                for s in raw_data.samples:
+                    gen_samples.add_sample(s)
+
+                cls.gen_data_cache[fn] = gen_samples
+
+            yield fn, cls.gen_data_cache[fn]
+            step -= 1
+
+    def add(self, ins, outs, validation=False):
         if validation:
-            self.validation_samples.append(sample)
+            self.conf.validation_input_channels.append(ins)
+            self.conf.validation_output_policies.append(outs[0])
+            self.conf.validation_output_final_scores.append(outs[1])
         else:
-            self.train_samples.append(sample)
+            self.conf.input_channels.append(ins)
+            self.conf.output_policies.append(outs[0])
+            self.conf.output_final_scores.append(outs[1])
 
     def strip(self, train_count, validate_count):
-        ''' Needs to throw away the tail of the list '''
-        self.train_samples = self.train_samples[:train_count]
-        self.validation_samples = self.validation_samples[:validate_count]
+        ''' Needs to throw away the tail of the list (since that is the oldest data) '''
 
-    def create_training_conf(self):
-        conf = confs.TrainData()
+        for name in "input_channels output_policies output_final_scores".split():
+            data = getattr(self.conf, name)
+            data = data[:train_count]
+            setattr(self.conf, name, data)
 
-        log.debug("transforming training samples: %s" % len(self.train_samples))
-        for sample in self.train_samples:
-            self.transformer.sample_to_nn(sample,
-                                          conf.input_channels,
-                                          conf.output_policies,
-                                          conf.output_final_scores)
+        for name in "validation_input_channels validation_output_policies validation_output_final_scores".split():
+            data = getattr(self.conf, name)
+            data = data[:validate_count]
+            setattr(self.conf, name, data)
 
-        log.debug("transforming validation samples: %s" % len(self.validation_samples))
-        for sample in self.validation_samples:
-            self.transformer.sample_to_nn(sample,
-                                          conf.validation_input_channels,
-                                          conf.validation_output_policies,
-                                          conf.validation_output_final_scores)
+    def check(self):
+        c = self.conf
+        assert len(c.input_channels) == len(c.output_policies)
+        assert len(c.input_channels) == len(c.output_final_scores)
 
-        return conf
+        assert len(c.validation_input_channels) == len(c.validation_output_policies)
+        assert len(c.validation_input_channels) == len(c.validation_output_final_scores)
 
-
-def get_data(conf):
-    assert isinstance(conf, msgs.TrainNNRequest)
-
-    step = conf.next_step - 1
-    while step >= conf.starting_step:
-        fn = os.path.join(conf.store_path, "gendata_%s_%s.json" % (conf.game, step))
-        yield fn, attrutil.json_to_attr(open(fn).read())
-        step -= 1
+    def summary(self):
+        log.info("SamplesBuffer - train size %d, validate size %d" % (len(self.conf.input_channels),
+                                                                      len(self.conf.validation_input_channels)))
 
 
 def parse(conf, game_info, transformer):
     assert isinstance(conf, msgs.TrainNNRequest)
 
-    samples_buffer = SamplesBuffer(transformer)
+    samples_buffer = SamplesBuffer()
 
     total_samples = 0
     from collections import Counter
     count = Counter()
 
-    for fn, gen_data in get_data(conf):
+    for fn, gen_data in samples_buffer.files_to_gen_samples(conf):
+        assert gen_data.game == conf.game
+
         log.debug("Proccesing %s" % fn)
         log.debug("Game %s, with gen: %s and sample count %s" % (gen_data.game,
                                                                  gen_data.with_generation,
                                                                  gen_data.num_samples))
 
-        samples = []
+        if not gen_data.transformed:
+            gen_data.transform_all(transformer)
+
+        data = []
+
         # XXX is this deduping a good idea?  Once we start using prev_states, then there will be a
         # lot less deduping?
-        for g in gen_data.samples:
-            s = tuple(g.state)
+        for state, ins, outs in gen_data:
             # keep the top n only?
-            if conf.drop_dupes_count > 0 and count[s] == conf.drop_dupes_count:
+            if conf.drop_dupes_count > 0 and count[state] == conf.drop_dupes_count:
                 continue
 
-            count[s] += 1
-            samples.append(g)
+            count[state] += 1
+            data.append((ins, outs))
 
-        log.verbose("DROPPED DUPES %s" % (gen_data.num_samples - len(samples)))
+        log.verbose("DROPPED DUPES %s" % (gen_data.num_samples - len(data)))
 
-        assert gen_data.game == conf.game
-        num_samples = len(samples)
+        num_samples = len(data)
+        log.verbose("Left over samples %d" % num_samples)
+
         train_count = int(num_samples * conf.validation_split)
 
-        for s in samples[:train_count]:
-            check_sample(s, game_info.model)
-            samples_buffer.add(s)
+        for ins, outs in data[:train_count]:
+            samples_buffer.add(ins, outs)
 
-        for s in samples[train_count:]:
-            check_sample(s, game_info.model)
-            samples_buffer.add(s, validation=True)
+        for ins, outs in data[train_count:]:
+            samples_buffer.add(ins, outs, validation=True)
 
         total_samples += num_samples
         if total_samples > conf.max_sample_count:
             break
 
-    log.info("Number of samples %s" % total_samples)
+    samples_buffer.check()
+    samples_buffer.summary()
 
     if conf.max_sample_count < total_samples:
         train_count = int(conf.max_sample_count * conf.validation_split)
@@ -132,9 +181,9 @@ def parse(conf, game_info, transformer):
                                                          conf.max_sample_count))
         samples_buffer.strip(train_count, validate_count)
 
-        log.info("Number of samples %s" % total_samples)
-
-    return samples_buffer.create_training_conf()
+    samples_buffer.check()
+    samples_buffer.summary()
+    return samples_buffer.conf
 
 
 def parse_and_train(conf):

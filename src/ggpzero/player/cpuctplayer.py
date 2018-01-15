@@ -8,7 +8,7 @@ from ggplib.player.base import MatchPlayer
 
 from ggpzero.defs import templates
 
-from ggpzero.util.cppinterface import joint_move_to_ptr, basestate_to_ptr, SupervisorPlay
+from ggpzero.util.cppinterface import joint_move_to_ptr, basestate_to_ptr, PlayPoller
 
 from ggpzero.nn.manager import get_manager
 
@@ -26,17 +26,18 @@ class CppPUCTPlayer(MatchPlayer):
         if self.conf.verbose:
             log.info("CppPUCTPlayer, match id: %s" % self.match.match_id)
 
-        if self.sm is None:
+        if self.sm is None or "*" in self.conf.generation:
+            if "*" in self.conf.generation:
+                log.warning("Using recent generation %s" % self.conf.generation)
+
             game_info = self.match.game_info
             self.sm = game_info.get_sm()
 
             man = get_manager()
-            if man.can_load(game_info.game, self.conf.generation):
-                self.nn = man.load_network(game_info.game, self.conf.generation)
-            else:
-                self.nn = man.create_new_network(game_info.game, "smaller")
-            self.supervisor = SupervisorPlay(self.sm, self.nn)
-            self.supervisor.player_start(attr.asdict(self.conf))
+            gen = self.conf.generation
+
+            self.nn = man.load_network(game_info.game, gen)
+            self.poller = PlayPoller(self.sm, self.nn, attr.asdict(self.conf))
 
             def get_noop_idx(actions):
                 for idx, a in enumerate(actions):
@@ -45,11 +46,12 @@ class CppPUCTPlayer(MatchPlayer):
                 assert False, "did not find noop"
 
             self.role0_noop_legal, self.role1_noop_legal = map(get_noop_idx, game_info.model.actions)
-        else:
-            self.supervisor.player_reset()
+
+        self.poller.player_reset()
 
     def on_apply_move(self, joint_move):
-        self.supervisor.player_apply_move(joint_move_to_ptr(joint_move))
+        self.poller.player_apply_move(joint_move_to_ptr(joint_move))
+        self.poller.poll_loop()
 
     def on_next_move(self, finish_time):
         current_state = self.match.get_current_state()
@@ -70,10 +72,11 @@ class CppPUCTPlayer(MatchPlayer):
             max_iterations = self.conf.playouts_per_iteration_noop
 
         current_state = self.match.get_current_state()
-        self.supervisor.player_move(basestate_to_ptr(current_state), max_iterations, finish_time)
 
-        self.supervisor.poll_loop()
-        return self.supervisor.player_get_move(self.match.our_role_index)
+        self.poller.player_move(basestate_to_ptr(current_state), max_iterations, finish_time)
+        self.poller.poll_loop()
+
+        return self.poller.player_get_move(self.match.our_role_index)
 
 
 ###############################################################################

@@ -91,47 +91,15 @@ class PUCTPlayerConfig(object):
 
 
 @register_attrs
-class ServerConfig(object):
-    port = attr.ib(9000)
-
-    game = attr.ib("breakthrough")
-
-    current_step = attr.ib(0)
-    network_size = attr.ib("normal")
-
-    generation_prefix = attr.ib("v2_")
-    store_path = attr.ib("somewhere")
-
-    player_select_conf = attr.ib(default=attr.Factory(PolicyPlayerConfig))
-    player_policy_conf = attr.ib(default=attr.Factory(PUCTPlayerConfig))
-    player_score_conf = attr.ib(default=attr.Factory(PUCTPlayerConfig))
-
-    generation_size = attr.ib(1024)
-    max_growth_while_training = attr.ib(0.2)
-
-    validation_split = attr.ib(0.8)
-    batch_size = attr.ib(32)
-    epochs = attr.ib(10)
-
-    max_sample_count = attr.ib(250000)
-    drop_dupes_count = attr.ib(3)
-
-    # this is applied even if max_sample_count can't be reached
-    starting_step = attr.ib(0)
-
-    retrain_network = attr.ib(False)
-
-    # run system commands after training (copy files to machines etc)
-    run_post_training_cmds = attr.ib(default=attr.Factory(list))
-
-
-@register_attrs
 class WorkerConfig(object):
     connect_port = attr.ib(9000)
     connect_ip_addr = attr.ib("127.0.0.1")
     do_training = attr.ib(False)
     do_self_play = attr.ib(False)
-    concurrent_plays = attr.ib(1)
+    self_play_batch_size = attr.ib(1)
+
+    # slow things down
+    sleep_between_poll = attr.ib(-1)
 
 
 # XXX not sure this should be here?
@@ -188,3 +156,61 @@ class Generation(object):
 
     # the samples (list of Sample)
     samples = attr.ib(attr.Factory(list))
+
+
+@register_attrs
+class SelfPlayConfig(object):
+    # -1 is off, and defaults to alpha-zero style
+    max_number_of_samples = attr.ib(4)
+
+    # if the probability of losing drops below - then resign
+    resign_score_probability = attr.ib(0.9)
+
+    # ignore resignation - and continue to end
+    resign_false_positive_retry_percentage = attr.ib(0.1)
+
+    # select will get to the point where we start sampling
+    select_puct_config = attr.ib(default=attr.Factory(PUCTPlayerConfig))
+    select_iterations = attr.ib(100)
+
+    # sample is the actual sample we take to train for.  The focus is on good policy distribution.
+    sample_puct_config = attr.ib(default=attr.Factory(PUCTPlayerConfig))
+    sample_iterations = attr.ib(800)
+
+    # after samples, will play to the end using this config
+    score_puct_config = attr.ib(default=attr.Factory(PUCTPlayerConfig))
+    score_iterations = attr.ib(100)
+
+
+@register_attrs
+class ServerConfig(object):
+    port = attr.ib(9000)
+
+    game = attr.ib("breakthrough")
+
+    current_step = attr.ib(0)
+    network_size = attr.ib("normal")
+
+    generation_prefix = attr.ib("v2_")
+    store_path = attr.ib("somewhere")
+
+    generation_size = attr.ib(1024)
+    max_growth_while_training = attr.ib(0.2)
+
+    validation_split = attr.ib(0.8)
+    batch_size = attr.ib(32)
+    epochs = attr.ib(10)
+
+    max_sample_count = attr.ib(250000)
+    drop_dupes_count = attr.ib(3)
+
+    # this is applied even if max_sample_count can't be reached
+    starting_step = attr.ib(0)
+
+    retrain_network = attr.ib(False)
+
+    # run system commands after training (copy files to machines etc)
+    run_post_training_cmds = attr.ib(default=attr.Factory(list))
+
+    # the self play config
+    self_play_config = attr.ib(default=attr.Factory(SelfPlayConfig))
