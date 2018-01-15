@@ -112,7 +112,7 @@ PuctNode* NetworkScheduler::createNode(PuctEvaluator* pe, const GGPLib::BaseStat
 
     greenlet_switch_to(this->main_loop);
 
-    ASSERT (this->pred_count > 0 && idx < this->pred_count);
+    ASSERT(this->pred_count > 0 && idx < this->pred_count);
 
     int policy_incr = new_node->lead_role_index ? this->transformer->getRole1Index() : 0;
     policy_incr += idx * this->transformer->getPolicySize();
@@ -183,8 +183,8 @@ void NetworkScheduler::mainLoop() {
             greenlet_switch_to(this->top);
 
             // once we return, we must handle the results before doing anything else
-            ASSERT (this->policies != nullptr && this->final_scores != nullptr);
-            ASSERT (this->pred_count == (int) this->requestors.size());
+            ASSERT(this->policies != nullptr && this->final_scores != nullptr);
+            ASSERT(this->pred_count == (int) this->requestors.size());
 
             for (greenlet_t* req : this->requestors) {
                 // handle them straight away
@@ -221,7 +221,7 @@ int NetworkScheduler::poll(float* policies, float* final_scores, int pred_count)
 
     ASSERT(!greenlet_isdead(this->main_loop));
 
-    ASSERT (this->policies == nullptr && this->final_scores == nullptr && this->pred_count == 0);
+    ASSERT(this->policies == nullptr && this->final_scores == nullptr && this->pred_count == 0);
     this->policies = policies;
     this->final_scores = final_scores;
     this->pred_count = pred_count;
