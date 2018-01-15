@@ -186,8 +186,9 @@ void SelfPlay::playOnce() {
     }
 
     // this was defined right at the top...
+    // XXXXX add to some stats and report at end of cycle... way too much noise
     if (saw_dupes) {
-        K273::l_verbose("saw dupe states %d", saw_dupes);
+        //K273::l_verbose("saw dupe states %d", saw_dupes);
     }
 
 }
