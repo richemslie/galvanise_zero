@@ -57,8 +57,11 @@ namespace GGPZero {
         uint16_t basestate_ptr_incr;
         uint16_t children_ptr_incr;
 
+        // the depth of the game
+        uint16_t game_depth;
+
         // actual size of this node
-        int allocated_size;
+        uint16_t allocated_size;
 
         uint8_t data[0];
 

@@ -31,12 +31,6 @@ SelfPlayManager::~SelfPlayManager() {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-void SelfPlayManager::addSample(Sample* sample) {
-    this->samples.push_back(sample);
-}
-
-///////////////////////////////////////////////////////////////////////////////
-
 void SelfPlayManager::startSelfPlayers(const SelfPlayConfig* config) {
     K273::l_info("SelfPlayManager::startSelfPlayers - starting %d players", this->batch_size);
 
@@ -44,8 +38,9 @@ void SelfPlayManager::startSelfPlayers(const SelfPlayConfig* config) {
 
     // create a bunch of self plays
     for (int ii=0; ii<this->batch_size; ii++) {
-        SelfPlay* sp = new SelfPlay(this->scheduler, config,
-                                    this, this->sm->getInitialState());
+        PuctEvaluator* pe = new PuctEvaluator(config->select_puct_config, this->scheduler);
+        SelfPlay* sp = new SelfPlay(this, config, pe,
+                                    this->sm->getInitialState(), this->sm->getRoleCount());
         this->self_plays.push_back(sp);
 
         auto f = [sp]() {
@@ -96,3 +91,22 @@ void SelfPlayManager::clearUniqueStates() {
     this->states_allocated.clear();
 }
 
+// will create a new sample based on the root tree
+Sample* SelfPlayManager::createSample(const PuctNode* node) {
+    Sample* sample = new Sample;
+    sample->state = this->sm->newBaseState();
+    sample->state->assign(node->getBaseState());
+
+    for (int ii=0; ii<node->num_children; ii++) {
+        const PuctNodeChild* child = node->getNodeChild(this->sm->getRoleCount(), ii);
+        sample->policy.emplace_back(child->move.get(node->lead_role_index),
+                                    child->next_prob);
+    }
+
+    sample->lead_role_index = node->lead_role_index;
+    return sample;
+}
+
+void SelfPlayManager::addSample(Sample* sample) {
+    this->samples.push_back(sample);
+}

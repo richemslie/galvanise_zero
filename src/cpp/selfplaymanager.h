@@ -28,6 +28,8 @@ namespace GGPZero {
         };
 
         void addSample(Sample* sample);
+        Sample* createSample(const PuctNode* node);
+        const GGPLib::BaseState* getInitialState() const;
 
     public:
         void startSelfPlayers(const SelfPlayConfig* config);
@@ -39,7 +41,6 @@ namespace GGPZero {
 
         void addUniqueState(const GGPLib::BaseState* bs);
         void clearUniqueStates();
-
     private:
         GGPLib::StateMachineInterface* sm;
         const GdlBasesTransformer* transformer;

@@ -69,6 +69,9 @@ static PuctNode* createNode(const BaseState* base_state,
     node->basestate_ptr_incr = current_score_bytes + final_score_bytes;
     node->children_ptr_incr = current_score_bytes + final_score_bytes + base_state_bytes;
 
+    // will be set by the evaluator
+    node->game_depth = 0;
+
     // store the allocated size
     node->allocated_size = total_bytes;
 

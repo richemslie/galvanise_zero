@@ -10,6 +10,7 @@
 namespace GGPZero {
     // forwards
     class Sample;
+    class PuctNode;
     class PuctConfig;
     class PuctEvaluator;
     class NetworkScheduler;
@@ -37,25 +38,40 @@ namespace GGPZero {
 
     class SelfPlay {
     public:
-        SelfPlay(NetworkScheduler* scheduler, const SelfPlayConfig* conf,
-                 SelfPlayManager* manager, const GGPLib::BaseState* initial_state);
+        SelfPlay(SelfPlayManager* manager, const SelfPlayConfig* conf,
+                 PuctEvaluator* pe,
+                 const GGPLib::BaseState* initial_state, int role_count);
         ~SelfPlay();
+
+
+    private:
+        PuctNode* selectNode(const bool can_resign);
+        PuctNode* collectSamples(PuctNode* node);
 
     public:
         void playOnce();
         void playGamesForever();
 
-    private:
-        NetworkScheduler* scheduler;
-        const SelfPlayConfig* conf;
-        SelfPlayManager* manager;
-        const GGPLib::BaseState* initial_state;
+        // XXX tmp
+        bool isUnique(const GGPLib::BaseState* bs);
 
+    private:
+        SelfPlayManager* manager;
+        const SelfPlayConfig* conf;
         // only one evaluator -  allow to swap in/out config
         PuctEvaluator* pe;
 
+        const GGPLib::BaseState* initial_state;
+        const int role_count;
+
         // random number generator
         K273::xoroshiro128plus32 rng;
+
+        // local to playOnce();
+        std::vector <Sample*> game_samples;
+
+        // stats
+        int saw_dupes;
     };
 
 }

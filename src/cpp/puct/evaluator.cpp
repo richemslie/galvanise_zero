@@ -72,6 +72,8 @@ void PuctEvaluator::expandChild(PuctNode* parent, PuctNodeChild* child) {
     this->addNode(new_node);
     child->to_node = new_node;
     parent->num_children_expanded++;
+
+    new_node->game_depth = parent->game_depth + 1;
 }
 
 PuctNode* PuctEvaluator::createNode(const GGPLib::BaseState* state) {
@@ -377,6 +379,7 @@ PuctNode* PuctEvaluator::establishRoot(const GGPLib::BaseState* current_state, i
     ASSERT(this->root == nullptr && this->initial_root == nullptr);
 
     this->initial_root = this->root = this->createNode(current_state);
+    this->initial_root->game_depth = 0;
 
     ASSERT(!this->root->isTerminal());
     return this->root;

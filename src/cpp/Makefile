@@ -5,11 +5,11 @@ AR = ar
 RM = rm -f
 CPP = g++
 
-CFLAGS = -MMD -MP -g -Wall -Werror -Woverloaded-virtual -Wnon-virtual-dtor -fno-strict-aliasing -O2 -fPIC -std=c++11
+CFLAGS = -MMD -MP -g -Wall -Werror -Woverloaded-virtual -Wnon-virtual-dtor -fno-strict-aliasing -O3 -fPIC -std=c++11
 
 CFLAGS += $(shell python2-config --includes)
 
-LDFLAGS = -g -MMD -MP -Wall -Werror -Woverloaded-virtual -Wnon-virtual-dtor -fno-strict-aliasing -O2 -std=c++11
+LDFLAGS = -g -MMD -MP -Wall -Werror -Woverloaded-virtual -Wnon-virtual-dtor -fno-strict-aliasing -O3 -std=c++11
 
 #LDFLAGS += $(shell python2-config --ldflags)
 

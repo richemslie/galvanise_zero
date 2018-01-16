@@ -12,8 +12,15 @@
 
 #include "greenlet-int.h"
 
+#include <k273/logging.h>
+#include <k273/exception.h>
+
+#include <type_traits>
+#include <typeinfo>
+#include <cxxabi.h>
 #include <exception>
 #include <functional>
+#include <string>
 
 enum greenlet_flags
 {
@@ -55,6 +62,29 @@ int greenlet_isdead(greenlet_t *greenlet);
 // f(void) -> void
 // Since no more is needed.
 
+template <class T>
+std::string
+type_name()
+{
+    typedef typename std::remove_reference<T>::type TR;
+    std::unique_ptr<char, void(*)(void*)> own
+           (
+            abi::__cxa_demangle(typeid(TR).name(), nullptr,
+                                           nullptr, nullptr),
+            std::free
+            );
+    std::string r = own != nullptr ? own.get() : typeid(TR).name();
+    if (std::is_const<TR>::value)
+        r += " const";
+    if (std::is_volatile<TR>::value)
+        r += " volatile";
+    if (std::is_lvalue_reference<T>::value)
+        r += "&";
+    else if (std::is_rvalue_reference<T>::value)
+        r += "&&";
+    return r;
+}
+
 namespace _greenlet_hidden {
     template <typename Callable> struct WrapClosure {
         typedef WrapClosure <Callable> Self;
@@ -70,7 +100,23 @@ namespace _greenlet_hidden {
         static void* call(void* data) {
             Self* wrapper = reinterpret_cast<Self*>(data);
             greenlet_switch_to(wrapper->bounce);
-            wrapper->function();
+
+            try {
+                wrapper->function();
+            } catch (const K273::Exception& exc) {
+                std::string wrapper_name = type_name<decltype(wrapper)>();
+                K273::l_critical("In %s, Exception: %s",
+                                 wrapper_name.c_str(),
+                                 exc.getMessage().c_str());
+                throw;
+
+            } catch (...) {
+                std::string wrapper_name = type_name<decltype(wrapper)>();
+                K273::l_critical("In %s, Unknown exception caught.",
+                                 wrapper_name.c_str());
+                throw;
+            }
+
             return nullptr;
         }
     };

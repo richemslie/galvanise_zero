@@ -14,68 +14,42 @@
 using namespace GGPZero;
 
 
-SelfPlay::SelfPlay(NetworkScheduler* scheduler, const SelfPlayConfig* conf,
-                   SelfPlayManager* manager, const GGPLib::BaseState* initial_state) :
-    scheduler(scheduler),
-    conf(conf),
+SelfPlay::SelfPlay(SelfPlayManager* manager, const SelfPlayConfig* conf, PuctEvaluator* pe,
+                   const GGPLib::BaseState* initial_state, int role_count) :
     manager(manager),
-    initial_state(initial_state) {
-    this->pe = new PuctEvaluator(conf->select_puct_config, this->scheduler);
+    conf(conf),
+    pe(pe),
+    initial_state(initial_state),
+    role_count(role_count),
+    saw_dupes(0) {
 }
 
 
 SelfPlay::~SelfPlay() {
 }
 
-void SelfPlay::playOnce() {
-    /*
-      XXX
-      * revert to playing whole game, then randomly sampling start point
-      * add exand root back as an option
-      * resignation false positives must be recorded, we'll need to increase the pct
-      * 3 functions, rather than one big function
-      * stats
-      * duplicates
-      */
+PuctNode* SelfPlay::selectNode(const bool can_resign) {
 
-
-    int saw_dupes = 0;
-    auto dupe = [this, &saw_dupes] (const GGPLib::BaseState* bs) {
-        auto unique_states = this->manager->getUniqueStates();
-        auto it = unique_states->find(bs);
-        saw_dupes++;
-
-        return it != this->manager->getUniqueStates()->end();
-    };
-
-    // reset the puct evaluator
-    this->pe->reset();
-
-    // this is what we are trying to get, samples
-    std::vector <Sample*> this_game_samples;
-
-    PuctNode* root = this->pe->establishRoot(this->initial_state, 0);
-    int game_depth = 0;
-    int total_iterations = 0;
+    PuctNode* node = this->pe->establishRoot(this->initial_state, 0);
 
     // ok simple loop until we start taking samples
     this->pe->updateConf(this->conf->select_puct_config);
-    int iterations = this->conf->select_iterations;
+    const int iterations = this->conf->select_iterations;
 
     // selecting - we playout whole game and then choose a random move
+    int game_depth = 0;
     while (true) {
         // we haven't started taking samples and we hit the end of the road... woops
-        if (root->isTerminal()) {
+        if (node->isTerminal()) {
             break;
         }
 
         const PuctNodeChild* choice = this->pe->onNextMove(iterations);
-        root = this->pe->fastApplyMove(choice);
-        total_iterations += iterations;
+        node = this->pe->fastApplyMove(choice);
         game_depth++;
     }
 
-    // ok, we have a complete game.  Choose a starting point and start running samples from there.
+    ASSERT(node->game_depth == game_depth);
 
     // choose a starting point for when to start sampling
     int sample_start_depth = 0;
@@ -84,94 +58,125 @@ void SelfPlay::playOnce() {
                                                   this->conf->max_number_of_samples);
     }
 
-    root = this->pe->jumpRoot(sample_start_depth);
-    game_depth = sample_start_depth;
+    ASSERT(sample_start_depth >= 0);
 
-    const bool can_resign = this->rng.get() > this->conf->resign_false_positive_retry_percentage;
+    node = this->pe->jumpRoot(sample_start_depth);
+    ASSERT(node->game_depth == sample_start_depth);
 
     // don't start as if the game is done
     if (can_resign) {
-        while (root->getCurrentScore(root->lead_role_index) < this->conf->resign_score_probability) {
+        // note this score isn't that reliable...  since likely we didn't do any iterations
+        while (node->getCurrentScore(node->lead_role_index) < this->conf->resign_score_probability) {
             sample_start_depth--;
+
             // XXX add to configuration (although it is obscure)
             if (sample_start_depth < 10) {
                 break;
             }
 
-            root = this->pe->jumpRoot(sample_start_depth);
+            node = this->pe->jumpRoot(sample_start_depth);
         }
     }
 
+    return node;
+}
+
+PuctNode* SelfPlay::collectSamples(PuctNode* node) {
+
     // sampling:
     this->pe->updateConf(this->conf->sample_puct_config);
-    iterations = this->conf->sample_iterations;
+    const int iterations = this->conf->sample_iterations;
+
     while (true) {
-        const int sample_count = this_game_samples.size();
+        const int sample_count = this->game_samples.size();
         if (sample_count == this->conf->max_number_of_samples) {
             break;
         }
 
-        if (root->isTerminal()) {
+        if (node->isTerminal()) {
             break;
         }
 
-        if (dupe(root->getBaseState())) {
-            // need random choice
-            int choice = rng.getWithMax(root->num_children);
-            const PuctNodeChild* child = root->getNodeChild(this->scheduler->getRoleCount(), choice);
+        if (!this->isUnique(node->getBaseState())) {
+            this->saw_dupes++;
 
-            root = this->pe->fastApplyMove(child);
-            total_iterations += iterations;
-            game_depth++;
+            // need random choice
+            int choice = rng.getWithMax(node->num_children);
+            const PuctNodeChild* child = node->getNodeChild(this->role_count, choice);
+
+            node = this->pe->fastApplyMove(child);
             continue;
         }
 
         // we will create a sample, add to unique states here before jumping out of continuation
-        this->manager->addUniqueState(root->getBaseState());
+        this->manager->addUniqueState(node->getBaseState());
 
         const PuctNodeChild* choice = this->pe->onNextMove(iterations);
 
         // create a sample (call getProbabilities() to ensure probabilities are right for policy)
-        this->pe->getProbabilities(root, 1.0f);
-        Sample* s = this->scheduler->createSample(root);
-        s->depth = game_depth;
+        this->pe->getProbabilities(node, 1.0f);
+        Sample* s = this->manager->createSample(node);
+        s->depth = node->game_depth;
 
         // keep a local ref to it for when we score it
-        this_game_samples.push_back(s);
+        this->game_samples.push_back(s);
 
-        root = this->pe->fastApplyMove(choice);
-        total_iterations += iterations;
-        game_depth++;
+        node = this->pe->fastApplyMove(choice);
     }
 
-    // scoring:
-    this->pe->updateConf(this->conf->score_puct_config);
-    iterations = this->conf->score_iterations;
+    return node;
+}
 
-    if (!this_game_samples.empty()) {
+void SelfPlay::playOnce() {
+    /*
+      * todo: see XXX
+      * resignation false positives must be recorded, we'll need to increase the pct
+      * stats / report duplicates, etc
+      */
+
+    ASSERT(this->game_samples.empty());
+    const bool can_resign = this->rng.get() > this->conf->resign_false_positive_retry_percentage;
+
+    // reset the puct evaluator
+    this->pe->reset();
+
+    PuctNode* node = this->selectNode(can_resign);
+
+    ASSERT(!node->isTerminal());
+
+    // ok, we have a complete game.  Choose a starting point and start running samples from there.
+    node = this->collectSamples(node);
+
+    // final stage, scoring:
+    this->pe->updateConf(this->conf->score_puct_config);
+    const int iterations = this->conf->score_iterations;
+
+    bool resigned = false;
+    if (!this->game_samples.empty()) {
+
         while (true) {
-            if (root->isTerminal()) {
+            if (node->isTerminal()) {
                 break;
             }
 
             if (can_resign) {
-                if (root->getCurrentScore(root->lead_role_index) < this->conf->resign_score_probability) {
+                if (node->getCurrentScore(node->lead_role_index) < this->conf->resign_score_probability) {
+                    resigned = true;
                     break;
                 }
             }
 
             const PuctNodeChild* choice = this->pe->onNextMove(iterations);
-            root = this->pe->fastApplyMove(choice);
-            total_iterations += iterations;
-            game_depth++;
+            node = this->pe->fastApplyMove(choice);
         }
 
         // update samples
-        for (auto sample : this_game_samples) {
-            sample->game_length = game_depth;
-            for (int ii=0; ii<this->scheduler->getRoleCount(); ii++) {
+        for (auto sample : this->game_samples) {
+            sample->game_length = node->game_depth;
+            sample->resigned = resigned;
+            for (int ii=0; ii<this->role_count; ii++) {
                 // need to clamp scores over > 0.9
-                double score = root->getCurrentScore(ii);
+                double score = node->getCurrentScore(ii);
                 if (score < this->conf->resign_score_probability) {
                     score = 0.0;
                 } else if (score > (1.0 - this->conf->resign_score_probability)) {
@@ -183,14 +188,9 @@ void SelfPlay::playOnce() {
 
             this->manager->addSample(sample);
         }
-    }
 
-    // this was defined right at the top...
-    // XXXXX add to some stats and report at end of cycle... way too much noise
-    if (saw_dupes) {
-        //K273::l_verbose("saw dupe states %d", saw_dupes);
+        this->game_samples.clear();
     }
-
 }
 
 void SelfPlay::playGamesForever() {
@@ -199,3 +199,10 @@ void SelfPlay::playGamesForever() {
     }
 }
 
+
+bool SelfPlay::isUnique(const GGPLib::BaseState* bs) {
+    auto unique_states = this->manager->getUniqueStates();
+
+    auto it = unique_states->find(bs);
+    return it == this->manager->getUniqueStates()->end();
+}

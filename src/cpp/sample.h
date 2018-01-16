@@ -18,6 +18,9 @@ namespace GGPZero {
         // update at end of game
         int game_length;
         std::vector <float> final_score;
+
+        // XXX not in python
+        bool resigned;
     };
 
 }
