@@ -2,10 +2,12 @@
 
 #include "sample.h"
 #include "scheduler.h"
+#include "uniquestates.h"
+#include "selfplaymanager.h"
+
 #include "puct/node.h"
 #include "puct/config.h"
 #include "puct/evaluator.h"
-#include "selfplaymanager.h"
 
 #include <statemachine/statemachine.h>
 
@@ -31,7 +33,7 @@ SelfPlay::SelfPlay(SelfPlayManager* manager, const SelfPlayConfig* conf, PuctEva
 SelfPlay::~SelfPlay() {
 }
 
-int clamp(float value, float amount) {
+float clamp(float value, float amount) {
     if (value < amount) {
         return 0.0;
 
@@ -111,7 +113,7 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
             break;
         }
 
-        if (!this->isUnique(node->getBaseState())) {
+        if (!this->manager->getUniqueStates()->isUnique(node->getBaseState())) {
             this->manager->incrDupes();
 
             // need random choice
@@ -123,7 +125,7 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
         }
 
         // we will create a sample, add to unique states here before jumping out of continuation
-        this->manager->addUniqueState(node->getBaseState());
+        this->manager->getUniqueStates()->add(node->getBaseState());
 
         const PuctNodeChild* choice = this->pe->onNextMove(iterations);
 
@@ -233,6 +235,8 @@ void SelfPlay::playOnce() {
         sample->resign_false_positive = is_resign_false_positive;
 
         this->manager->addSample(sample);
+
+        this->game_samples.clear();
     }
 }
 
@@ -241,12 +245,4 @@ void SelfPlay::playGamesForever() {
     while (true) {
         this->playOnce();
     }
-}
-
-
-bool SelfPlay::isUnique(const GGPLib::BaseState* bs) {
-    auto unique_states = this->manager->getUniqueStates();
-
-    auto it = unique_states->find(bs);
-    return it == this->manager->getUniqueStates()->end();
 }

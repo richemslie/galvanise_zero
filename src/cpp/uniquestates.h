@@ -9,7 +9,7 @@
 namespace GGPZero {
     class UniqueStates {
     public:
-        UniqueStates(GGPLib::StateMachineInterface* sm) :
+        UniqueStates(const GGPLib::StateMachineInterface* sm) :
             sm(sm->dupe()) {
         }
 
@@ -52,7 +52,7 @@ namespace GGPZero {
         }
 
     private:
-        GGPLib::StateMachineInterface* sm;
+        const GGPLib::StateMachineInterface* sm;
         GGPLib::BaseState::HashSet unique_states;
         std::mutex mut;
         std::vector <GGPLib::BaseState*> states_allocated;

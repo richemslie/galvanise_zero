@@ -52,9 +52,6 @@ namespace GGPZero {
         void playOnce();
         void playGamesForever();
 
-        // XXX tmp
-        bool isUnique(const GGPLib::BaseState* bs);
-
     private:
         SelfPlayManager* manager;
         const SelfPlayConfig* conf;

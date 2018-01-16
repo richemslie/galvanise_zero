@@ -1,5 +1,6 @@
 #include "player.h"
 
+#include "events.h"
 #include "scheduler.h"
 #include "gdltransformer.h"
 
@@ -78,5 +79,16 @@ int Player::puctPlayerGetMove(int lead_role_index) {
     }
 
     return child->move.get(lead_role_index);
+}
+
+const ReadyEvent* Player::poll(float* policies, float* final_scores, int pred_count) {
+    // when pred_count == 0, it is used to bootstrap the main loop in scheduler
+    this->predict_done_event.pred_count = pred_count;
+    this->predict_done_event.policies = policies;
+    this->predict_done_event.final_scores = final_scores;
+
+    this->scheduler->poll(&this->predict_done_event, &this->ready_event);
+
+    return &this->ready_event;
 }
 

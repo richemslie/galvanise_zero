@@ -47,8 +47,7 @@ static PyObject* Player_player_get_move(PyObject_Player* self, PyObject* args) {
 }
 
 static PyObject* Player_poll(PyObject_Player* self, PyObject* args) {
-    NetworkScheduler* scheduler = self->impl->getScheduler();
-    return schedulerPoll(scheduler, args);
+    return doPoll(self->impl, args);
 }
 
 static struct PyMethodDef Player_methods[] = {

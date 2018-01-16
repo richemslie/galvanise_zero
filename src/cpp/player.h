@@ -1,5 +1,7 @@
 #pragma once
 
+#include "events.h"
+
 #include <statemachine/basestate.h>
 #include <statemachine/jointmove.h>
 #include <statemachine/statemachine.h>
@@ -30,15 +32,17 @@ namespace GGPZero {
         void puctPlayerMove(const GGPLib::BaseState* state, int iterations, double end_time);
         int puctPlayerGetMove(int lead_role_index);
 
-        NetworkScheduler* getScheduler() {
-            return this->scheduler;
-        }
+        const ReadyEvent* poll(float* policies, float* final_scores, int pred_count);
 
     private:
         PuctEvaluator* evaluator;
         NetworkScheduler* scheduler;
 
         bool first_play;
+
+        // Events
+        ReadyEvent ready_event;
+        PredictDoneEvent predict_done_event;
     };
 
 }

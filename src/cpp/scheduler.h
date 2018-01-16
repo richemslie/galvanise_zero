@@ -1,11 +1,15 @@
 #pragma once
 
-#include "greenlet/greenlet.h"
+#include "events.h"
+
 #include "puct/node.h"
+
+#include "greenlet/greenlet.h"
 
 #include <statemachine/basestate.h>
 #include <statemachine/jointmove.h>
 #include <statemachine/statemachine.h>
+
 
 #include <k273/exception.h>
 
@@ -62,10 +66,7 @@ namespace GGPZero {
                 });
         }
 
-        int poll(float* policies, float* final_scores, int pred_count);
-        float* getBuf() const {
-            return this->channel_buf;
-        }
+        void poll(const PredictDoneEvent* predict_done_event, ReadyEvent* ready_event);
 
     private:
         void mainLoop();
@@ -85,13 +86,11 @@ namespace GGPZero {
         // exit in and of the main_loop (and is parent of main_loop)
         greenlet_t* top;
 
-        // inbound predictions
-        float* policies;
-        float* final_scores;
-        int pred_count;
-
-        // outbound predictions
+        // outbound predictions (we own this memory - although it will end up in python/tensorflow
+        // for predictions, but that point we will be in a preserved state.)
         float* channel_buf;
         int channel_buf_indx;
+
+        const PredictDoneEvent* predict_done_event;
    };
 }

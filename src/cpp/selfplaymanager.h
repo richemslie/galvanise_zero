@@ -1,5 +1,7 @@
 #pragma once
 
+#include "events.h"
+#include "uniquestates.h"
 #include "gdltransformer.h"
 
 #include <statemachine/basestate.h>
@@ -17,19 +19,19 @@ namespace GGPZero {
     class SelfPlayManager {
     public:
         SelfPlayManager(GGPLib::StateMachineInterface* sm,
-                   const GdlBasesTransformer* transformer,
-                   int batch_size);
+                        const GdlBasesTransformer* transformer,
+                        int batch_size,
+                        UniqueStates* unique_states);
         ~SelfPlayManager();
 
     public:
-        // only called from self player
-        const GGPLib::BaseState::HashSet* getUniqueStates() const {
-            return &this->unique_states;
-        };
-
-        void addSample(Sample* sample);
+        // the following are only called from self player
         Sample* createSample(const PuctNode* node);
-        const GGPLib::BaseState* getInitialState() const;
+        void addSample(Sample* sample);
+
+        UniqueStates* getUniqueStates() const {
+            return this->unique_states;
+        };
 
         void incrDupes() {
             this->saw_dupes++;
@@ -47,12 +49,18 @@ namespace GGPZero {
         void startSelfPlayers(const SelfPlayConfig* config);
         std::vector <Sample*> getSamples();
 
-        int poll(float* policies, float* final_scores, int pred_count);
-        float* getBuf() const;
+        void poll();
 
+        void reportAndResetStats();
 
-        void addUniqueState(const GGPLib::BaseState* bs);
-        void clearUniqueStates();
+        ReadyEvent* getReadyEvent() {
+            return &this->ready_event;
+        }
+
+        PredictDoneEvent* getPredictDoneEvent() {
+            return &this->predict_done_event;
+        }
+
     private:
         GGPLib::StateMachineInterface* sm;
         const GdlBasesTransformer* transformer;
@@ -64,8 +72,12 @@ namespace GGPZero {
         NetworkScheduler* scheduler;
 
         std::vector <Sample*> samples;
-        GGPLib::BaseState::HashSet unique_states;
+        UniqueStates* unique_states;
         std::vector <GGPLib::BaseState*> states_allocated;
+
+        // Events
+        ReadyEvent ready_event;
+        PredictDoneEvent predict_done_event;
 
         // stats
         int saw_dupes;

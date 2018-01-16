@@ -1,5 +1,6 @@
 #pragma once
 
+#include "events.h"
 #include "player.h"
 #include "selfplay.h"
 #include "scheduler.h"
@@ -130,25 +131,21 @@ static SelfPlayConfig* createSelfPlayConfig(PyObject* dict) {
 
 
 template <typename T>
-static PyObject* schedulerPoll(T* scheduler, PyObject* args) {
+static PyObject* doPoll(T* parent_caller, PyObject* args) {
     // IMPORTANT NOTE:
     // the first time around there are no predictions.  In this case two matrices are still passed
     // in - however these are empty arrays.
-    // This is just to simplify parse args here.
+    // This is to
+    //   (a) simplify parse args here.
+    //   (b) start the ball rolling, since in the beginning there are no predictions needed to
+    //       made, and only once we poll for the first time - then there may be some predictions
+    //       to be made!
 
     PyArrayObject* m0 = nullptr;
     PyArrayObject* m1 = nullptr;
     if (!PyArg_ParseTuple(args, "O!O!", &PyArray_Type, &m0, &PyArray_Type, &m1)) {
         return nullptr;
     }
-
-    // for (int ii=0; ii<PyArray_NDIM(m0); ii++) {
-    //     K273::l_verbose("dim of m0 @ %d : %d", ii, (int) PyArray_DIM(m0, ii));
-    // }
-
-    // for (int ii=0; ii<PyArray_NDIM(m1); ii++) {
-    //     K273::l_verbose("dim of m1 @ %d : %d", ii, (int) PyArray_DIM(m1, ii));
-    // }
 
     if (!PyArray_ISFLOAT(m0)) {
         return nullptr;
@@ -166,29 +163,24 @@ static PyObject* schedulerPoll(T* scheduler, PyObject* args) {
         return nullptr;
     }
 
-    int sz = PyArray_DIM(m0, 0);
-    // K273::l_verbose("dim of m0 : %d", sz);
-
+    int pred_count = PyArray_DIM(m0, 0);
     float* policies = nullptr;
     float* final_scores = nullptr;
 
-    if (sz) {
-        policies = (float*) PyArray_DATA(m0);
-        final_scores = (float*) PyArray_DATA(m1);
-    }
+    policies = (float*) PyArray_DATA(m0);
+    final_scores = (float*) PyArray_DATA(m1);
 
     try {
-        int res = scheduler->poll(policies, final_scores, sz);
+        const ReadyEvent* event = parent_caller->poll(policies, final_scores, pred_count);
 
-        if (res) {
+        if (event->pred_count) {
             // create a numpy array using our internal array
-            npy_intp dims[1]{res};
-            return PyArray_SimpleNewFromData(1, dims, NPY_FLOAT, scheduler->getBuf());
-
-        } else {
-            // indicates we are done
-            Py_RETURN_NONE;
+            npy_intp dims[1]{event->pred_count};
+            return PyArray_SimpleNewFromData(1, dims, NPY_FLOAT, event->channel_buf);
         }
+
+        // indicates we are done
+        Py_RETURN_NONE;
 
     } catch (...) {
         logExceptionWrapper(__PRETTY_FUNCTION__);

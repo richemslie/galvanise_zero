@@ -11,7 +11,6 @@ struct PyObject_Supervisor {
     Supervisor* impl;
 };
 
-
 static PyObject* Supervisor_start_self_play(PyObject_Supervisor* self, PyObject* args) {
     PyObject* dict;
     if (! PyArg_ParseTuple(args, "O!", &PyDict_Type, &dict)) {
@@ -107,10 +106,6 @@ static PyObject* Supervisor_fetch_samples(PyObject_Supervisor* self, PyObject* a
     Py_RETURN_NONE;
 }
 
-static PyObject* Supervisor_poll(PyObject_Supervisor* self, PyObject* args) {
-    return schedulerPoll(self->impl, args);
-}
-
 static PyObject* Supervisor_add_unique_state(PyObject_Supervisor* self, PyObject* args) {
     ssize_t ptr = 0;
     if (! ::PyArg_ParseTuple(args, "n", &ptr)) {
@@ -125,6 +120,10 @@ static PyObject* Supervisor_add_unique_state(PyObject_Supervisor* self, PyObject
 static PyObject* Supervisor_clear_unique_states(PyObject_Supervisor* self, PyObject* args) {
     self->impl->clearUniqueStates();
     Py_RETURN_NONE;
+}
+
+static PyObject* Supervisor_poll(PyObject_Supervisor* self, PyObject* args) {
+    return doPoll(self->impl, args);
 }
 
 static struct PyMethodDef Supervisor_methods[] = {

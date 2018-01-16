@@ -15,10 +15,12 @@ using namespace GGPZero;
 
 SelfPlayManager::SelfPlayManager(GGPLib::StateMachineInterface* sm,
                                  const GdlBasesTransformer* transformer,
-                                 int batch_size) :
+                                 int batch_size,
+                                 UniqueStates* unique_states) :
     sm(sm->dupe()),
     transformer(transformer),
     batch_size(batch_size),
+    unique_states(unique_states),
     saw_dupes(0),
     no_samples_taken(0),
     false_positive_resigns(0) {
@@ -26,11 +28,48 @@ SelfPlayManager::SelfPlayManager(GGPLib::StateMachineInterface* sm,
     this->scheduler = new NetworkScheduler(this->sm->dupe(),
                                            this->transformer,
                                            this->batch_size);
+
+    // allocate buffers for predict_done_event
+    const int num_of_floats_policies = (this->transformer->getPolicySize() *
+                                        this->batch_size);
+
+    const int num_of_floats_final_scores = (this->sm->getRoleCount() *
+                                            this->batch_size);
+
+    this->predict_done_event.policies = new float[num_of_floats_policies];
+    this->predict_done_event.final_scores = new float[num_of_floats_final_scores];
+    this->predict_done_event.pred_count = 0;
 }
 
 SelfPlayManager::~SelfPlayManager() {
     delete this->sm;
     delete this->scheduler;
+
+    delete[] this->predict_done_event.policies;
+    delete[] this->predict_done_event.final_scores;
+}
+
+
+///////////////////////////////////////////////////////////////////////////////
+
+// will create a new sample based on the root tree
+Sample* SelfPlayManager::createSample(const PuctNode* node) {
+    Sample* sample = new Sample;
+    sample->state = this->sm->newBaseState();
+    sample->state->assign(node->getBaseState());
+
+    for (int ii=0; ii<node->num_children; ii++) {
+        const PuctNodeChild* child = node->getNodeChild(this->sm->getRoleCount(), ii);
+        sample->policy.emplace_back(child->move.get(node->lead_role_index),
+                                    child->next_prob);
+    }
+
+    sample->lead_role_index = node->lead_role_index;
+    return sample;
+}
+
+void SelfPlayManager::addSample(Sample* sample) {
+    this->samples.push_back(sample);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -62,40 +101,16 @@ std::vector <Sample*> SelfPlayManager::getSamples() {
     return result;
 }
 
-int SelfPlayManager::poll(float* policies, float* final_scores, int pred_count) {
-    return this->scheduler->poll(policies, final_scores, pred_count);
+void SelfPlayManager::poll() {
+    // VERY IMPORTANT: This must be called in the thread that the scheduler resides (along with its
+    // co-routines)
+    // To make this super clear, the selfplaymanger should have a greenlet and we should assert it
+    // is the correct one before continueing.
+
+    this->scheduler->poll(&this->predict_done_event, &this->ready_event);
 }
 
-float* SelfPlayManager::getBuf() const {
-    return this->scheduler->getBuf();
-}
-
-void SelfPlayManager::addUniqueState(const GGPLib::BaseState* bs) {
-    GGPLib::BaseState::HashSet::const_iterator it = this->unique_states.find(bs);
-    if (it != this->unique_states.end()) {
-        return;
-    }
-
-    // create a new basestate...
-    GGPLib::BaseState* new_bs = this->sm->newBaseState();
-    new_bs->assign(bs);
-    this->states_allocated.push_back(new_bs);
-
-    this->unique_states.insert(new_bs);
-}
-
-
-void SelfPlayManager::clearUniqueStates() {
-    for (GGPLib::BaseState* bs : this->states_allocated) {
-        ::free(bs);
-    }
-
-    this->unique_states.clear();
-    this->states_allocated.clear();
-
-    // XXX hack in here for now:
-    // dump the state
-
+void SelfPlayManager::reportAndResetStats() {
     if (this->saw_dupes) {
         K273::l_info("Number of dupe states seen %d", this->saw_dupes);
         this->saw_dupes = 0;
@@ -110,24 +125,4 @@ void SelfPlayManager::clearUniqueStates() {
         K273::l_info("Number of false positive resigns seen %d", this->false_positive_resigns);
         this->false_positive_resigns = 0;
     }
-}
-
-// will create a new sample based on the root tree
-Sample* SelfPlayManager::createSample(const PuctNode* node) {
-    Sample* sample = new Sample;
-    sample->state = this->sm->newBaseState();
-    sample->state->assign(node->getBaseState());
-
-    for (int ii=0; ii<node->num_children; ii++) {
-        const PuctNodeChild* child = node->getNodeChild(this->sm->getRoleCount(), ii);
-        sample->policy.emplace_back(child->move.get(node->lead_role_index),
-                                    child->next_prob);
-    }
-
-    sample->lead_role_index = node->lead_role_index;
-    return sample;
-}
-
-void SelfPlayManager::addSample(Sample* sample) {
-    this->samples.push_back(sample);
 }

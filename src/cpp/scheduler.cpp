@@ -24,9 +24,7 @@ NetworkScheduler::NetworkScheduler(GGPLib::StateMachineInterface* sm,
     basestate_expand_node(nullptr),
     main_loop(nullptr),
     top(nullptr),
-    policies(nullptr),
-    final_scores(nullptr),
-    pred_count(0),
+    channel_buf(nullptr),
     channel_buf_indx(0) {
 
     this->basestate_expand_node = this->sm->newBaseState();
@@ -34,12 +32,12 @@ NetworkScheduler::NetworkScheduler(GGPLib::StateMachineInterface* sm,
     const int num_floats = this->transformer->totalSize() * this->batch_size;
     K273::l_debug("Creating channel_buf of size %d", num_floats);
 
-    this->channel_buf = (float*) malloc(sizeof(float) * num_floats);
+    this->channel_buf = (float*) new float[num_floats];
 }
 
 NetworkScheduler::~NetworkScheduler() {
     free(this->basestate_expand_node);
-    free(this->channel_buf);
+    delete[] this->channel_buf;
 
     delete this->sm;
     delete this->transformer;
@@ -83,30 +81,37 @@ PuctNode* NetworkScheduler::createNode(PuctEvaluator* pe, const GGPLib::BaseStat
         return new_node;
     }
 
-    static std::vector <GGPLib::BaseState*> dummy;
+    static std::vector <GGPLib::BaseState*> dummy_prev_states;
     float* buf = this->channel_buf + this->channel_buf_indx;
-    this->transformer->toChannels(bs, dummy, buf);
+    this->transformer->toChannels(bs, dummy_prev_states, buf);
+
     this->channel_buf_indx += this->transformer->totalSize();
 
-    // hang onto the position of where we in requestors
+    // hang onto the position of where inserted into requestors
     int idx = this->requestors.size();
     this->requestors.emplace_back(greenlet_current());
-
-    greenlet_switch_to(this->main_loop);
-
-    ASSERT(this->pred_count > 0 && idx < this->pred_count);
 
     int policy_incr = new_node->lead_role_index ? this->transformer->getRole1Index() : 0;
     policy_incr += idx * this->transformer->getPolicySize();
 
     int final_score_incr = idx * role_count;
 
+    // see you later...
+    greenlet_switch_to(this->main_loop);
+
+    // back now! at this point we have predicted
+    ASSERT(this->predict_done_event->pred_count >= idx);
+
+    float* policies_start = this->predict_done_event->policies + policy_incr;
+    float* final_scores_start = this->predict_done_event->final_scores + final_score_incr;
+
+    // simple go through and populate stuff
+
     // Update children in new_node with prediction
     float total_prediction = 0.0f;
-
     for (int ii=0; ii<new_node->num_children; ii++) {
         PuctNodeChild* c = new_node->getNodeChild(this->sm->getRoleCount(), ii);
-        c->policy_prob = *(this->policies + policy_incr + c->move.get(new_node->lead_role_index));
+        c->policy_prob = *(policies_start + c->move.get(new_node->lead_role_index));
         total_prediction += c->policy_prob;
     }
 
@@ -118,6 +123,7 @@ PuctNode* NetworkScheduler::createNode(PuctEvaluator* pe, const GGPLib::BaseStat
         }
 
     } else {
+        // well that sucks - absolutely no predictions, just make it uniform them
         for (int ii=0; ii<new_node->num_children; ii++) {
             PuctNodeChild* c = new_node->getNodeChild(this->sm->getRoleCount(), ii);
             c->policy_prob = 1.0 / new_node->num_children;
@@ -125,12 +131,12 @@ PuctNode* NetworkScheduler::createNode(PuctEvaluator* pe, const GGPLib::BaseStat
     }
 
     for (int ii=0; ii<role_count; ii++) {
-        float s = (float) *(this->final_scores + final_score_incr + ii);
+        float s = *(final_scores_start + ii);
         new_node->setFinalScore(ii, s);
         new_node->setCurrentScore(ii, s);
     }
 
-    // we return before continueing, we will be pushed back onto runnables queue
+    // we return before continuing, we will be pushed back onto runnables queue
     greenlet_switch_to(this->main_loop);
 
     return new_node;
@@ -165,11 +171,11 @@ void NetworkScheduler::mainLoop() {
             greenlet_switch_to(this->top);
 
             // once we return, we must handle the results before doing anything else
-            ASSERT(this->policies != nullptr && this->final_scores != nullptr);
-            ASSERT(this->pred_count == (int) this->requestors.size());
+            ASSERT(this->predict_done_event->pred_count == (int) this->requestors.size());
 
             for (greenlet_t* req : this->requestors) {
-                // handle them straight away
+                // handle them straight away (will jump back to "see you later" in
+                // NetworkScheduler::createNode()
                 greenlet_switch_to(req);
 
                 // and then add them to runnables
@@ -178,9 +184,6 @@ void NetworkScheduler::mainLoop() {
 
             // clean up
             this->requestors.clear();
-            this->policies = nullptr;
-            this->final_scores = nullptr;
-            this->pred_count = 0;
         }
 
         greenlet_t *g = this->runnables.front();
@@ -191,31 +194,37 @@ void NetworkScheduler::mainLoop() {
     K273::l_verbose("requestors.size on exiting runScheduler():  %zu", this->requestors.size());
 }
 
-int NetworkScheduler::poll(float* policies, float* final_scores, int pred_count) {
-    // this is top
-    this->top = greenlet_current();
-    ASSERT(!greenlet_isdead(this->top));
+void NetworkScheduler::poll(const PredictDoneEvent* predict_done_event, ReadyEvent* ready_event) {
+    //poll() must be called with an event.  The even resides in the parent process (which is the
+    //self play manager / player).  This is passed to the main_loop()..
 
-    if (this->main_loop == nullptr) {
-        K273::l_warning("poll called with no job");
-        return 0;
+    // this is top
+    if (this->top == nullptr) {
+        this->top = greenlet_current();
+    } else {
+        // very important that this relationship is maintainede
+        ASSERT(greenlet_current() == this->top);
+        ASSERT(!greenlet_isdead(this->top));
     }
 
+    // This should be an assert also...
+    ASSERT_MSG(this->main_loop != nullptr, "NetworkScheduler::poll without mainLoop() set");
     ASSERT(!greenlet_isdead(this->main_loop));
 
-    ASSERT(this->policies == nullptr && this->final_scores == nullptr && this->pred_count == 0);
-    this->policies = policies;
-    this->final_scores = final_scores;
-    this->pred_count = pred_count;
+    this->predict_done_event = predict_done_event;
 
+    // we may / or may not set the pred_count
     this->channel_buf_indx = 0;
-
     greenlet_switch_to(this->main_loop);
+    this->predict_done_event = nullptr;
 
+    // the main_loop will die if it runs out of things to do
     if (this->channel_buf_indx == 0) {
         ASSERT(greenlet_isdead(this->main_loop));
         this->main_loop = nullptr;
     }
 
-    return this->channel_buf_indx;
+    // populate ready_event
+    ready_event->channel_buf = this->channel_buf;
+    ready_event->pred_count = this->channel_buf_indx;
 }

@@ -1,5 +1,9 @@
 #pragma once
 
+#include "uniquestates.h"
+
+#include "events.h"
+
 #include "puct/node.h"
 #include "puct/config.h"
 #include "puct/evaluator.h"
@@ -74,8 +78,7 @@ namespace GGPZero {
         // basically proxies to manager/workers
         std::vector <Sample*> getSamples();
 
-        int poll(float* policies, float* final_scores, int pred_count);
-        float* getBuf() const;
+        const ReadyEvent* poll(float* policies, float* final_scores, int pred_count);
 
         void addUniqueState(const GGPLib::BaseState* bs);
         void clearUniqueStates();
@@ -89,5 +92,7 @@ namespace GGPZero {
 
         std::vector <SelfPlayWorker*> self_play_workers;
         SelfPlayManager* current;
+
+        UniqueStates unique_states;
     };
 }
