@@ -26,13 +26,12 @@ namespace GGPZero {
     class SelfPlayManager;
 
     typedef K273::LockedQueue <SelfPlayManager*> ReadyQueue;
+    typedef K273::LockedQueue <SelfPlayManager* > PredictDoneQueue;
 
     class SelfPlayWorker : public K273::WorkerInterface {
     public:
-        SelfPlayWorker(std::vector <SelfPlayManager*> self_players) :
-            managers_available(self_players) {
-        }
-
+        SelfPlayWorker(SelfPlayManager* man0, SelfPlayManager* man1,
+                       const SelfPlayConfig* config);
         virtual ~SelfPlayWorker();
 
     private:
@@ -55,15 +54,19 @@ namespace GGPZero {
         }
 
     private:
-        std::vector <SelfPlayManager*> managers_available;
-
         // worker pulls from here when no more workers available
-        ReadyQueue inbound_queue;
+        PredictDoneQueue inbound_queue;
 
         // worker pushes on here when done
         ReadyQueue outbound_queue;
-    };
 
+        bool enter_first_time;
+        const SelfPlayConfig* config;
+
+        // will be two
+        SelfPlayManager* man0;
+        SelfPlayManager* man1;
+    };
 
     class Supervisor {
     public:
@@ -74,8 +77,8 @@ namespace GGPZero {
 
     public:
         void createInline(const SelfPlayConfig* config);
+        void createWorkers(const SelfPlayConfig* config);
 
-        // basically proxies to manager/workers
         std::vector <Sample*> getSamples();
 
         const ReadyEvent* poll(float* policies, float* final_scores, int pred_count);
@@ -90,9 +93,11 @@ namespace GGPZero {
 
         SelfPlayManager* inline_sp_manager;
 
+        SelfPlayManager* in_progress_manager;
+        SelfPlayWorker* in_progress_worker;
         std::vector <SelfPlayWorker*> self_play_workers;
-        SelfPlayManager* current;
 
+        std::vector <Sample*> samples;
         UniqueStates unique_states;
     };
 }

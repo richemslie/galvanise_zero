@@ -47,11 +47,14 @@ namespace GGPZero {
 
     public:
         void startSelfPlayers(const SelfPlayConfig* config);
-        std::vector <Sample*> getSamples();
 
         void poll();
 
         void reportAndResetStats();
+
+        std::vector <Sample*>& getSamples() {
+            return this->samples;
+        }
 
         ReadyEvent* getReadyEvent() {
             return &this->ready_event;

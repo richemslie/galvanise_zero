@@ -94,13 +94,6 @@ void SelfPlayManager::startSelfPlayers(const SelfPlayConfig* config) {
     }
 }
 
-std::vector <Sample*> SelfPlayManager::getSamples() {
-    std::vector <Sample*> result = this->samples;
-    this->samples.clear();
-
-    return result;
-}
-
 void SelfPlayManager::poll() {
     // VERY IMPORTANT: This must be called in the thread that the scheduler resides (along with its
     // co-routines)
