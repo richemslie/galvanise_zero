@@ -31,6 +31,18 @@ namespace GGPZero {
         Sample* createSample(const PuctNode* node);
         const GGPLib::BaseState* getInitialState() const;
 
+        void incrDupes() {
+            this->saw_dupes++;
+        }
+
+        void incrNoSamples() {
+            this->no_samples_taken++;
+        }
+
+        void incrResignFalsePositives() {
+            this->false_positive_resigns++;
+        }
+
     public:
         void startSelfPlayers(const SelfPlayConfig* config);
         std::vector <Sample*> getSamples();
@@ -54,5 +66,10 @@ namespace GGPZero {
         std::vector <Sample*> samples;
         GGPLib::BaseState::HashSet unique_states;
         std::vector <GGPLib::BaseState*> states_allocated;
+
+        // stats
+        int saw_dupes;
+        int no_samples_taken;
+        int false_positive_resigns;
     };
 }

@@ -21,6 +21,7 @@ namespace GGPZero {
 
         // XXX not in python
         bool resigned;
+        bool resign_false_positive;
     };
 
 }

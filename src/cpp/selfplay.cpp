@@ -11,6 +11,10 @@
 
 #include <k273/logging.h>
 
+#include <cmath>
+#include <vector>
+
+
 using namespace GGPZero;
 
 
@@ -20,12 +24,22 @@ SelfPlay::SelfPlay(SelfPlayManager* manager, const SelfPlayConfig* conf, PuctEva
     conf(conf),
     pe(pe),
     initial_state(initial_state),
-    role_count(role_count),
-    saw_dupes(0) {
+    role_count(role_count) {
 }
 
 
 SelfPlay::~SelfPlay() {
+}
+
+int clamp(float value, float amount) {
+    if (value < amount) {
+        return 0.0;
+
+    } else if (value > (1.0f - amount)) {
+        return 1.0;
+    } else {
+        return value;
+    }
 }
 
 PuctNode* SelfPlay::selectNode(const bool can_resign) {
@@ -98,7 +112,7 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
         }
 
         if (!this->isUnique(node->getBaseState())) {
-            this->saw_dupes++;
+            this->manager->incrDupes();
 
             // need random choice
             int choice = rng.getWithMax(node->num_children);
@@ -128,12 +142,6 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
 }
 
 void SelfPlay::playOnce() {
-    /*
-      * todo: see XXX
-      * resignation false positives must be recorded, we'll need to increase the pct
-      * stats / report duplicates, etc
-      */
-
     ASSERT(this->game_samples.empty());
     const bool can_resign = this->rng.get() > this->conf->resign_false_positive_retry_percentage;
 
@@ -147,51 +155,87 @@ void SelfPlay::playOnce() {
     // ok, we have a complete game.  Choose a starting point and start running samples from there.
     node = this->collectSamples(node);
 
+    // no samples :(  XXX Worthy of a reporting statistic (add it to manager)
+    if (this->game_samples.empty()) {
+        this->manager->incrNoSamples();
+        return;
+    }
+
     // final stage, scoring:
     this->pe->updateConf(this->conf->score_puct_config);
     const int iterations = this->conf->score_iterations;
 
+    // resignation and check for false positives
     bool resigned = false;
-    if (!this->game_samples.empty()) {
+    bool false_postitive_resign_check = !can_resign;
+    std::vector <float> resign_false_positive_check_scores;
 
-        while (true) {
-            if (node->isTerminal()) {
+    // run the game to end
+    while (true) {
+        if (node->isTerminal()) {
+            break;
+        }
+
+        if (can_resign) {
+            if (node->getCurrentScore(node->lead_role_index) < this->conf->resign_score_probability) {
+                resigned = true;
                 break;
             }
+        } else {
 
-            if (can_resign) {
-                if (node->getCurrentScore(node->lead_role_index) < this->conf->resign_score_probability) {
-                    resigned = true;
-                    break;
+            // check for false postive on resigns...
+            if (false_postitive_resign_check) {
+                for (int ii=0; ii<this->role_count; ii++) {
+                    float score = node->getCurrentScore(ii);
+
+                    if (score < this->conf->resign_score_probability) {
+                        false_postitive_resign_check = false;
+
+                        // add the scores to check later
+                        for (int jj=0; jj<this->role_count; jj++) {
+                            float clamped_score = clamp(node->getCurrentScore(jj),
+                                                        this->conf->resign_score_probability);
+                            resign_false_positive_check_scores.push_back(clamped_score);
+                        }
+
+                        // break out of the outer for loop
+                        break;
+                    }
                 }
             }
-
-            const PuctNodeChild* choice = this->pe->onNextMove(iterations);
-            node = this->pe->fastApplyMove(choice);
         }
 
-        // update samples
-        for (auto sample : this->game_samples) {
-            sample->game_length = node->game_depth;
-            sample->resigned = resigned;
-            for (int ii=0; ii<this->role_count; ii++) {
-                // need to clamp scores over > 0.9
-                double score = node->getCurrentScore(ii);
-                if (score < this->conf->resign_score_probability) {
-                    score = 0.0;
-                } else if (score > (1.0 - this->conf->resign_score_probability)) {
-                    score = 1.0;
+        const PuctNodeChild* choice = this->pe->onNextMove(iterations);
+        node = this->pe->fastApplyMove(choice);
+    }
+
+    // update current samples (remember we can have multiple per game)
+    for (auto sample : this->game_samples) {
+
+        bool is_resign_false_positive = false;
+        for (int ii=0; ii<this->role_count; ii++) {
+            float score = clamp(node->getCurrentScore(ii),
+                                this->conf->resign_score_probability);
+
+            sample->final_score.push_back(score);
+
+            if (!is_resign_false_positive && !resign_false_positive_check_scores.empty()) {
+                if (std::fabs(score - resign_false_positive_check_scores[ii]) > 0.0001f) {
+
+                    is_resign_false_positive = true;
+                    this->manager->incrResignFalsePositives();
                 }
-
-                sample->final_score.push_back(score);
             }
-
-            this->manager->addSample(sample);
         }
 
-        this->game_samples.clear();
+        sample->resigned = resigned;
+        sample->game_length = node->game_depth;
+        sample->resign_false_positive = is_resign_false_positive;
+
+        this->manager->addSample(sample);
     }
 }
+
 
 void SelfPlay::playGamesForever() {
     while (true) {

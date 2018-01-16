@@ -69,9 +69,6 @@ namespace GGPZero {
 
         // local to playOnce();
         std::vector <Sample*> game_samples;
-
-        // stats
-        int saw_dupes;
     };
 
 }

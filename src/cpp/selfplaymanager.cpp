@@ -18,7 +18,11 @@ SelfPlayManager::SelfPlayManager(GGPLib::StateMachineInterface* sm,
                                  int batch_size) :
     sm(sm->dupe()),
     transformer(transformer),
-    batch_size(batch_size) {
+    batch_size(batch_size),
+    saw_dupes(0),
+    no_samples_taken(0),
+    false_positive_resigns(0) {
+
     this->scheduler = new NetworkScheduler(this->sm->dupe(),
                                            this->transformer,
                                            this->batch_size);
@@ -52,7 +56,6 @@ void SelfPlayManager::startSelfPlayers(const SelfPlayConfig* config) {
 }
 
 std::vector <Sample*> SelfPlayManager::getSamples() {
-    // move semantics? XXX
     std::vector <Sample*> result = this->samples;
     this->samples.clear();
 
@@ -89,6 +92,24 @@ void SelfPlayManager::clearUniqueStates() {
 
     this->unique_states.clear();
     this->states_allocated.clear();
+
+    // XXX hack in here for now:
+    // dump the state
+
+    if (this->saw_dupes) {
+        K273::l_info("Number of dupe states seen %d", this->saw_dupes);
+        this->saw_dupes = 0;
+    }
+
+    if (this->no_samples_taken) {
+        K273::l_info("Number of plays where no samples were taken %d", this->no_samples_taken);
+        this->no_samples_taken = 0;
+    }
+
+    if (this->false_positive_resigns) {
+        K273::l_info("Number of false positive resigns seen %d", this->false_positive_resigns);
+        this->false_positive_resigns = 0;
+    }
 }
 
 // will create a new sample based on the root tree
