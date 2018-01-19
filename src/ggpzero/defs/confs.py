@@ -101,6 +101,12 @@ class WorkerConfig(object):
     # slow things down
     sleep_between_poll = attr.ib(-1)
 
+    # the minimum number of samples gathered before sending to the server
+    min_num_samples = attr.ib(128)
+
+    # if this is set, no threads will be set up to poll
+    inline_manager = attr.ib(False)
+
 
 # XXX not sure this should be here?
 @register_attrs
@@ -142,6 +148,11 @@ class Sample(object):
     # may be a noop).  XXX we should remove this entirely.  Unfortnately we need to keep this to
     # index into the probability distribution.
     lead_role_index = attr.ib(-1)
+
+    match_identifier = attr.ib("agame_421")
+    has_resigned = attr.ib(False)
+    resign_false_positive = attr.ib(False)
+    starting_sample_depth = attr.ib(42)
 
 
 @register_attrs
