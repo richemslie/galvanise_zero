@@ -178,7 +178,7 @@ class WorkerClient(Client):
             log.info("Logical connection established")
 
 
-class WorkerFactory(protocol.ReconnectingClientFactory):
+class WorkerFactory(protocol.ClientFactory):
     ' client side factory, connects to server '
 
     # maximum number of seconds between connection attempts
