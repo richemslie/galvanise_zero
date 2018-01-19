@@ -37,6 +37,12 @@ class BaseInfo(object):
         self.control_state = None
         self.control_state_value = None
 
+    def terms_to_piece(self, terms_indices):
+        if isinstance(terms_indices, tuple):
+            return tuple([self.terms[idx] for idx in terms_indices])
+        else:
+            return self.terms[terms_indices]
+
 
 class GdlBasesTransformer(object):
     game = None
@@ -114,14 +120,15 @@ class GdlBasesTransformer(object):
             if b_info.terms[0] != self.base_term:
                 continue
 
-            piece = b_info.terms[self.piece_term]
-            x_cord = b_info.terms[self.x_term]
-            y_cord = b_info.terms[self.y_term]
+            piece = b_info.terms_to_piece(self.piece_term)
 
             if piece not in self.pieces:
                 continue
 
             b_info.channel = self.pieces.index(piece)
+
+            x_cord = b_info.terms[self.x_term]
+            y_cord = b_info.terms[self.y_term]
             b_info.x_idx = self.x_cords.index(x_cord)
             b_info.y_idx = self.y_cords.index(y_cord)
 
@@ -141,6 +148,7 @@ class GdlBasesTransformer(object):
 
         self.num_of_base_controls = 0
         self.control_states = []
+
         for b in self.base_infos:
             if b.terms[0] in self.control_base_terms:
                 self.num_of_base_controls += 1
@@ -173,7 +181,7 @@ class GdlBasesTransformer(object):
             if state[b_info.index]:
                 channels[b_info.channel][b_info.y_idx][b_info.x_idx] = 1
 
-        # set who's turn it is by setting entire channel to 1
+        # set a control state by setting entire channel to 1
         channel_idx = len(self.pieces)
         for idx in self.control_states:
             if state[idx]:
@@ -188,6 +196,7 @@ class GdlBasesTransformer(object):
             channels = np.rollaxis(channels, -1)
             channels = np.rollaxis(channels, -1)
             assert channels.shape == (orig.shape[1], orig.shape[2], orig.shape[0])
+
         return channels
 
     def policy_to_array(self, policy, lead_role_index):
@@ -351,9 +360,28 @@ class EscortLatch(GdlBasesTransformer):
     control_base_terms = ["blackKingCaptured", "whiteKingCaptured", "control"]
 
 
+class SpeedChess(GdlBasesTransformer):
+    game = "speedChess"
+
+    x_cords = "a b c d e f g h".split()
+    y_cords = "1 2 3 4 5 6 7 8".split()
+
+    base_term = "cell"
+    x_term = 1
+    y_term = 2
+
+    piece_term = 3, 4
+    pieces = [(p0, p1) for p1 in ['king', 'rook', 'pawn', 'knight', 'queen', 'bishop']
+              for p0 in ['white', 'black']]
+
+    control_base_terms = ["kingHasMoved", "hRookHasMoved",
+                          "aRookHasMoved", "aRookHasMoved", "control"]
+
+
 ###############################################################################
 
 def init():
     from ggpzero.nn.manager import get_manager
-    for clz in (AtariGo_7x7, BreakthroughSmall, Breakthrough, Reversi, Connect4, Hex, CitTacEot, Checkers, EscortLatch):
+    for clz in (AtariGo_7x7, BreakthroughSmall, Breakthrough, Reversi, Connect4,
+                Hex, CitTacEot, Checkers, EscortLatch, SpeedChess):
         get_manager().register_transformer(clz)
