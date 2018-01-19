@@ -203,7 +203,6 @@ class ServerConfig(object):
     network_size = attr.ib("normal")
 
     generation_prefix = attr.ib("v2_")
-    store_path = attr.ib("somewhere")
 
     generation_size = attr.ib(1024)
     max_growth_while_training = attr.ib(0.2)
