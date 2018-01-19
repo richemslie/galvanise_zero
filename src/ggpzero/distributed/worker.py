@@ -92,7 +92,7 @@ class Worker(Broker):
             self.supervisor = cppinterface.Supervisor(self.sm, self.nn,
                                                       batch_size=self.conf.self_play_batch_size,
                                                       sleep_between_poll=self.conf.sleep_between_poll)
-            self.supervisor.start_self_play(msg.self_play_conf)
+            self.supervisor.start_self_play(msg.self_play_conf, self.conf.inline_manager)
         else:
             self.supervisor.update_nn(self.nn)
             self.supervisor.clear_unique_states()
@@ -100,12 +100,9 @@ class Worker(Broker):
         return msgs.Ok("configured")
 
     def cb_from_superviser(self):
-        new_samples = self.supervisor.fetch_samples()
-        if new_samples:
-            self.samples += [confs.Sample(**d) for d in new_samples]
-            # XXX self.conf.min_num_samples configure
-            if len(self.samples) > 128:
-                return True
+        self.samples += self.supervisor.fetch_samples()
+        # XXX self.conf.min_num_samples
+        return len(self.samples) > 128
 
     def on_request_samples(self, server, msg):
         assert self.supervisor is not None
@@ -121,8 +118,9 @@ class Worker(Broker):
         start_time = time.time()
         self.supervisor.poll_loop(do_stats=True, cb=self.cb_from_superviser)
 
-        log.info("Number of samples %s, predictions %d" % (len(self.samples),
-                                                           self.supervisor.total_predictions))
+        log.info("Number of samples %s, prediction calls %d, predictions %d" % (len(self.samples),
+                                                                                self.supervisor.num_predictions_calls,
+                                                                                self.supervisor.total_predictions))
         log.info("time takens python/predict/all %.2f / %.2f / %.2f" % (self.supervisor.acc_time_polling,
                                                                         self.supervisor.acc_time_prediction,
                                                                         time.time() - start_time))
