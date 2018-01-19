@@ -71,6 +71,7 @@ class PollerBase(object):
         raise NotImplemented
 
     def reset_stats(self):
+        self.num_predictions_calls = 0
         self.total_predictions = 0
         self.acc_time_polling = 0
         self.acc_time_prediction = 0
@@ -108,6 +109,7 @@ class PollerBase(object):
         if do_stats:
             s2 = time.time()
 
+            self.num_predictions_calls += 1
             self.total_predictions += num_predictions
             self.acc_time_polling += s1 - s0
             self.acc_time_prediction += s2 - s1
@@ -133,6 +135,7 @@ class PollerBase(object):
         self.nn = nn
 
     def dump_stats(self):
+        print "num of prediction calls", self.num_predictions_calls
         print "predictions", self.total_predictions
         print "acc_time_polling", self.acc_time_polling
         print "acc_time_prediction", self.acc_time_prediction
@@ -174,20 +177,16 @@ class Supervisor(PollerBase):
     def _get_poller(self):
         return self.c_supervisor
 
-    def start_workers(self):
-        ' start worker threads.  only needed if configured with workers '
-        self.c_supervisor.start()
-
-    def stop_workers(self):
-        ' stop worker threads.  only needed if configured with workers '
-        self.c_supervisor.stop()
-
-    def start_self_play(self, conf):
+    def start_self_play(self, conf, inline=True):
         assert isinstance(conf, confs.SelfPlayConfig)
-        return self.c_supervisor.start_self_play(attr.asdict(conf))
+        return self.c_supervisor.start_self_play(inline, attr.asdict(conf))
 
     def fetch_samples(self):
-        return self.c_supervisor.fetch_samples()
+        res = self.c_supervisor.fetch_samples()
+        if res:
+            return [confs.Sample(**d) for d in res]
+        else:
+            return []
 
     def add_unique_state(self, l):
         self.bs_for_unique_states.from_list(l)
