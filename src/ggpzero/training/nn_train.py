@@ -1,4 +1,5 @@
 import os
+import gzip
 
 from ggplib.util import log
 from ggplib.db import lookup
@@ -56,8 +57,6 @@ class GenerationSamples(object):
 
 
 class SamplesBuffer(object):
-    ''' this is suppose to be our in memory buffer.  But we throw it away everytime we train.  XXX
-    ie should we keep it in memory, or is it too big?  '''
 
     def __init__(self):
         self.conf = confs.TrainData()
@@ -70,10 +69,9 @@ class SamplesBuffer(object):
 
         step = conf.next_step - 1
         while step >= conf.starting_step:
-            fn = os.path.join(conf.store_path, "gendata_%s_%s.json" % (conf.game, step))
+            fn = os.path.join(conf.store_path, "gendata_%s_%s.json.gz" % (conf.game, step))
             if fn not in cls.gen_data_cache:
-
-                raw_data = attrutil.json_to_attr(open(fn).read())
+                raw_data = attrutil.json_to_attr(gzip.open(fn).read())
                 gen_samples = GenerationSamples(raw_data.game,
                                                 raw_data.with_generation,
                                                 raw_data.num_samples)

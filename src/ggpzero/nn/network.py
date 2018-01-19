@@ -100,22 +100,20 @@ class TrainingController(keras.callbacks.Callback):
         self.stop_training = False
         self.at_epoch = 0
 
-        self.reduce_value_weight = False
-
         self.best = None
         self.best_val_policy_acc = -1
 
         self.retrain_best = None
         self.retrain_best_val_policy_acc = -1
         self.epoch_last_set_at = None
+        self.value_loss_diff = -1
 
-    def check_value_overfitting(self, logs):
+    def set_value_overfitting(self, logs):
         loss = logs['value_loss']
         val_loss = logs['val_value_loss']
 
-        # catch it early
-        if loss - 0.005 < val_loss:
-            self.reduce_value_weight = True
+        # positive loss - *may* mean we are overfitting.
+        self.value_loss_diff = val_loss - loss
 
     def on_epoch_begin(self, epoch, logs=None):
         self.at_epoch += 1
@@ -123,7 +121,7 @@ class TrainingController(keras.callbacks.Callback):
     def on_epoch_end(self, _, logs=None):
         epoch = self.at_epoch
 
-        self.check_value_overfitting(logs)
+        self.set_value_overfitting(logs)
 
         policy_acc = logs['policy_acc']
         val_policy_acc = logs['val_policy_acc']
@@ -258,19 +256,37 @@ class NeuralNetwork(object):
         training_logger = TrainingLoggerCb(train_conf.epochs)
         controller = TrainingController(retraining)
 
-        value_weight = 0.1 if retraining else 1.0
+        # XXX add hyper parameters
+
+        XX_value_weight_reduction = 0.333
+        XX_value_weight_min = 0.05
+
+        value_weight = 1.0
+        # start retraining with reduce weight
+        if retraining:
+            value_weight *= XX_value_weight_reduction
+
         self.compile(value_weight=value_weight)
         for _ in range(train_conf.epochs):
             if controller.stop_training:
                 log.warning("Stop training early via controller")
                 break
 
-            if controller.reduce_value_weight:
-                controller.reduce_value_weight = False
+            print controller.value_loss_diff
+            if controller.value_loss_diff > 0.0:
                 orig_weight = value_weight
-                value_weight *= 0.25
-                value_weight = max(0.01, value_weight)
-                if value_weight + 0.0001 < orig_weight:
+                if orig_weight > 0.2:
+                    if controller.value_loss_diff > 0.001:
+                        value_weight *= XX_value_weight_reduction
+                else:
+                    if controller.value_loss_diff > 0.01:
+                        value_weight *= XX_value_weight_reduction
+                    else:
+                        # increase it again... 
+                        value_weight /= XX_value_weight_reduction
+
+                value_weight = max(XX_value_weight_min, value_weight)
+                if abs(value_weight - orig_weight) > 0.0001:
                     self.compile(value_weight=value_weight)
 
             self.keras_model.fit(train_conf.input_channels,

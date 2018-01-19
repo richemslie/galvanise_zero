@@ -1,5 +1,6 @@
 import os
 import sys
+import gzip
 import time
 import shutil
 
@@ -281,8 +282,8 @@ class ServerBroker(Broker):
     @property
     def sample_data_filename(self):
         p = samples_path(self.conf.game, self.conf.generation_prefix)
-        return os.path.join(p, "gendata_%s_%s.json" % (self.conf.game,
-                                                       self.conf.current_step))
+        return os.path.join(p, "gendata_%s_%s.json.gz" % (self.conf.game,
+                                                          self.conf.current_step))
 
     def save_sample_data(self, count):
         assert count <= len(self.accumulated_samples)
@@ -296,17 +297,16 @@ class ServerBroker(Broker):
         # write json file
         json.encoder.FLOAT_REPR = lambda f: ("%.5f" % f)
 
-        log.info("writing json: %s" % self.sample_data_filename)
-        with open(self.sample_data_filename, 'w') as open_file:
-            open_file.write(attrutil.attr_to_json(gen, indent=4))
+        log.info("writing json (gzipped): %s" % self.sample_data_filename)
+        with gzip.open(self.sample_data_filename, 'w') as f:
+            f.write(attrutil.attr_to_json(gen, indent=4))
 
         return gen
 
     def load_and_check_data(self):
         log.info("checking if generation data available")
         try:
-            f = open(self.sample_data_filename)
-            gen = attrutil.json_to_attr(f.read())
+            gen = attrutil.json_to_attr(gzip.open(self.sample_data_filename).read())
             log.info("data exists, with generation: %s, adding %s samples" % (gen.with_generation, gen.num_samples))
 
             self.add_new_samples(gen.samples)

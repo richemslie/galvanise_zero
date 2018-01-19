@@ -7,7 +7,7 @@ from collections import Counter
 import numpy as np
 
 from ggplib.util import log
-from ggplib.util.symbols import SymbolFactory
+from ggplib.util.symbols import SymbolFactory, Term
 
 # only importing for checking type (otherwise will go insane)
 from ggplib.db.lookup import GameInfo
@@ -22,11 +22,21 @@ class BaseInfo(object):
         # drops true ie (true (control black)) -> (control black)
         self.terms = symbols[1]
 
+        if isinstance(self.terms, Term):
+            self.terms = [self.terms]
+
         # populated in create_base_infos()
         self.channel = None
+
+        # if cord_state, will use these cords
+        self.cord_state = False
         self.x_idx = None
         self.y_idx = None
+
+        # if control_state. will set set channel to value
         self.control_state = None
+        self.control_state_value = None
+
 
 class GdlBasesTransformer(object):
     game = None
@@ -36,7 +46,9 @@ class GdlBasesTransformer(object):
     # the following are defined subclass
     base_term = pieces = piece_term = x_term = y_term = None
     x_cords = y_cords = []
+
     control_base_term = None
+    control_base_terms = None
 
     # these are set in create_base_infos
     base_infos = None
@@ -59,6 +71,7 @@ class GdlBasesTransformer(object):
         # this is the 'image' data ordering for tensorflow/keras
         self.channel_last = channel_last
 
+        self.num_of_base_controls = 0
         self.create_base_infos()
 
     @property
@@ -81,7 +94,7 @@ class GdlBasesTransformer(object):
     @property
     def num_channels(self):
         # one for each role to indicate turn, one for each pieces
-        return self.role_count + len(self.pieces)
+        return self.num_of_base_controls + len(self.pieces)
 
     def create_base_infos(self):
         # ############ XXX
@@ -105,6 +118,9 @@ class GdlBasesTransformer(object):
             x_cord = b_info.terms[self.x_term]
             y_cord = b_info.terms[self.y_term]
 
+            if piece not in self.pieces:
+                continue
+
             b_info.channel = self.pieces.index(piece)
             b_info.x_idx = self.x_cords.index(x_cord)
             b_info.y_idx = self.y_cords.index(y_cord)
@@ -115,14 +131,22 @@ class GdlBasesTransformer(object):
         for i, piece in enumerate(self.pieces):
             log.info("found %s states for channel %s" % (count[i], piece))
 
-        assert self.control_base_term is not None
+        if self.control_base_terms is None:
+            self.control_base_terms = []
+
+        if self.control_base_term is not None:
+            self.control_base_terms.append(self.control_base_term)
+
+        assert self.control_base_terms
+
         self.num_of_base_controls = 0
         self.control_states = []
         for b in self.base_infos:
-            if b.terms[0] == self.control_base_term:
+            if b.terms[0] in self.control_base_terms:
                 self.num_of_base_controls += 1
                 self.control_states.append(b.index)
                 b.control_state = True
+
         log.info("Number of control states %s" % self.num_of_base_controls)
 
         # warn about any unhandled states
@@ -197,58 +221,6 @@ class GdlBasesTransformer(object):
 
         # output - best/final scores
         finals.append(np.array(sample.final_score, dtype='float32'))
-
-    '''
-
-    # leftover hacks here for amazonSuicide_10x10
-
-        if self.extra_term:
-            channel_count += 1
-
-    # extra_term = None
-
-        # channel_count += 1
-        # if self.extra_term:
-        #     count = 0
-        #     for board_pos, (x_cord, y_cord) in enumerate(all_cords):
-        #         # this is slow.  Will go through all the bases and match up terms.
-        #         for b_info in self.base_infos:
-        #             if b_info.terms[0] != self.extra_term:
-        #                 continue
-
-        #             if b_info.terms[self.x_term] == x_cord and \
-        #                b_info.terms[self.y_term] == y_cord:
-
-        #                 count += 1
-        #                 b_info.channel = channel_count
-        #                 b_info.cord_idx = board_pos
-        #                 break
-
-
-class AmazonsSuicide_10x10(BasesConfig):
-    game = "amazonsSuicide_10x10"
-    x_cords = "1 2 3 4 5 6 7 8 9 10".split()
-    y_cords = "1 2 3 4 5 6 7 8 9 10".split()
-
-    base_term = "cell"
-    x_term = 1
-    y_term = 2
-    piece_term = 3
-
-    pieces = ['white', 'black', 'arrow']
-
-    extra_term = "justMoved"
-    x_term = 1
-    y_term = 2
-
-    control_base_term = 'turn'
-
-    @property
-    def num_channels(self):
-        # one for each role to indicate turn, one for each pieces
-        return 4 + len(self.pieces) + 1
-
-'''
 
 
 ###############################################################################
@@ -338,45 +310,50 @@ class BreakthroughSmall(GdlBasesTransformer):
     control_base_term = 'control'
 
 
-# class Connect5(GdlBasesTransformer):
-#     game = "connect5"
-#     x_cords = "a b c d e f g h".split()
-#     y_cords = "a b c d e f g h".split()
-#     base_term = "cell"
-#     pieces = ['x', 'o']
+class CitTacEot(GdlBasesTransformer):
+    game = "cittaceot"
+    x_cords = "1 2 3 4 5".split()
+    y_cords = "1 2 3 4 5".split()
+
+    base_term = "cell"
+    x_term = 1
+    y_term = 2
+    piece_term = 3
+
+    pieces = ['x', 'o']
+    control_base_term = 'control'
 
 
-# class CitTacEot(GdlBasesTransformer):
-#     game = "cittaceot"
-#     x_cords = "1 2 3 4 5".split()
-#     y_cords = "1 2 3 4 5".split()
-#     base_term = "cell"
-#     pieces = ['x', 'o']
+class Checkers(GdlBasesTransformer):
+    game = "checkers"
+    x_cords = "a b c d e f g h".split()
+    y_cords = "1 2 3 4 5 6 7 8".split()
+    base_term = "cell"
+    x_term = 1
+    y_term = 2
+    piece_term = 3
+
+    pieces = ['bp', 'bk', 'wk', 'wp']
+    control_base_term = 'control'
 
 
-# class EscortLatchBack(GdlBasesTransformer):
-#     game = "escortLatch"
-#     x_cords = "a b c d e f g h".split()
-#     y_cords = "1 2 3 4 5 6 7 8".split()
-#     base_term = "cell"
-#     pieces = ['wp', 'wk', 'bp', 'bk']
+class EscortLatch(GdlBasesTransformer):
+    game = "escortLatch"
+    x_cords = "a b c d e f g h".split()
+    y_cords = "1 2 3 4 5 6 7 8".split()
 
+    base_term = "cell"
+    x_term = 1
+    y_term = 2
+    piece_term = 3
+    pieces = ['wp', 'wk', 'bp', 'bk']
 
-# class Checkers(GdlBasesTransformer):
-#     game = "checkers"
-#     x_cords = "a b c d e f g h".split()
-#     y_cords = "1 2 3 4 5 6 7 8".split()
-#     base_term = "cell"
-#     pieces = ['bp', 'b', 'bk', 'wk', 'wp']
-
-
-# class BreakthroughWalls(GdlBasesTransformer):
-#     game = "breakthroughWalls"
+    control_base_terms = ["blackKingCaptured", "whiteKingCaptured", "control"]
 
 
 ###############################################################################
 
 def init():
     from ggpzero.nn.manager import get_manager
-    for clz in (AtariGo_7x7, BreakthroughSmall, Breakthrough, Reversi, Connect4, Hex):
+    for clz in (AtariGo_7x7, BreakthroughSmall, Breakthrough, Reversi, Connect4, Hex, CitTacEot, Checkers, EscortLatch):
         get_manager().register_transformer(clz)
