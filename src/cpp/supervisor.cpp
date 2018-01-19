@@ -22,6 +22,7 @@ Supervisor::Supervisor(GGPLib::StateMachineInterface* sm,
     sm(sm->dupe()),
     transformer(transformer),
     batch_size(batch_size),
+    slow_poll_counter(0),
     inline_sp_manager(nullptr),
     in_progress_manager(nullptr),
     in_progress_worker(nullptr),
@@ -30,16 +31,45 @@ Supervisor::Supervisor(GGPLib::StateMachineInterface* sm,
 
 Supervisor::~Supervisor() {
     delete this->sm;
-    // delete self_play_managers XXX
+    // XXX (for now kill -9)
+    // * stop and join workers
+    // * delete workers
+    // * delete self_play_managers?
+}
+
+
+void Supervisor::slowPoll(SelfPlayManager* manager) {
+    this->slow_poll_counter++;
+    if (this->slow_poll_counter < 128) {
+        return;
+    }
+
+    this->slow_poll_counter = 0;
+
+    manager->reportAndResetStats();
+
+    std::vector<Sample* >& other = manager->getSamples();
+    if (other.empty()) {
+        return;
+    }
+
+    if (this->samples.empty()) {
+        // fast move semantics
+        this->samples = std::move(other);
+
+    } else {
+        this->samples.insert(this->samples.end(), other.begin(), other.end());
+        other.clear();
+    }
 }
 
 void Supervisor::createInline(const SelfPlayConfig* config) {
-    // XXX going to have to change for threaded version
     K273::l_verbose("Supervisor::createInline()");
     this->inline_sp_manager = new SelfPlayManager(this->sm,
                                                   this->transformer,
                                                   this->batch_size,
-                                                  &this->unique_states);
+                                                  &this->unique_states,
+                                                  "inline");
 
     this->inline_sp_manager->startSelfPlayers(config);
 }
@@ -48,11 +78,13 @@ void Supervisor::createWorkers(const SelfPlayConfig* config) {
     SelfPlayWorker* spw = new SelfPlayWorker(new SelfPlayManager(this->sm,
                                                                  this->transformer,
                                                                  this->batch_size,
-                                                                 &this->unique_states),
+                                                                 &this->unique_states,
+                                                                 "sp0"),
                                              new SelfPlayManager(this->sm,
                                                                  this->transformer,
                                                                  this->batch_size,
-                                                                 &this->unique_states),
+                                                                 &this->unique_states,
+                                                                 "sp1"),
                                              config);
     this->self_play_workers.push_back(spw);
 
@@ -81,27 +113,10 @@ const ReadyEvent* Supervisor::poll(float* policies, float* final_scores, int pre
         }
     };
 
-    // XXX just make a normal private method?
-    auto grabSamples = [this] (SelfPlayManager* manager) {
-        std::vector<Sample* >& other = manager->getSamples();
-        if (other.empty()) {
-            return;
-        }
-
-        if (this->samples.empty()) {
-            // fast move semantics
-            this->samples = std::move(other);
-
-        } else {
-            this->samples.insert(this->samples.end(), other.begin(), other.end());
-            other.clear();
-        }
-    };
-
     if (this->inline_sp_manager != nullptr) {
         populateEvent(this->inline_sp_manager);
         this->inline_sp_manager->poll();
-        grabSamples(this->inline_sp_manager);
+        this->slowPoll(this->inline_sp_manager);
         return this->inline_sp_manager->getReadyEvent();
     }
 
@@ -124,7 +139,7 @@ const ReadyEvent* Supervisor::poll(float* policies, float* final_scores, int pre
         for (auto worker : this->self_play_workers) {
             this->in_progress_manager = worker->pull();
             if (this->in_progress_manager != nullptr) {
-                grabSamples(this->in_progress_manager);
+                this->slowPoll(this->in_progress_manager);
                 this->in_progress_worker = worker;
                 break;
             }
@@ -135,6 +150,10 @@ const ReadyEvent* Supervisor::poll(float* policies, float* final_scores, int pre
         }
 
         ::usleep(100000);
+
+        for (auto worker : this->self_play_workers) {
+            worker->getThread()->promptWorker();
+        }
     }
 
     return this->in_progress_manager->getReadyEvent();
@@ -193,7 +212,7 @@ void SelfPlayWorker::doWork() {
             }
         }
 
-        //this->thread_self->done();
+        this->thread_self->done();
         return;
 
     } catch (const K273::Exception &exc) {

@@ -170,12 +170,7 @@ PuctNode* PuctNode::create(int role_count,
             }
         }
 
-    } else {
-        // XXX I don't think we have to do anything.  The score will be updated by the updater as we add the new node.
-        //k_debug("node is final");
     }
-
-    //k_debug("before createNode total_children %d", total_children);
 
     PuctNode* node = createNode(base_state,
                                 is_finalised,

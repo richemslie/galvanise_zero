@@ -75,6 +75,9 @@ namespace GGPZero {
                    int batch_size);
         ~Supervisor();
 
+    private:
+        void slowPoll(SelfPlayManager* manager);
+
     public:
         void createInline(const SelfPlayConfig* config);
         void createWorkers(const SelfPlayConfig* config);
@@ -90,6 +93,8 @@ namespace GGPZero {
         GGPLib::StateMachineInterface* sm;
         const GdlBasesTransformer* transformer;
         const int batch_size;
+
+        int slow_poll_counter;
 
         SelfPlayManager* inline_sp_manager;
 

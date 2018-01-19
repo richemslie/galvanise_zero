@@ -14,7 +14,7 @@ void GdlBasesTransformer::toChannels(const GGPLib::BaseState* bs,
                                      const std::vector <GGPLib::BaseState*>& prev_states,
                                      float* buf) const {
 
-    // XXX ZZZ only supports 'channel first'.  If we really want to have 'channel last',
+    // NOTE: only supports 'channel first'.  If we really want to have 'channel last',
     // transformation will need to be via python code on numpy arrays.  Keeping this code lean and
     // fast.
 

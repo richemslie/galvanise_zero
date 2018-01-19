@@ -12,6 +12,7 @@
 #include <statemachine/statemachine.h>
 
 #include <k273/logging.h>
+#include <k273/strutils.h>
 
 #include <cmath>
 #include <vector>
@@ -21,12 +22,14 @@ using namespace GGPZero;
 
 
 SelfPlay::SelfPlay(SelfPlayManager* manager, const SelfPlayConfig* conf, PuctEvaluator* pe,
-                   const GGPLib::BaseState* initial_state, int role_count) :
+                   const GGPLib::BaseState* initial_state, int role_count, std::string identifier) :
     manager(manager),
     conf(conf),
     pe(pe),
     initial_state(initial_state),
-    role_count(role_count) {
+    role_count(role_count),
+    identifier(identifier),
+    match_count(0) {
 }
 
 
@@ -44,13 +47,17 @@ float clamp(float value, float amount) {
     }
 }
 
-PuctNode* SelfPlay::selectNode(const bool can_resign) {
-
+PuctNode* SelfPlay::selectNode() {
     PuctNode* node = this->pe->establishRoot(this->initial_state, 0);
 
     // ok simple loop until we start taking samples
     this->pe->updateConf(this->conf->select_puct_config);
     const int iterations = this->conf->select_iterations;
+
+    // start from initial_state if select is turned off
+    if (iterations < 0) {
+        return node;
+    }
 
     // selecting - we playout whole game and then choose a random move
     int game_depth = 0;
@@ -64,6 +71,8 @@ PuctNode* SelfPlay::selectNode(const bool can_resign) {
         node = this->pe->fastApplyMove(choice);
         game_depth++;
     }
+
+    // ok, we have a complete game.  Choose a starting point and start running samples from there.
 
     ASSERT(node->game_depth == game_depth);
 
@@ -80,7 +89,7 @@ PuctNode* SelfPlay::selectNode(const bool can_resign) {
     ASSERT(node->game_depth == sample_start_depth);
 
     // don't start as if the game is done
-    if (can_resign) {
+    if (this->can_resign) {
         // note this score isn't that reliable...  since likely we didn't do any iterations
         while (node->getCurrentScore(node->lead_role_index) < this->conf->resign_score_probability) {
             sample_start_depth--;
@@ -97,6 +106,34 @@ PuctNode* SelfPlay::selectNode(const bool can_resign) {
     return node;
 }
 
+bool SelfPlay::resign(PuctNode* node) {
+    float score = node->getCurrentScore(node->lead_role_index);
+    bool should_resign = score < this->conf->resign_score_probability;
+
+    // already resigned
+    ASSERT (!this->has_resigned);
+
+    if (this->can_resign) {
+        this->has_resigned = should_resign;
+        return should_resign;
+
+    } else if (should_resign && this->false_postitive_resign_check) {
+        // check for false postive on resigns...
+
+        this->false_postitive_resign_check = false;
+
+        // add the scores to check later
+        for (int ii=0; ii<this->role_count; ii++) {
+            float clamped_score = clamp(node->getCurrentScore(ii),
+                                        this->conf->resign_score_probability);
+
+            this->resign_false_positive_check_scores.push_back(clamped_score);
+        }
+    }
+
+    return false;
+}
+
 PuctNode* SelfPlay::collectSamples(PuctNode* node) {
 
     // sampling:
@@ -104,19 +141,20 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
     const int iterations = this->conf->sample_iterations;
 
     while (true) {
+        // sample_count < 0, run to the end with samples
         const int sample_count = this->game_samples.size();
-        if (sample_count == this->conf->max_number_of_samples) {
+        if (sample_count > 0 && sample_count == this->conf->max_number_of_samples) {
             break;
         }
 
-        if (node->isTerminal()) {
+        if (node->isTerminal() || this->resign(node)) {
             break;
         }
 
         if (!this->manager->getUniqueStates()->isUnique(node->getBaseState())) {
             this->manager->incrDupes();
 
-            // need random choice
+            // need random choice (XXX use the probabilty distribution)
             int choice = rng.getWithMax(node->num_children);
             const PuctNodeChild* child = node->getNodeChild(this->role_count, choice);
 
@@ -124,7 +162,7 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
             continue;
         }
 
-        // we will create a sample, add to unique states here before jumping out of continuation
+        // we will create a sample, add to unique states here
         this->manager->getUniqueStates()->add(node->getBaseState());
 
         const PuctNodeChild* choice = this->pe->onNextMove(iterations);
@@ -143,72 +181,56 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
     return node;
 }
 
+PuctNode* SelfPlay::runToEnd(PuctNode* node) {
+    this->pe->updateConf(this->conf->score_puct_config);
+    const int iterations = this->conf->score_iterations;
+
+    // simply run the game to end
+    while (true) {
+        if (node->isTerminal() || this->resign(node)) {
+            break;
+        }
+
+        const PuctNodeChild* choice = this->pe->onNextMove(iterations);
+        node = this->pe->fastApplyMove(choice);
+    }
+
+    return node;
+}
+
 void SelfPlay::playOnce() {
-    ASSERT(this->game_samples.empty());
-    const bool can_resign = this->rng.get() > this->conf->resign_false_positive_retry_percentage;
+    this->match_count++;
+
+    // reset everything
+    this->game_samples.clear();
+
+    this->has_resigned = false;
+    this->false_postitive_resign_check = !can_resign;
+    this->resign_false_positive_check_scores.clear();
 
     // reset the puct evaluator
     this->pe->reset();
 
-    PuctNode* node = this->selectNode(can_resign);
+    // randomly choose if we can resign or not
+    this->can_resign = this->rng.get() > this->conf->resign_false_positive_retry_percentage;
 
+    // first select a starting point
+    PuctNode* node = this->selectNode();
     ASSERT(!node->isTerminal());
 
-    // ok, we have a complete game.  Choose a starting point and start running samples from there.
+    int starting_sample_depth = node->game_depth;
+
     node = this->collectSamples(node);
 
-    // no samples :(  XXX Worthy of a reporting statistic (add it to manager)
+    // no samples :(
     if (this->game_samples.empty()) {
         this->manager->incrNoSamples();
         return;
     }
 
     // final stage, scoring:
-    this->pe->updateConf(this->conf->score_puct_config);
-    const int iterations = this->conf->score_iterations;
-
-    // resignation and check for false positives
-    bool resigned = false;
-    bool false_postitive_resign_check = !can_resign;
-    std::vector <float> resign_false_positive_check_scores;
-
-    // run the game to end
-    while (true) {
-        if (node->isTerminal()) {
-            break;
-        }
-
-        if (can_resign) {
-            if (node->getCurrentScore(node->lead_role_index) < this->conf->resign_score_probability) {
-                resigned = true;
-                break;
-            }
-        } else {
-
-            // check for false postive on resigns...
-            if (false_postitive_resign_check) {
-                for (int ii=0; ii<this->role_count; ii++) {
-                    float score = node->getCurrentScore(ii);
-
-                    if (score < this->conf->resign_score_probability) {
-                        false_postitive_resign_check = false;
-
-                        // add the scores to check later
-                        for (int jj=0; jj<this->role_count; jj++) {
-                            float clamped_score = clamp(node->getCurrentScore(jj),
-                                                        this->conf->resign_score_probability);
-                            resign_false_positive_check_scores.push_back(clamped_score);
-                        }
-
-                        // break out of the outer for loop
-                        break;
-                    }
-                }
-            }
-        }
-
-        const PuctNodeChild* choice = this->pe->onNextMove(iterations);
-        node = this->pe->fastApplyMove(choice);
+    if (!this->has_resigned && !node->isTerminal()) {
+        node = this->runToEnd(node);
     }
 
     // update current samples (remember we can have multiple per game)
@@ -230,16 +252,17 @@ void SelfPlay::playOnce() {
             }
         }
 
-        sample->resigned = resigned;
+        // game id?
+        sample->match_identifier = this->identifier + K273::fmtString("_%d",
+                                                                     this->match_count);
+        sample->has_resigned = this->has_resigned;
         sample->game_length = node->game_depth;
+        sample->starting_sample_depth = starting_sample_depth;
         sample->resign_false_positive = is_resign_false_positive;
 
         this->manager->addSample(sample);
-
-        this->game_samples.clear();
     }
 }
-
 
 void SelfPlay::playGamesForever() {
     while (true) {

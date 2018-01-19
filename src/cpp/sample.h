@@ -5,6 +5,7 @@
 
 #include <vector>
 #include <utility>
+#include <string>
 
 namespace GGPZero {
 
@@ -19,9 +20,10 @@ namespace GGPZero {
         int game_length;
         std::vector <float> final_score;
 
-        // XXX not in python
-        bool resigned;
+        std::string match_identifier;
+        bool has_resigned;
         bool resign_false_positive;
+        int starting_sample_depth;
     };
 
 }

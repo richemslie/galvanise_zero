@@ -58,11 +58,17 @@ PyObject* sampleToDict(Sample* sample) {
     // this is basically FML - trying to steal as much ref counts as possible
     PyObject* sample_as_dict = PyDict_New();
 
-    // easy one first
+    // populate dict from Sample (prev_states, policy, final_score - done after)
     PyDict_setNewItem(sample_as_dict, "state", stateToList(sample->state));
     PyDict_setNewItem(sample_as_dict, "depth", PyInt_FromLong(sample->depth));
-    PyDict_setNewItem(sample_as_dict, "game_length", PyInt_FromLong(sample->game_length));
     PyDict_setNewItem(sample_as_dict, "lead_role_index", PyInt_FromLong(sample->lead_role_index));
+
+    PyDict_setNewItem(sample_as_dict, "game_length", PyInt_FromLong(sample->game_length));
+    PyDict_setNewItem(sample_as_dict, "match_identifier", PyString_FromString(sample->match_identifier.c_str()));
+    PyDict_setNewItem(sample_as_dict, "has_resigned", PyBool_FromLong((int) sample->has_resigned));
+    PyDict_setNewItem(sample_as_dict, "resign_false_positive", PyBool_FromLong((int) sample->resign_false_positive));
+    PyDict_setNewItem(sample_as_dict, "starting_sample_depth", PyInt_FromLong(sample->starting_sample_depth));
+
 
     // same pattern, could abstract it out if my template skills were better
     {

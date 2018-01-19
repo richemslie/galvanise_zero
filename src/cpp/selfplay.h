@@ -39,14 +39,15 @@ namespace GGPZero {
     class SelfPlay {
     public:
         SelfPlay(SelfPlayManager* manager, const SelfPlayConfig* conf,
-                 PuctEvaluator* pe,
-                 const GGPLib::BaseState* initial_state, int role_count);
+                 PuctEvaluator* pe, const GGPLib::BaseState* initial_state,
+                 int role_count, std::string identifier);
         ~SelfPlay();
 
-
     private:
-        PuctNode* selectNode(const bool can_resign);
+        PuctNode* selectNode();
+        bool resign(PuctNode* node);
         PuctNode* collectSamples(PuctNode* node);
+        PuctNode* runToEnd(PuctNode* node);
 
     public:
         void playOnce();
@@ -55,17 +56,27 @@ namespace GGPZero {
     private:
         SelfPlayManager* manager;
         const SelfPlayConfig* conf;
+
         // only one evaluator -  allow to swap in/out config
         PuctEvaluator* pe;
 
         const GGPLib::BaseState* initial_state;
         const int role_count;
+        const std::string identifier;
+
+        int match_count;
+
+        // collect samples per game - need to be scored at the end of game
+        std::vector <Sample*> game_samples;
+
+        // resignation during self play
+        bool has_resigned;
+        bool can_resign;
+        bool false_postitive_resign_check;
+        std::vector <float> resign_false_positive_check_scores;
 
         // random number generator
         K273::xoroshiro128plus32 rng;
-
-        // local to playOnce();
-        std::vector <Sample*> game_samples;
     };
 
 }

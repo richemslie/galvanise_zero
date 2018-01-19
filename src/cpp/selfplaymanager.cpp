@@ -9,18 +9,23 @@
 #include <statemachine/statemachine.h>
 
 #include <k273/logging.h>
+#include <k273/strutils.h>
 #include <k273/exception.h>
+
+#include <string>
 
 using namespace GGPZero;
 
 SelfPlayManager::SelfPlayManager(GGPLib::StateMachineInterface* sm,
                                  const GdlBasesTransformer* transformer,
                                  int batch_size,
-                                 UniqueStates* unique_states) :
+                                 UniqueStates* unique_states,
+                                 std::string identifier) :
     sm(sm->dupe()),
     transformer(transformer),
     batch_size(batch_size),
     unique_states(unique_states),
+    identifier(identifier),
     saw_dupes(0),
     no_samples_taken(0),
     false_positive_resigns(0) {
@@ -82,8 +87,9 @@ void SelfPlayManager::startSelfPlayers(const SelfPlayConfig* config) {
     // create a bunch of self plays
     for (int ii=0; ii<this->batch_size; ii++) {
         PuctEvaluator* pe = new PuctEvaluator(config->select_puct_config, this->scheduler);
-        SelfPlay* sp = new SelfPlay(this, config, pe,
-                                    this->sm->getInitialState(), this->sm->getRoleCount());
+        std::string self_play_identifier = this->identifier + K273::fmtString("_%d", ii);
+        SelfPlay* sp = new SelfPlay(this, config, pe, this->sm->getInitialState(),
+                                    this->sm->getRoleCount(), self_play_identifier);
         this->self_plays.push_back(sp);
 
         auto f = [sp]() {

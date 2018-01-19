@@ -7,6 +7,7 @@
 #include <statemachine/basestate.h>
 #include <statemachine/statemachine.h>
 
+#include <string>
 #include <vector>
 
 namespace GGPZero {
@@ -21,7 +22,8 @@ namespace GGPZero {
         SelfPlayManager(GGPLib::StateMachineInterface* sm,
                         const GdlBasesTransformer* transformer,
                         int batch_size,
-                        UniqueStates* unique_states);
+                        UniqueStates* unique_states,
+                        std::string identifier);
         ~SelfPlayManager();
 
     public:
@@ -76,6 +78,8 @@ namespace GGPZero {
 
         std::vector <Sample*> samples;
         UniqueStates* unique_states;
+        std::string identifier;
+
         std::vector <GGPLib::BaseState*> states_allocated;
 
         // Events
