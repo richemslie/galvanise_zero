@@ -196,13 +196,13 @@ def main():
     setup()
 
     mapping = {
-        #'breakthrough' : ["v5_%s" % s for s in [80, 92]],
-        'cittaceot' : ["v8_%s" % s for s in [10, 12]],
-        #'checkers' : ["v7_%s" % s for s in [10, 16]],
-        #'connectFour' : ["v7_%s" % s for s in [25, 38]],
-        #'escortLatch' : ["v7_%s" % s for s in [5, 10]],
+        'breakthrough' : ["v5_%s" % s for s in [80, 92]],
+        'cittaceot' : ["v8_%s" % s for s in [20, 30]],
+        'checkers' : ["v7_%s" % s for s in [10, 16]],
+        'connectFour' : ["v7_%s" % s for s in [25, 38]],
+        'escortLatch' : ["v7_%s" % s for s in [5, 10]],
         'hex' : ["v7_%s" % s for s in [15, 20]],
-        #'reversi' : ["v7_%s" % s for s in [25, 39]]
+        'reversi' : ["v7_%s" % s for s in [25, 39]]
     }
 
     simplemcts = get.get_player("simplemcts")

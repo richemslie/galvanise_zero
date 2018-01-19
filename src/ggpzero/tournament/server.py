@@ -20,8 +20,7 @@ import attr
 from twisted.web import server
 from twisted.internet import reactor
 from twisted.web.resource import Resource, NoResource
-
-# from twisted.web.static import File
+from twisted.web.static import File
 
 from ggplib.util import log
 from ggplib import interface
@@ -54,9 +53,13 @@ class GetMatchInfo(Resource):
         self.match_path = os.path.join(path_to_matches, "%s.json" % identifier)
 
     def render_GET(self, request):
-        obj = attrutil.json_to_attr(open(self.match_path).read())
-        augment_header(request.responseHeaders)
-        return json.dumps(attr.asdict(obj))
+        try:
+            obj = attrutil.json_to_attr(open(self.match_path).read())
+            augment_header(request.responseHeaders)
+            return json.dumps(attr.asdict(obj))
+        except Exception as exc:
+            log.debug("ERROR %s" % exc)
+            return ""
 
 
 class SummaryForGame(Resource):
@@ -73,18 +76,21 @@ class SummaryForGame(Resource):
         return GetMatchInfo(self.game, identifier)
 
     def render_GET(self, request):
-        augment_header(request.responseHeaders)
-        return json.dumps(attr.asdict(self.obj))
-
+        try:
+            augment_header(request.responseHeaders)
+            return json.dumps(attr.asdict(self.obj))
+        except Exception as exc:
+            log.debug("ERROR %s" % exc)
+            return ""
 
 class WebServer(Resource):
     isLeaf = False
 
-    def __init__(self):
+    def __init__(self, path_to_viewer):
         Resource.__init__(self)
+        self.path_to_viewer = path_to_viewer
 
     def getChild(self, game, request):
-        print 'here', game
         log.debug("Got GET request from: %s" % request.getClientIP())
         log.debug("HEADERS : %s" % pprint.pformat(request.getAllHeaders()))
 
@@ -94,7 +100,8 @@ class WebServer(Resource):
         games = "breakthrough cittaceot checkers connectFour escortLatch hex reversi "
         if game in games.split():
             return SummaryForGame(game)
-        return NoResource()
+
+        return File(self.path_to_viewer)
 
     def render_GET(self, request):
         summary_path = matches_path("summary.json")
@@ -114,10 +121,11 @@ class WebServer(Resource):
 
 def main(args):
     port = int(args[0])
+    path_to_viewer = args[1]
     interface.initialise_k273(1, log_name_base="viewer")
     log.initialise()
 
-    root = WebServer()
+    root = WebServer(path_to_viewer)
     site = server.Site(root)
 
     log.info("Running WebServer on port %d" % port)
