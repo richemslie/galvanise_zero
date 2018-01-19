@@ -154,11 +154,20 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
         if (!this->manager->getUniqueStates()->isUnique(node->getBaseState())) {
             this->manager->incrDupes();
 
-            // need random choice (XXX use the probabilty distribution)
-            int choice = rng.getWithMax(node->num_children);
-            const PuctNodeChild* child = node->getNodeChild(this->role_count, choice);
+            // break out here, no point playing randomly when samples have been taken
+            if (sample_count > 0) {
+                break;
+            }
 
-            node = this->pe->fastApplyMove(child);
+            // move to next state via selector
+            {
+                this->pe->updateConf(this->conf->select_puct_config);
+                const PuctNodeChild* choice = this->pe->onNextMove(this->conf->select_iterations);
+                node = this->pe->fastApplyMove(choice);
+
+                this->pe->updateConf(this->conf->sample_puct_config);
+            }
+
             continue;
         }
 
