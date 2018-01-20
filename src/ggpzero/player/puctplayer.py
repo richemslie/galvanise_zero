@@ -11,9 +11,6 @@ from tabulate import tabulate
 from ggplib.util import log
 from ggplib.player.base import MatchPlayer
 
-#from ggpzero.util.bt import pretty_print_board
-from ggpzero.util.atarigo import pretty_print_board
-
 from ggpzero.defs import confs, templates
 
 from ggpzero.nn.manager import get_manager
@@ -435,24 +432,46 @@ class PUCTEvaluator(object):
 
     def on_next_move(self, max_iterations, finish_time):
         self.playout_loop(self.root, max_iterations, finish_time)
+        return self.choose(finish_time)
 
-        choice = self.choose(finish_time)
+    def dump_node(self, node, choice, indent=0):
+        class Color:
+            PURPLE = '\033[95m'
+            CYAN = '\033[96m'
+            DARKCYAN = '\033[36m'
+            BLUE = '\033[94m'
+            GREEN = '\033[92m'
+            YELLOW = '\033[93m'
+            RED = '\033[91m'
+            BOLD = '\033[1m'
+            UNDERLINE = '\033[4m'
+            END = '\033[0m'
 
-        if self.conf.verbose:
-            self.debug_output(choice)
+            @classmethod
+            def pr(self, color, s):
+                print "%s%s%s" % (color, s, self.END)
 
-        return choice
-
-    def dump_node(self, node, indent=0):
         indent_str = " " * indent
         role = self.sm.get_roles()[node.lead_role_index]
-        print "%s>>> lead: %s, visits: %s, reward: %s" % (indent_str,
-                                                          role,
-                                                          node.mc_visits,
-                                                          node.final_score[node.lead_role_index])
 
+        Color.pr(Color.YELLOW, "%s>>> lead: %s, visits: %s, reward: %s" % (indent_str,
+                                                                           role,
+                                                                           node.mc_visits,
+                                                                           node.final_score[node.lead_role_index]))
+
+        colors = [Color.BOLD]
         rows = []
-        for child, prob in self.get_probabilities(node):
+        temp = 1.0
+        if choice is not None:
+            temp = self.get_temperature()
+
+        for child, prob in self.get_probabilities(node, temp):
+
+            if child == choice:
+                colors.append(Color.GREEN)
+            else:
+                colors.append(Color.CYAN)
+
             cols = []
 
             cols.append(child.move)
@@ -477,21 +496,20 @@ class PUCTEvaluator(object):
             rows.append(cols)
 
         headers = "move visits policy prob type score ~puct ~select".split()
-        for line in tabulate(rows, headers, floatfmt=".2f", tablefmt="plain").splitlines():
-            print indent_str + line
+        for c, line in zip(colors, tabulate(rows, headers, floatfmt=".2f", tablefmt="plain").splitlines()):
+            Color.pr(c, indent_str + line)
 
     def debug_output(self, choice):
-        if self.game_info.game == "atariGo_7x7":
-            pretty_print_board(self.sm, self.root.state)
-            print
-
         current = self.root
 
         dump_depth = 0
+        dump_node_choice = choice
         while dump_depth < self.conf.max_dump_depth:
             assert not current.is_terminal
 
-            self.dump_node(current, indent=dump_depth * 4)
+            self.dump_node(current, dump_node_choice, indent=dump_depth * 4)
+            dump_node_choice = None
+
             current = current.sorted_children()[0].to_node
 
             if current is None or current.is_terminal:
@@ -573,23 +591,32 @@ class PUCTEvaluator(object):
     def choose_top_visits(self, finish_time):
         return self.root.sorted_children()[0]
 
-    def choose_temperature(self, finish_time):
-        # apply temperature
+    def get_temperature(self):
         c = self.conf
         if self.game_depth > c.depth_temperature_stop:
-            return self.choose_top_visits(finish_time)
+            return -1
 
         assert c.temperature > 0
 
-        depth = (self.game_depth - c.depth_temperature_start) * c.depth_temperature_increment
-        depth = max(1, depth)
+        exponent = (self.game_depth - c.depth_temperature_start) * c.depth_temperature_increment
+        exponent = max(1, exponent)
+        exponent = min(exponent, c.depth_temperature_max)
 
-        temp = c.temperature * float(depth)
-        if c.verbose:
-            log.debug("depth %s, temperature %s " % (depth, temp))
+        temp = c.temperature * float(exponent)
+        return temp
+
+    def choose_temperature(self, finish_time):
+        # apply temperature
+
+        temp = self.get_temperature()
+        if temp < 0:
+            return self.choose_top_visits(finish_time)
 
         dist = self.get_probabilities(self.root, temp)
         expected_prob = random.random() * self.conf.random_scale
+
+        if self.conf.verbose:
+            log.info("* temperature: %s, expected_prob:%s" % (temp, expected_prob))
 
         seen_prob = 0
         for child, prob in dist:
@@ -617,24 +644,42 @@ class PUCTPlayer(MatchPlayer):
         self.puct_evaluator.on_apply_move(joint_move)
 
     def on_next_move(self, finish_time):
+        pe = self.puct_evaluator
+        conf = self.puct_evaluator.conf
+
         current_state = self.match.get_current_state()
         game_depth = self.match.game_depth
 
-        self.puct_evaluator.establish_root(current_state, game_depth)
+        pe.establish_root(current_state, game_depth)
 
-        if self.puct_evaluator.root is not None:
-            if self.puct_evaluator.root.lead_role_index == self.match.our_role_index:
-                max_iterations = self.puct_evaluator.conf.playouts_per_iteration
+        if pe.root is not None:
+            resign = False
+            if conf.resign_score_value > 0 and pe.root.mc_score is not None:
+                for i in range(2):
+                    s = pe.root.mc_score[i]
+                    if s < conf.resign_score_value:
+                        resign = True
+                        break
+
+            if pe.root.lead_role_index == self.match.our_role_index:
+                max_iterations = conf.playouts_per_iteration
             else:
-                max_iterations = self.puct_evaluator.conf.playouts_per_iteration_noop
+                max_iterations = conf.playouts_per_iteration_noop
+
+            if resign:
+                max_iterations = min(max_iterations, conf.playouts_per_iteration_resign)
+                print "RESIGN", max_iterations
 
         # choice here is always based on lead_role_index, and not our_role_index
-        choice = self.puct_evaluator.on_next_move(max_iterations, finish_time)
+        choice = pe.on_next_move(max_iterations, finish_time)
 
-        noop_res = self.puct_evaluator.noop(self.match.our_role_index)
+        noop_res = pe.noop(self.match.our_role_index)
         if noop_res is not None:
             return noop_res
         else:
+            if conf.verbose:
+                pe.debug_output(choice)
+
             return choice.legal
 
     def get_probabilities(self, node=None, temperature=1):

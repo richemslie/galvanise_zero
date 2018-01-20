@@ -60,10 +60,13 @@ class PolicyPlayerConfig(object):
 class PUCTPlayerConfig(object):
     name = attr.ib("PUCTPlayer")
     verbose = attr.ib(True)
-    generation = attr.ib("latest")
 
+    # XXX player only attributes
+    generation = attr.ib("latest")
+    resign_score_value = attr.ib(-1)
     playouts_per_iteration = attr.ib(800)
     playouts_per_iteration_noop = attr.ib(1)
+    playouts_per_iteration_resign = attr.ib(1)
 
     # applies different constant until the following expansions are met
     puct_before_expansions = attr.ib(4)
@@ -88,6 +91,7 @@ class PUCTPlayerConfig(object):
     depth_temperature_start = attr.ib(5)
     depth_temperature_increment = attr.ib(0.5)
     depth_temperature_stop = attr.ib(10)
+    depth_temperature_max = attr.ib(5)
 
 
 @register_attrs

@@ -8,6 +8,7 @@ class CanPlayGame(object):
 
     # can be empty for non-model players
     generations = attr.ib(default=attr.Factory(list))
+    max_concurrent_games =  = attr.ib(1)
 
 @register_attrs
 class RegisterPlayer(object):

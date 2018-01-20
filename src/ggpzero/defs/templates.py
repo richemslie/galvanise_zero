@@ -108,8 +108,12 @@ def puct_config_template(generation, name="default"):
 
         compete=confs.PUCTPlayerConfig(name="compete",
                                        verbose=True,
-                                       playouts_per_iteration=800,
-                                       playouts_per_iteration_noop=800,
+
+                                       playouts_per_iteration=400,
+                                       playouts_per_iteration_noop=100,
+
+                                       resign_score_value = 0.1,
+                                       playouts_per_iteration_resign=25,
 
                                        dirichlet_noise_alpha=-1,
 
@@ -119,13 +123,14 @@ def puct_config_template(generation, name="default"):
                                        puct_constant_after=1.00,
 
                                        temperature=1.0,
-                                       depth_temperature_start=6,
-                                       depth_temperature_increment=0.25,
-                                       depth_temperature_stop=12,
-                                       random_scale=0.5,
+                                       depth_temperature_max=2.0,
+                                       depth_temperature_start=8,
+                                       depth_temperature_increment=0.1,
+                                       depth_temperature_stop=60,
+                                       random_scale=0.7,
 
                                        choose="choose_temperature",
-                                       max_dump_depth=1),
+                                       max_dump_depth=2),
 
         policy=confs.PUCTPlayerConfig(name="policy-test",
                                       verbose=True,
