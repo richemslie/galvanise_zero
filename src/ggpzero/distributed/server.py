@@ -265,16 +265,16 @@ class ServerBroker(Broker):
         return dupe_count
 
     def on_sample_response(self, worker, msg):
-        assert len(msg.samples) > 0
-
         info = self.workers[worker]
-        dupe_count = self.add_new_samples(msg.samples)
+        if len(msg.samples) > 0:
+            dupe_count = self.add_new_samples(msg.samples)
+            if dupe_count:
+                log.warning("dropping %s inflight duplicate state(s)" % dupe_count)
 
-        if dupe_count:
-            log.warning("dropping %s inflight duplicate state(s)" % dupe_count)
+            if msg.duplicates_seen:
+                log.info("worker saw %s duplicates" % msg.duplicates_seen)
 
-        log.info("len accumulated_samples: %s" % len(self.accumulated_samples))
-        log.info("worker saw %s duplicates" % msg.duplicates_seen)
+            log.info("len accumulated_samples: %s" % len(self.accumulated_samples))
 
         self.free_players.append(info)
         reactor.callLater(0, self.schedule_players)
@@ -432,7 +432,9 @@ class ServerBroker(Broker):
                 if self.need_more_samples():
                     updates = worker_info.get_and_update(self.unique_states)
                     m = msgs.RequestSamples(updates)
-                    log.debug("sending request with %s updates" % len(updates))
+                    if updates:
+                        log.debug("sending request with %s updates" % len(updates))
+
                     worker_info.worker.send_msg(m)
                 else:
                     log.warning("capacity full! %d" % len(self.accumulated_samples))

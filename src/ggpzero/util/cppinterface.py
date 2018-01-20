@@ -179,7 +179,11 @@ class Supervisor(PollerBase):
 
     def start_self_play(self, conf, inline=True):
         assert isinstance(conf, confs.SelfPlayConfig)
-        return self.c_supervisor.start_self_play(inline, attr.asdict(conf))
+        if inline:
+            num_workers = 0
+        else:
+            num_workers = 1
+        return self.c_supervisor.start_self_play(num_workers, attr.asdict(conf))
 
     def fetch_samples(self):
         res = self.c_supervisor.fetch_samples()

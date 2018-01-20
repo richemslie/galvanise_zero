@@ -101,10 +101,16 @@ class Worker(Broker):
 
     def cb_from_superviser(self):
         self.samples += self.supervisor.fetch_samples()
-        # XXX self.conf.min_num_samples
-        return len(self.samples) > 128
+
+        # keeps the tcp connection active for remote workers
+        if time.time() > self.on_request_samples_time + self.conf.server_poll_time:
+            return True
+
+        return len(self.samples) > self.conf.min_num_samples
 
     def on_request_samples(self, server, msg):
+        self.on_request_samples_time = time.time()
+
         assert self.supervisor is not None
         self.samples = []
         self.supervisor.reset_stats()

@@ -12,19 +12,20 @@ struct PyObject_Supervisor {
 };
 
 static PyObject* Supervisor_start_self_play(PyObject_Supervisor* self, PyObject* args) {
-    int workers_int = 0;
+    int num_workers = 0;
     PyObject* dict;
-    if (! PyArg_ParseTuple(args, "iO!", &workers_int, &PyDict_Type, &dict)) {
+    if (! PyArg_ParseTuple(args, "iO!", &num_workers, &PyDict_Type, &dict)) {
         return nullptr;
     }
 
-    bool do_workers = bool(workers_int);
-
     SelfPlayConfig* config = ::createSelfPlayConfig(dict);
-    if (do_workers) {
+    if (num_workers <= 0) {
         self->impl->createInline(config);
+
     } else {
-        self->impl->createWorkers(config);
+        for (int ii=0; ii<num_workers; ii++) {
+            self->impl->createWorkers(config);
+        }
     }
 
     Py_RETURN_NONE;

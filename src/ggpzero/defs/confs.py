@@ -101,6 +101,9 @@ class WorkerConfig(object):
     # slow things down
     sleep_between_poll = attr.ib(-1)
 
+    # send back whatever samples we have gather at this - sort of application level keep alive
+    server_poll_time = attr.ib(10)
+
     # the minimum number of samples gathered before sending to the server
     min_num_samples = attr.ib(128)
 
