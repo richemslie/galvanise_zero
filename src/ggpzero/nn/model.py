@@ -108,7 +108,7 @@ def residual_one_by_one(last_filter_size, reqd, dropout=-1):
     if reqd % last_filter_size == 0:
         return reqd / last_filter_size
 
-    return reqd / last_filter_size + 1
+    return min(3, reqd / last_filter_size + 1)
 
 
 def get_network_model(conf):
@@ -142,9 +142,6 @@ def get_network_model(conf):
                               conf.cnn_kernel_size,
                               name="ResLayer_%s" % i,
                               **extra_params)(layer)
-
-    # residual net -> flattened for policy head
-    # here we set number of filters to the number of roles + 1.
 
     # residual net -> flattened for policy head
     filters = residual_one_by_one(conf.cnn_filter_size, conf.policy_dist_count)
