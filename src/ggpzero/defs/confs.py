@@ -68,6 +68,10 @@ class PUCTPlayerConfig(object):
     playouts_per_iteration_noop = attr.ib(1)
     playouts_per_iteration_resign = attr.ib(1)
 
+    # root level minmax ing, an old galvanise nn idea.  Expands the root node, and presets visits.
+    # -1 off.
+    root_expansions_preset_visits = attr.ib(-1)
+
     # applies different constant until the following expansions are met
     puct_before_expansions = attr.ib(4)
     puct_before_root_expansions = attr.ib(4)
@@ -91,7 +95,7 @@ class PUCTPlayerConfig(object):
     depth_temperature_start = attr.ib(5)
     depth_temperature_increment = attr.ib(0.5)
     depth_temperature_stop = attr.ib(10)
-    depth_temperature_max = attr.ib(5)
+    depth_temperature_max = attr.ib(5.0)
 
 
 @register_attrs

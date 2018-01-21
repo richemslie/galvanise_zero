@@ -431,6 +431,15 @@ class PUCTEvaluator(object):
         return self.root
 
     def on_next_move(self, max_iterations, finish_time):
+        if self.conf.root_expansions_preset_visits > 0:
+            for c in self.root.children:
+                if c.to_node is None:
+                    self.expand_child(c)
+
+                # XXX needs to be traversal
+                c.to_node.mc_visits = max(c.to_node.mc_visits,
+                                          self.conf.root_expansions_preset_visits)
+
         self.playout_loop(self.root, max_iterations, finish_time)
         return self.choose(finish_time)
 
@@ -463,7 +472,7 @@ class PUCTEvaluator(object):
         rows = []
         temp = 1.0
         if choice is not None:
-            temp = self.get_temperature()
+            temp = max(temp, self.get_temperature())
 
         for child, prob in self.get_probabilities(node, temp):
 
