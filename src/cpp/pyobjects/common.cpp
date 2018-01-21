@@ -69,6 +69,7 @@ static PuctConfig* createPuctConfig(PyObject* dict) {
     config->puct_before_root_expansions = asInt("puct_before_root_expansions");
     config->puct_constant_before = asFloat("puct_constant_before");
     config->puct_constant_after = asFloat("puct_constant_after");
+    config->root_expansions_preset_visits = asInt("root_expansions_preset_visits");
     config->dirichlet_noise_pct = asFloat("dirichlet_noise_pct");
     config->dirichlet_noise_alpha = asFloat("dirichlet_noise_alpha");
     config->max_dump_depth = asInt("max_dump_depth");
@@ -77,6 +78,7 @@ static PuctConfig* createPuctConfig(PyObject* dict) {
     config->depth_temperature_start = asInt("depth_temperature_start");
     config->depth_temperature_increment = asFloat("depth_temperature_increment");
     config->depth_temperature_stop = asInt("depth_temperature_stop");
+    config->depth_temperature_max = asInt("depth_temperature_max");
 
     std::string choose_method = asString("choose");
     if (choose_method == "choose_top_visits") {

@@ -54,6 +54,8 @@ namespace GGPZero {
         const PuctNodeChild* onNextMove(int max_iterations, double end_time=-1);
         void applyMove(const GGPLib::JointMove* move);
 
+        float getTemperature() const;
+
         const PuctNodeChild* choose(const PuctNode* node=nullptr);
         const PuctNodeChild* chooseTopVisits(const PuctNode* node);
         const PuctNodeChild* chooseTemperature(const PuctNode* node);

@@ -388,6 +388,21 @@ PuctNode* PuctEvaluator::establishRoot(const GGPLib::BaseState* current_state, i
 const PuctNodeChild* PuctEvaluator::onNextMove(int max_iterations, double end_time) {
     ASSERT(this->root != nullptr && this->initial_root != nullptr);
 
+    if (this->conf->root_expansions_preset_visits > 0) {
+
+        for (int ii=0; ii<this->root->num_children; ii++) {
+            PuctNodeChild* c = this->root->getNodeChild(this->role_count, ii);
+
+            if (c->to_node == nullptr) {
+                this->expandChild(this->root, c);
+
+                // XXX needs to be traversal
+                c->to_node->visits = std::max(c->to_node->visits,
+                                              this->conf->root_expansions_preset_visits);
+            }
+        }
+    }
+
     this->playoutLoop(max_iterations, end_time);
 
     if (this->conf->verbose) {
@@ -395,6 +410,22 @@ const PuctNodeChild* PuctEvaluator::onNextMove(int max_iterations, double end_ti
     }
 
     return this->choose();
+}
+
+float PuctEvaluator::getTemperature() const {
+    if (this->game_depth > this->conf->depth_temperature_stop) {
+        return -1;
+    }
+
+    ASSERT(this->conf->temperature > 0);
+
+    float exponent = ((this->game_depth - this->conf->depth_temperature_start) *
+                      this->conf->depth_temperature_increment);
+    exponent = std::max(1.0f, exponent);
+    exponent = std::min(exponent, this->conf->depth_temperature_max);
+
+    float temperature = this->conf->temperature * exponent;
+    return temperature;
 }
 
 const PuctNodeChild* PuctEvaluator::choose(const PuctNode* node) {
@@ -434,25 +465,18 @@ const PuctNodeChild* PuctEvaluator::chooseTemperature(const PuctNode* node) {
         node = this->root;
     }
 
-    if (this->game_depth > this->conf->depth_temperature_stop) {
+    float temperature = this->getTemperature();
+    if (temperature < 0) {
         return this->chooseTopVisits(node);
     }
-
-    ASSERT(this->conf->temperature > 0);
-
-    float depth = ((this->game_depth - this->conf->depth_temperature_start) *
-                    this->conf->depth_temperature_increment);
-    depth = std::max(1.0f, depth);
-
-    float temperature = this->conf->temperature * depth;
 
     Children dist = this->getProbabilities(this->root, temperature);
 
     float expected_probability = this->rng.get() * this->conf->random_scale;
 
     if (this->conf->verbose) {
-        K273::l_debug("depth %.2f, temperature %.2f, expected_probability %.2f",
-                      depth, temperature, expected_probability);
+        K273::l_debug("temperature %.2f, expected_probability %.2f",
+                      temperature, expected_probability);
     }
 
     float seen_probability = 0;
