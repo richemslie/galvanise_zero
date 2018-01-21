@@ -1,3 +1,4 @@
+
 from ggplib.db import lookup
 
 from ggpzero.defs import templates
@@ -20,10 +21,23 @@ def setup():
     # just ensures we have the manager ready
     get_manager()
 
+    import os
+    import tensorflow as tf
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+    tf.logging.set_verbosity(tf.logging.ERROR)
+
 
 def test_config():
+    import numpy as np
+    np.set_printoptions(threshold=100000)
+
+    games = ("checkers escortLatch breakthroughSmall breakthrough"
+             "connectFour reversi".split())
+
+    games = "speedChess escortLatch reversi".split()
+
     man = get_manager()
-    for game in "breakthroughSmall breakthrough connectFour reversi".split():
+    for game in games:
 
         # lookup game in manager
         transformer = man.get_transformer(game)
@@ -81,18 +95,19 @@ def test_net_create():
         print policy, scores
 
 
-def test_net_sizes():
+def test_net_sizes_normal():
     man = get_manager()
 
-    for game in "breakthroughSmall breakthrough reversi".split():
+    for game in "hex breakthroughSmall breakthrough reversi".split():
         # create a nn
-        for size in "tiny smaller small medium large".split():
+        for size in "tiny smaller small medium-small medium medium-large large larger massive".split():
             print
             print size
             model_conf = templates.nn_model_config_template(game, size)
             nn = man.create_new_network(game, model_conf)
             nn.summary()
             print
+            print game, size
             # print "hit return"
             # raw_input()
 
@@ -134,3 +149,24 @@ def test_save_load_net():
     nn2.summary()
 
     assert nn is not nn2
+
+
+def test_cittaceot():
+    man = get_manager()
+
+    game = "cittaceot"
+
+    # create a nn
+    model_conf = templates.nn_model_config_template(game)
+    nn = man.create_new_network(game, model_conf)
+
+    game_info = lookup.by_name(game)
+    sm = game_info.get_sm()
+    basestate = sm.get_initial_state()
+
+    policy, scores = nn.predict_1(basestate.to_list())
+    print policy, scores
+
+    res = nn.predict_n([basestate.to_list(), basestate.to_list()])
+    assert len(res) == 2 and len(res[0]) == 2 and len(res[1]) == 2
+    print policy, scores

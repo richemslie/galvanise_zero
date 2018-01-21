@@ -31,38 +31,80 @@ class Configs:
     def reversi(self, gen_prefix):
         conf = msgs.TrainNNRequest("reversi")
 
-        conf.network_size = "medium-small"
+        conf.network_size = "medium"
         conf.generation_prefix = gen_prefix
-        conf.store_path = os.path.join(os.environ["GGPZERO_PATH"], "data", "reversi", "v6")
+        conf.store_path = os.path.join(os.environ["GGPZERO_PATH"], "data", "reversi", "v7")
 
         conf.use_previous = False
-        conf.next_step = 53
+        conf.next_step = 31
 
         conf.validation_split = 0.9
-        conf.batch_size = 256
-        conf.epochs = 30
-        conf.max_sample_count = 250000
-        conf.starting_step = 10
-        conf.drop_dupes_count = 3
+        conf.batch_size = 1024
+        conf.epochs = 20
+        conf.max_sample_count = 500000
+        conf.starting_step = 3
+        conf.drop_dupes_count = -1
 
         return conf
+
 
     def c4(self, gen_prefix):
         conf = msgs.TrainNNRequest("connectFour")
 
-        conf.network_size = "small"
+        conf.network_size = "medium-small"
         conf.generation_prefix = gen_prefix
-        conf.store_path = os.path.join(os.environ["GGPZERO_PATH"], "data", "connectFour", "v6")
+        conf.store_path = os.path.join(os.environ["GGPZERO_PATH"], "data", "connectFour", "v7")
 
         conf.use_previous = False
-        conf.next_step = 27
+        conf.next_step = 33
+
+        conf.validation_split = 0.5
+        conf.batch_size = 4096
+        conf.epochs = 1
+        conf.max_sample_count = 270000
+        conf.starting_step = 25
+        conf.drop_dupes_count = 3
+        conf.overwrite_existing = True
+
+        return conf
+
+    def hex(self, gen_prefix):
+        conf = msgs.TrainNNRequest("hex")
+
+        conf.network_size = "small"
+        conf.generation_prefix = gen_prefix
+        conf.store_path = os.path.join(os.environ["GGPZERO_PATH"], "data", "hex", "v7")
+
+        conf.use_previous = False
+        conf.next_step = 20
+
+        conf.validation_split = 0.9
+        conf.batch_size = 256
+        conf.epochs = 20
+        conf.max_sample_count = 300000
+        conf.starting_step = 3
+        conf.drop_dupes_count = 3
+        conf.overwrite_existing = True
+
+        return conf
+
+    def speedChess(self, gen_prefix):
+        conf = msgs.TrainNNRequest("speedChess")
+
+        conf.network_size = "medium-small"
+        conf.generation_prefix = gen_prefix
+        conf.store_path = os.path.join(os.environ["GGPZERO_PATH"], "data", "speedChess", "v9")
+
+        conf.use_previous = False
+        conf.next_step = 12
 
         conf.validation_split = 0.9
         conf.batch_size = 128
-        conf.epochs = 30
+        conf.epochs = 20
         conf.max_sample_count = 300000
-        conf.starting_step = 0
-        conf.drop_dupes_count = -1
+        conf.starting_step = 3
+        conf.drop_dupes_count = 3
+        conf.overwrite_existing = True
 
         return conf
 

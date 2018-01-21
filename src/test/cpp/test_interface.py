@@ -1,3 +1,4 @@
+''' note these tests really need a GPU.  XXX add a skip, or CPU versions of test. '''
 
 import os
 import time
@@ -8,6 +9,7 @@ from ggplib.db import lookup
 
 from ggpzero.nn.manager import get_manager
 from ggpzero.util import cppinterface
+from ggpzero.defs import confs, templates
 
 
 def float_formatter0(x):
@@ -91,56 +93,127 @@ def test_inline_supervisor_creation():
         nn = man.create_new_network(game)
 
         for batch_size in (1, 128, 1024):
-            supervisor = cppinterface.SupervisorSelfPlay(sm, nn, batch_size=batch_size)
+            supervisor = cppinterface.Supervisor(sm, nn, batch_size=batch_size)
+            supervisor = supervisor
             continue
 
 
-def test_inline_supervisor_run():
-    game = "breakthroughSmall"
+def setup_c4(batch_size=1024):
+    game = "connectFour"
     man = get_manager()
     nn = man.create_new_network(game, "smaller")
+    # nn = man.load_network(game, "v6_26")
 
     game_info = lookup.by_name(game)
 
-    supervisor = cppinterface.SupervisorSelfPlay(game_info.get_sm(), nn, batch_size=4096)
-    supervisor.create_job(4096, 42, 42)
-    supervisor.poll_loop(do_stats=True)
+    supervisor = cppinterface.Supervisor(game_info.get_sm(), nn, batch_size=batch_size)
+
+    conf = confs.SelfPlayConfig()
+    conf.max_number_of_samples = 4
+    conf.resign_score_probability = 0.1
+    conf.resign_false_positive_retry_percentage = 0.5
+
+    conf.select_iterations = 0
+    conf.sample_iterations = 50
+    conf.score_iterations = 5
+
+    p = conf.select_puct_config = templates.puct_config_template("policy")
+    p.temperature = 0.5
+    p.depth_temperature_start = 1
+    p.depth_temperature_increment = 0.5
+    p.depth_temperature_stop = 40
+    p.random_scale = 0.85
+
+    p.choose = "choose_temperature"
+    p.verbose = False
+
+    conf.sample_puct_config = templates.puct_config_template("test")
+    conf.sample_puct_config.verbose = False
+
+    conf.score_puct_config = templates.puct_config_template("test")
+    conf.score_puct_config.verbose = False
+
+    return supervisor, conf
+
+
+def get_ctx():
+    class X:
+        pass
+    return X()
+
+
+def do_test(batch_size, get_sample_count, inline=True):
+    supervisor, conf = setup_c4(batch_size=batch_size)
+    supervisor.start_self_play(conf, inline=inline)
+
+    nonlocal = get_ctx
+    nonlocal.samples = []
+
+    def cb():
+        new_samples = supervisor.fetch_samples()
+        if new_samples:
+            nonlocal.samples += new_samples
+            print "Total rxd", len(nonlocal.samples)
+
+            if len(nonlocal.samples) > get_sample_count:
+                return True
+
+    supervisor.poll_loop(do_stats=True, cb=cb)
     supervisor.dump_stats()
 
-    time.sleep(0.5)
-
-    supervisor.create_job(4096, 42, 42)
-    supervisor.poll_loop(do_stats=True)
+    # should be resumable
+    nonlocal.samples = []
+    supervisor.reset_stats()
+    supervisor.poll_loop(do_stats=True, cb=cb)
     supervisor.dump_stats()
 
 
-def test_inline_supervisor_speed():
-    game = "reversi"
-    gen = "v6_65"
+def test_inline_one():
+    do_test(batch_size=1, get_sample_count=42, inline=True)
 
-    man = get_manager()
-    nn = man.load_network(game, gen)
-    print nn.summary()
-    game_info = lookup.by_name(game)
 
-    supervisor = cppinterface.SupervisorSelfPlay(game_info.get_sm(), nn, batch_size=4096)
-    supervisor.create_job(1024, 500, 500)
-    supervisor.poll_loop(do_stats=True)
+def test_inline_batched():
+    do_test(batch_size=1024, get_sample_count=5000, inline=True)
+
+
+def test_workers_batched():
+    do_test(batch_size=1024, get_sample_count=5000, inline=False)
+
+
+def test_inline_unique_states():
+    get_sample_count = 250
+    supervisor, conf = setup_c4(batch_size=1)
+    supervisor.start_self_play(conf)
+
+    nonlocal = get_ctx
+    nonlocal.samples = []
+    nonlocal.added_unique_states = False
+
+    def cb():
+        new_samples = supervisor.fetch_samples()
+        if new_samples:
+            nonlocal.samples += new_samples
+            print "Total rxd", len(nonlocal.samples)
+
+            if len(nonlocal.samples) > get_sample_count:
+                return True
+
+        if not nonlocal.added_unique_states:
+            if len(nonlocal.samples) > 100:
+                nonlocal.added_unique_states = True
+                for s in nonlocal.samples:
+                    supervisor.add_unique_state(s.state)
+
+            elif len(nonlocal.samples) > 20:
+                print 'clearing unique states'
+                supervisor.clear_unique_states()
+
+    supervisor.poll_loop(do_stats=True, cb=cb)
     supervisor.dump_stats()
 
+    supervisor.clear_unique_states()
+    nonlocal.samples = []
+    nonlocal.added_unique_states = False
 
-def test_inline_more_games():
-    ' tests where we have more games than batch_size '
-    batch_size = 128
-    games_size = 512
-
-    game = "breakthroughSmall"
-    man = get_manager()
-    nn = man.create_new_network(game, "smaller")
-
-    game_info = lookup.by_name(game)
-
-    supervisor = cppinterface.SupervisorSelfPlay(game_info.get_sm(), nn, batch_size=batch_size)
-    supervisor.create_job(games_size, 21, 21)
-    supervisor.poll_loop(do_stats=True)
+    supervisor.poll_loop(do_stats=True, cb=cb)
     supervisor.dump_stats()
