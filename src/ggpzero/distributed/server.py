@@ -46,10 +46,10 @@ def samples_path(game, generation_prefix):
 
 
 class WorkerInfo(object):
-    def __init__(self, worker, ping_time):
+    def __init__(self, worker, ping_time_sent):
         self.worker = worker
         self.valid = True
-        self.ping_time_sent = ping_time
+        self.ping_time_sent = ping_time_sent
         self.conf = None
         self.self_play_configured = None
         self.reset()
@@ -236,7 +236,7 @@ class ServerBroker(Broker):
             if self.conf.run_post_training_cmds:
                 self.cmds_running = runprocs.RunCmds(self.conf.run_post_training_cmds,
                                                      cb_on_completion=self.finished_cmds_running,
-                                                     max_time=15.0)
+                                                     max_time=180.0)
                 self.cmds_running.spawn()
             else:
                 self.roll_generation()
@@ -285,14 +285,14 @@ class ServerBroker(Broker):
         return os.path.join(p, "gendata_%s_%s.json.gz" % (self.conf.game,
                                                           self.conf.current_step))
 
-    def save_sample_data(self, count):
-        assert count <= len(self.accumulated_samples)
-
+    def save_sample_data(self):
         gen = confs.Generation()
         gen.game = self.conf.game
         gen.with_generation = self.get_generation_name(self.conf.current_step)
-        gen.num_samples = len(self.accumulated_samples)
-        gen.samples = self.accumulated_samples[:count]
+
+        # only save the minimal number for this run
+        gen.num_samples = min(len(self.accumulated_samples), self.conf.generation_size)
+        gen.samples = self.accumulated_samples[:gen.num_samples]
 
         # write json file
         json.encoder.FLOAT_REPR = lambda f: ("%.5f" % f)
@@ -315,12 +315,12 @@ class ServerBroker(Broker):
             log.info("Not such file for generation: %s" % exc)
 
     def checkpoint(self):
-        log.verbose("entering checkpoint with %s sample accumulated" % len(self.accumulated_samples))
-        num_samples = min(len(self.accumulated_samples), self.conf.generation_size)
+        num_samples = len(self.accumulated_samples)
+        log.verbose("entering checkpoint with %s sample accumulated" % num_samples)
         if num_samples > 0:
-            gen = self.save_sample_data(num_samples)
+            gen = self.save_sample_data()
 
-            if num_samples >= self.conf.generation_size:
+            if num_samples > self.conf.generation_size:
                 if self.generation is None:
                     log.info("data done for: %s" % self.get_generation_name(self.conf.current_step + 1))
                     self.generation = gen
@@ -381,6 +381,8 @@ class ServerBroker(Broker):
         self.accumulated_samples = self.accumulated_samples[self.conf.generation_size:]
         self.unique_states = self.unique_states[self.conf.generation_size:]
         self.unique_states_set = set(self.unique_states)
+
+        self.checkpoint()
 
         assert len(self.accumulated_samples) == len(self.unique_states)
         assert len(self.unique_states) == len(self.unique_states_set)
