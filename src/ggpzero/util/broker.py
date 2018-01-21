@@ -169,6 +169,8 @@ class Client(protocol.Protocol):
         self.transport.write(self.format_msg(payload))
 
 
+# XXX doesnt need to be a worker, just a brokerclient...
+
 class WorkerClient(Client):
     def init_data_rxd(self, data):
         self.start_buf += data
@@ -178,7 +180,7 @@ class WorkerClient(Client):
             log.info("Logical connection established")
 
 
-class WorkerFactory(protocol.ClientFactory):
+class WorkerFactory(protocol.ReconnectingClientFactory):
     ' client side factory, connects to server '
 
     # maximum number of seconds between connection attempts
