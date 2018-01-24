@@ -14,7 +14,7 @@ from ggpzero.util import attrutil
 
 from ggpzero.defs import msgs, confs
 
-from ggpzero.util.broker import Broker, WorkerFactory
+from ggpzero.util.broker import Broker, BrokerClientFactory
 from ggpzero.util import cppinterface
 
 from ggpzero.training import nn_train
@@ -69,7 +69,7 @@ class Worker(Broker):
     def connect(self):
         reactor.connectTCP(self.conf.connect_ip_addr,
                            self.conf.connect_port,
-                           WorkerFactory(self))
+                           BrokerClientFactory(self))
 
     def on_ping(self, server, msg):
         server.send_msg(msgs.Pong())

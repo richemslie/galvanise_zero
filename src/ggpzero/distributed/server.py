@@ -18,9 +18,6 @@ from ggpzero.defs import msgs, confs, templates
 
 from ggpzero.nn.manager import get_manager
 
-# worth making this a config option? XXX
-CHECKPOINT_INTERVAL = 60.0 * 5
-
 
 def critical_error(msg):
     log.critical(msg)
@@ -117,7 +114,7 @@ class ServerBroker(Broker):
         reactor.listenTCP(conf.port, ServerFactory(self))
 
         # save the samples periodically
-        self.checkpoint_cb = reactor.callLater(CHECKPOINT_INTERVAL, self.checkpoint)
+        self.checkpoint_cb = reactor.callLater(self.conf.checkpoint_interval, self.checkpoint)
 
     def check_files_exist(self):
         # first check that the directories exist
@@ -175,13 +172,13 @@ class ServerBroker(Broker):
         return len(self.accumulated_samples) < (self.conf.generation_size +
                                                 self.conf.generation_size * self.conf.max_growth_while_training)
 
-    def new_worker(self, worker):
+    def new_broker_client(self, worker):
         self.workers[worker] = WorkerInfo(worker, time.time())
         log.debug("New worker %s" % worker)
         worker.send_msg(msgs.Ping())
         worker.send_msg(msgs.RequestConfig())
 
-    def remove_worker(self, worker):
+    def remove_broker_client(self, worker):
         if worker not in self.workers:
             log.critical("worker removed, but not in workers %s" % worker)
         self.workers[worker].cleanup()
@@ -336,7 +333,7 @@ class ServerBroker(Broker):
             self.checkpoint_cb.cancel()
 
         # call checkpoint again in n seconds
-        self.checkpoint_cb = reactor.callLater(CHECKPOINT_INTERVAL, self.checkpoint)
+        self.checkpoint_cb = reactor.callLater(self.conf.checkpoint_interval, self.checkpoint)
 
     def send_request_to_train_nn(self):
         assert not self.training_in_progress

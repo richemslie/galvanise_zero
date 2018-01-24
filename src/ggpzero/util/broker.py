@@ -169,9 +169,7 @@ class Client(protocol.Protocol):
         self.transport.write(self.format_msg(payload))
 
 
-# XXX doesnt need to be a worker, just a brokerclient...
-
-class WorkerClient(Client):
+class BrokerClient(Client):
     def init_data_rxd(self, data):
         self.start_buf += data
         if len(self.start_buf) == self.CHALLENGE_SIZE:
@@ -180,7 +178,7 @@ class WorkerClient(Client):
             log.info("Logical connection established")
 
 
-class WorkerFactory(protocol.ReconnectingClientFactory):
+class BrokerClientFactory(protocol.ReconnectingClientFactory):
     ' client side factory, connects to server '
 
     # maximum number of seconds between connection attempts
@@ -197,7 +195,7 @@ class WorkerFactory(protocol.ReconnectingClientFactory):
 
     def buildProtocol(self, addr):
         log.debug("Connection made to: %s" % addr)
-        return WorkerClient(self.broker)
+        return BrokerClient(self.broker)
 
 
 class ServerClient(Client):
@@ -208,7 +206,7 @@ class ServerClient(Client):
             if self.expected_response == self.start_buf:
                 self.logical_connection = True
                 log.info("Logical connection made")
-                self.broker.new_worker(self)
+                self.broker.new_broker_client(self)
             else:
                 self.logical_connection = True
                 log.error("Logical connection failed")
@@ -222,7 +220,7 @@ class ServerClient(Client):
 
     def connectionLost(self, reason=""):
         if self.logical_connection:
-            self.broker.remove_worker(self)
+            self.broker.remove_broker_client(self)
         Client.connectionLost(self, reason)
 
 
