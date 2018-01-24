@@ -11,7 +11,7 @@ from twisted.internet import reactor
 from ggplib.util import log
 from ggplib.db import lookup
 
-from ggpzero.util import attrutil, runprocs
+from ggpzero.util import attrutil
 from ggpzero.util.broker import Broker, ServerFactory
 
 from ggpzero.defs import msgs, confs, templates
@@ -94,7 +94,6 @@ class ServerBroker(Broker):
 
         # when a generation object is around, we are in the processing of training
         self.generation = None
-        self.cmds_running = None
         self.training_in_progress = False
 
         self.register(msgs.Pong, self.on_pong)
@@ -230,18 +229,7 @@ class ServerBroker(Broker):
             reactor.callLater(0, self.schedule_players)
 
         if msg.message == "network_trained":
-            if self.conf.run_post_training_cmds:
-                self.cmds_running = runprocs.RunCmds(self.conf.run_post_training_cmds,
-                                                     cb_on_completion=self.finished_cmds_running,
-                                                     max_time=180.0)
-                self.cmds_running.spawn()
-            else:
-                self.roll_generation()
-
-    def finished_cmds_running(self):
-        self.cmds_running = None
-        log.info("commands done")
-        self.roll_generation()
+            self.roll_generation()
 
     def add_new_samples(self, samples):
         dupe_count = 0
