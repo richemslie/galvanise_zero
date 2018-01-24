@@ -35,7 +35,7 @@ class BoardTerm(object):
 
 
 @register_attrs
-class GameDesc(GdlBasesTransformer):
+class GameDesc(object):
     game = "checkers"
     x_cords = "a b c d e f g h".split()
     y_cords = "1 2 3 4 5 6 7 8".split()
@@ -64,5 +64,3 @@ class GameDefines(object):
                         "1 2 3 4 5 6 7 8".split(),
                         [board_term],
                         [control_terms])
-
-

@@ -11,8 +11,9 @@ from twisted.internet import stdio, reactor
 
 try:
     port = int(sys.argv[1])
-except:
+except Exception as _:
     port = 2222
+
 
 class TCPBridge(basic.LineReceiver):
     def __init__(self, client):
@@ -42,6 +43,7 @@ class StdioBridgeClient(basic.LineReceiver):
     delimiter = os.linesep.encode("ascii")
     buf = []
     tcp_bridge = None
+
     def connectionMade(self):
         reactor.connectTCP("localhost",
                            port,

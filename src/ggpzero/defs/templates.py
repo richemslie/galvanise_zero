@@ -112,7 +112,7 @@ def puct_config_template(generation, name="default"):
                                        playouts_per_iteration=500,
                                        playouts_per_iteration_noop=100,
 
-                                       resign_score_value = 0.1,
+                                       resign_score_value=0.1,
                                        playouts_per_iteration_resign=25,
 
                                        dirichlet_noise_alpha=-1,
@@ -140,7 +140,7 @@ def puct_config_template(generation, name="default"):
 
                                         root_expansions_preset_visits=7,
 
-                                        resign_score_value = 0.05,
+                                        resign_score_value=0.05,
                                         playouts_per_iteration_resign=25,
 
                                         dirichlet_noise_alpha=-1,

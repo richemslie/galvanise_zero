@@ -151,4 +151,3 @@ def register_attrs(clz):
     clz = attr.s(clz, slots=True)
     register_clz(clz)
     return clz
-

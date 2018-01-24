@@ -52,6 +52,8 @@ class PUCTPlayerConfig(object):
 
 @register_attrs
 class SelfPlayConfig(object):
+    with_generation = attr.ib("latest")
+
     # -1 is off, and defaults to alpha-zero style
     max_number_of_samples = attr.ib(4)
 

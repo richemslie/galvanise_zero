@@ -1,9 +1,6 @@
-import os
 import random
 
 from ggplib.db import lookup
-
-from ggpzero.util import attrutil
 
 from ggpzero.defs import confs
 
@@ -235,6 +232,7 @@ def determine_cords(game):
     # pieces (king queen rook bishop knight pawn) * (white black) :12
     # total channels 12 + 10 == 22
 
+
 if __name__ == "__main__":
     import sys
     try:
@@ -242,5 +240,5 @@ if __name__ == "__main__":
     except IndexError:
         game = "skirmishNew"
 
-    #determine_cords(game)
+    # determine_cords(game)
     do_data_samples(game)

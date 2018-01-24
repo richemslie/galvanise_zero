@@ -54,7 +54,3 @@ class RequestSampleResponse(object):
 class RequestTrainnNN(object):
     game = attr.ib("game")
     train_conf = attr.ib(default=attr.Factory(confs.TrainNNConfig))
-
-
-
-

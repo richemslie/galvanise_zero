@@ -51,12 +51,13 @@ class Worker(Broker):
         self.register(msgs.RequestSamples, self.on_request_samples)
         self.register(msgs.TrainNNRequest, self.on_train_request)
 
-        self.game_info = None
-        self.sm = None
         self.nn = None
+        self.sm = None
+        self.game_info = None
         self.supervisor = None
+        self.self_play_conf = None
 
-        self.cmds_running
+        self.cmds_running = []
 
         # connect to server
         reactor.callLater(0, self.connect)
@@ -79,44 +80,56 @@ class Worker(Broker):
     def on_request_config(self, server, msg):
         return msgs.WorkerConfigMsg(self.conf)
 
-
-    self.cmds_running = runprocs.RunCmds(self.conf.run_post_training_cmds,
-                                         cb_on_completion=self.finished_cmds_running,
-                                         max_time=180.0)
-    self.cmds_running.spawn()
-else:
-    def finished_cmds_running(self):
-        self.cmds_running = None
-        log.info("commands done")
-        self.roll_generation()
-
     def on_configure(self, server, msg):
         attrutil.pprint(msg)
 
         if self.game_info is None:
             self.game_info = lookup.by_name(msg.game)
             self.sm = self.game_info.get_sm()
+
         else:
             self.game_info.game == msg.game
 
+        self.self_play_conf = msg.self_play_conf
 
+        # refresh the neural network.  May have to run some commands to get it.
+        self.nn = None
+        try:
+            self.nn = get_manager().load_network(self.game_info.game,
+                                                 self.self_play_conf.with_generation)
+            self.configure_self_play()
 
+        except Exception as exc:
+            log.error("Exception: %s", exc)
+            self.cmds_running = runprocs.RunCmds(self.conf.run_post_training_cmds,
+                                                 cb_on_completion=self.finished_cmds_running,
+                                                 max_time=180.0)
+            self.cmds_running.spawn()
 
-        self.nn = get_manager().load_network(msg.game, msg.generation)
+        return msgs.Ok("configured")
+
+    def finished_cmds_running(self):
+        self.cmds_running = None
+        log.info("commands done")
+        self.configure_self_play()
+
+    def configure_self_play(self):
+        assert self.self_play_conf is not None
+
+        if self.nn is None:
+            self.nn = get_manager().load_network(self.game_info.game,
+                                                 self.self_play_conf.with_generation)
 
         if self.supervisor is None:
             self.supervisor = cppinterface.Supervisor(self.sm, self.nn,
                                                       batch_size=self.conf.self_play_batch_size,
                                                       sleep_between_poll=self.conf.sleep_between_poll)
-            self.supervisor.start_self_play(msg.self_play_conf, self.conf.inline_manager)
+
+            self.supervisor.start_self_play(self.self_play_conf, self.conf.inline_manager)
+
         else:
             self.supervisor.update_nn(self.nn)
             self.supervisor.clear_unique_states()
-
-        return msgs.Ok("configured")
-
-    def configure_self_play(self):
-        pass
 
     def cb_from_superviser(self):
         self.samples += self.supervisor.fetch_samples()

@@ -3,7 +3,6 @@ import glob
 
 from keras.models import model_from_json
 
-from ggplib.util import log
 from ggplib.db import lookup
 
 from ggpzero.defs import confs
