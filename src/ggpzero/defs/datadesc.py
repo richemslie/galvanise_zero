@@ -1,0 +1,86 @@
+import attr
+
+from ggpzero.util.attrutil import register_attrs
+
+
+@register_attrs
+class Sample(object):
+    # state policy trained on.  This is a tuple of 0/1s.  Effectively a bit array.
+    state = attr.ib([0, 0, 0, 1])
+
+    # list of previous state (first element is immediate parent of 'state')
+    prev_states = attr.ib([1, 0, 0, 1])
+
+    # polict distribution - should sum to 1.
+    policy = attr.ib([0, 0, 0.5, 0.5])
+
+    # list of final scores for value head of network - list has same number as number of roles
+    final_score = attr.ib([0, 1])
+
+    # game depth at which point sample is taken
+    depth = attr.ib(42)
+
+    # total length of game
+    game_length = attr.ib(42)
+
+    # conceptually who's turn it is.  It is the role index (into sm.roles) if game has concept of
+    # 'turn'.  If not -1.  XXX this is not a GGP concept.  Each player makes a move each turn (it
+    # may be a noop).  XXX we should remove this entirely.  Unfortnately we need to keep this to
+    # index into the probability distribution.
+    lead_role_index = attr.ib(-1)
+
+    # these are for debug.  The match_identifier can be used to extract contigous samples from the
+    # same match.
+    match_identifier = attr.ib("agame_421")
+    has_resigned = attr.ib(False)
+    resign_false_positive = attr.ib(False)
+    starting_sample_depth = attr.ib(42)
+
+    # the results after running the puct iterations
+    resultant_puct_score = attr.ib(attr.Factory(list))
+    resultant_puct_visits = attr.ib(800)
+
+
+@register_attrs
+class GenerationSamples(object):
+    game = attr.ib("game")
+    date_created = attr.ib('2018-01-24 22:28')
+
+    # trained with this generation
+    with_generation = attr.ib("v6_123")
+
+    # number of samples in this generation
+    num_samples = attr.ib(1024)
+
+    # the samples (list of Sample)
+    samples = attr.ib(attr.Factory(list))
+
+
+@register_attrs
+class GenerationMetaAttributes(object):
+    ''' this describes the inputs/output to the network, provide information how the gdl
+        transformations to input/outputs. and other meta information.  It does not describe the
+        internals of the neural network, which is provided by the keras json model file. '''
+
+    game = attr.ib("breakthrough")
+    date_created = attr.ib('2018-01-24 22:28')
+
+    # whether the network expects channel inputs to have channel last format
+    channel_last = attr.ib(False)
+
+    # whether the network uses multiple policy heads (False - there is one)
+    multiple_policy_heads = attr.ib(False)
+
+    # number of previous states expected (default is 0).
+    num_previous_states = attr.ib(0)
+
+    # XXX todo
+    transformer_description = attr.ib(None)
+
+    # XXX the training config attributes - for debugging, historical purposes
+    # the number of samples trained on, etc
+    # the number losses, validation losses, accurcacy
+    trained_losses = attr.ib('XXX')
+    trained_validation_losses = attr.ib('XXX')
+    trained_policy_accuracy = attr.ib('XXX')
+    trained_value_accuracy = attr.ib('XXX')
