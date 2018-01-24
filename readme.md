@@ -13,21 +13,21 @@ Current games trained:
 
  * reversi (strong)
  * breakthrough (strong)
- * cittaceot (solved, network reports 99% proability of first move win)
+ * cittaceot (solved, network reports 99% probability of first move win)
  * hex
  * connect four
  * checkers-variant
  * escort latched breakthrough (variant) and speedChess (variant)
 
 The trained model for reversi is very strong, and plays at ntest level 7. (compare to
-[mokemokechicken's challange history](https://github.com/mokemokechicken/reversi-alpha-zero/blob/master/challenge_history.md))
+[mokemokechicken's challenge history](https://github.com/mokemokechicken/reversi-alpha-zero/blob/master/challenge_history.md))
 
 Based on [GGPLib](https://github.com/ggplib/ggplib).
 
 
 roadmap
 -------
- * flesh out "zero batteground", visualisation and pretty elo graphs
+ * flesh out "zero battleground", visualisation and pretty elo graphs
 
  * train new variant of escort latched breakthrough - which is super hard for mcts players (and
    since method of learning is similar to mcts, can it learn to play?)
@@ -41,5 +41,5 @@ roadmap
 
 other
 -----
-* old/early [results](https://github.com/ggplib/ggp-zero/blob/dev/doc/old_results.md).
+* old / early [results](https://github.com/ggplib/ggp-zero/blob/dev/doc/old_results.md).
 * old install [instructions](https://github.com/ggplib/ggp-zero/blob/dev/doc/install.md).
