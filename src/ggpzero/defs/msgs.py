@@ -50,34 +50,11 @@ class RequestSampleResponse(object):
     duplicates_seen = attr.ib(0)
 
 
-# this is a config, not a message.  fix XXX
 @register_attrs
-class TrainNNRequest(object):
+class RequestTrainnNN(object):
     game = attr.ib("game")
+    train_conf = attr.ib(default=attr.Factory(confs.TrainNNConfig))
 
-    # XXX replace with NNModelConfig
-    network_size = attr.ib("small")
 
-    # the generation prefix is what defines our models (along with step). Be careful not to
-    # overwrite these.
-    generation_prefix = attr.ib("v2_")
 
-    # this is where the generations are stored
-    store_path = attr.ib("/home/me/somewhere")
 
-    # uses previous network?
-    use_previous = attr.ib(True)
-    next_step = attr.ib(42)
-    overwrite_existing = attr.ib(False)
-    validation_split = attr.ib(0.8)
-    batch_size = attr.ib(32)
-    epochs = attr.ib(10)
-
-    # if the total number of samples is met, will trim the oldest samples
-    max_sample_count = attr.ib(250000)
-
-    # this is applied even if max_sample_count can't be reached
-    starting_step = attr.ib(0)
-
-    # if we see duplicate states of mre than > n, drop them, keeping the most recent.  < 0 is off.
-    drop_dupes_count = attr.ib(-1)

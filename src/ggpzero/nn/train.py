@@ -15,6 +15,23 @@ from ggpzero.nn.manager import get_manager
 # efficient and preprocessed format.
 
 
+class TrainData(object):
+    input_channels = attr.ib(attr.Factory(list))
+    output_policies = attr.ib(attr.Factory(list))
+    output_final_scores = attr.ib(attr.Factory(list))
+
+    validation_input_channels = attr.ib(attr.Factory(list))
+    validation_output_policies = attr.ib(attr.Factory(list))
+    validation_output_final_scores = attr.ib(attr.Factory(list))
+
+    batch_size = attr.ib(512)
+    epochs = attr.ib(24)
+
+    # <= 0 off.  Idea is we have more samples in the data, we take a sample a different subset each
+    # epoch.
+    max_epoch_samples_count = attr.ib(0)
+
+
 class TrainException(Exception):
     pass
 
@@ -228,6 +245,7 @@ def parse_and_train(conf):
     train_conf = parse(conf, game_info, man.get_transformer(conf.game))
     train_conf.epochs = conf.epochs
     train_conf.batch_size = conf.batch_size
+    train_conf.max_epoch_samples_count = conf.max_epoch_samples_count
 
     res = nn.train(train_conf, retraining=retraining)
     man.save_network(nn, conf.game, next_generation)

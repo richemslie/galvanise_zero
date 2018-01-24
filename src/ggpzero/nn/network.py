@@ -20,6 +20,17 @@ def objective_function_for_policy(y_true, y_pred):
     return K.sum(-y_true * K.log(y_pred + K.epsilon()), axis=-1)
 
 
+def unison_shuffle(*arrays):
+    assert arrays
+    length_of_array0 = len(arrays[0])
+    for a in arrays[1:]:
+        assert len(a) == length_of_array0
+
+    perms = np.random.permutation(length_of_array0)
+    for a in arrays:
+        return a[perms]
+
+
 ###############################################################################
 
 class TrainingLoggerCb(keras.callbacks.Callback):
@@ -116,6 +127,10 @@ class TrainingController(keras.callbacks.Callback):
         self.value_loss_diff = val_loss - loss
 
     def on_epoch_begin(self, epoch, logs=None):
+        if self.retrain_best is None and self.retraining:
+            log.info('Reusing old retraining network for *next* retraining network')
+            self.retrain_best = self.model.get_weights()
+
         self.at_epoch += 1
 
     def on_epoch_end(self, _, logs=None):
@@ -156,7 +171,7 @@ class TrainingController(keras.callbacks.Callback):
                 log.info("Early stopping... since not improving")
                 self.stop_training = True
 
-        # always stop the model from continueing, so can gain control
+        # always stop the model from continuing, so can gain control
         self.model.stop_training = True
 
     def on_train_end(self, logs=None):
@@ -246,9 +261,6 @@ class NeuralNetwork(object):
             print v[42]
             setattr(train_conf, k, np.concatenate(v, axis=0).reshape(new_shape))
 
-        outputs = [train_conf.output_policies,
-                   train_conf.output_final_scores]
-
         validation_data = [train_conf.validation_input_channels,
                            [train_conf.validation_output_policies,
                             train_conf.validation_output_final_scores]]
@@ -267,36 +279,53 @@ class NeuralNetwork(object):
             value_weight *= XX_value_weight_reduction
 
         self.compile(value_weight=value_weight)
-        for _ in range(train_conf.epochs):
+
+        num_samples = len(train_conf.input_channels)
+
+        for i in range(train_conf.epochs):
+
             if controller.stop_training:
                 log.warning("Stop training early via controller")
                 break
 
-            print controller.value_loss_diff
-            if controller.value_loss_diff > 0.0:
-                orig_weight = value_weight
-                if orig_weight > 0.2:
-                    if controller.value_loss_diff > 0.001:
-                        value_weight *= XX_value_weight_reduction
-                else:
-                    if controller.value_loss_diff > 0.01:
-                        value_weight *= XX_value_weight_reduction
-                    else:
-                        # increase it again... 
-                        value_weight /= XX_value_weight_reduction
+            # let's shuffle our data by ourselvs
+            unison_shuffle(train_conf.input_channels,
+                           train_conf.output_policies,
+                           train_conf.output_final_scores)
 
-                value_weight = max(XX_value_weight_min, value_weight)
+            # trim if neccessary
+            input_channels = train_conf.input_channels
+            outputs = [train_conf.output_policies,
+                       train_conf.output_final_scores]
+
+            if (train_conf.max_epoch_samples_count > 0 and
+                train_conf.max_epoch_samples_count < num_samples):
+                input_channels = input_channels[:train_conf.max_epoch_samples_count]
+                outputs = [o[:train_conf.max_epoch_samples_count] for o in outputs]
+
+            if i > 0:
+                log.info("controller.value_loss_diff %.3f" % controller.value_loss_diff)
+
+                orig_weight = value_weight
+                if orig_weight > 0.2 and controller.value_loss_diff > 0.001:
+                    value_weight *= XX_value_weight_reduction
+                elif controller.value_loss_diff > 0.01:
+                    value_weight *= XX_value_weight_reduction
+                else:
+                    # increase it again...
+                    value_weight /= XX_value_weight_reduction
+
+                value_weight = min(max(XX_value_weight_min, value_weight), 1.0)
                 if abs(value_weight - orig_weight) > 0.0001:
                     self.compile(value_weight=value_weight)
 
-            self.keras_model.fit(train_conf.input_channels,
+            self.keras_model.fit(input_channels,
                                  outputs,
                                  verbose=0,
                                  batch_size=train_conf.batch_size,
                                  epochs=1,
                                  validation_data=validation_data,
-                                 callbacks=[training_logger, controller],
-                                 shuffle=True)
+                                 callbacks=[training_logger, controller])
 
         return controller
 

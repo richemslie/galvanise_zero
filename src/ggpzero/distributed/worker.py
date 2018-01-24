@@ -10,7 +10,7 @@ from twisted.internet import reactor
 from ggplib.util import log
 from ggplib.db import lookup
 
-from ggpzero.util import attrutil
+from ggpzero.util import attrutil, runprocs
 
 from ggpzero.defs import msgs, confs
 
@@ -56,6 +56,8 @@ class Worker(Broker):
         self.nn = None
         self.supervisor = None
 
+        self.cmds_running
+
         # connect to server
         reactor.callLater(0, self.connect)
 
@@ -77,6 +79,17 @@ class Worker(Broker):
     def on_request_config(self, server, msg):
         return msgs.WorkerConfigMsg(self.conf)
 
+
+    self.cmds_running = runprocs.RunCmds(self.conf.run_post_training_cmds,
+                                         cb_on_completion=self.finished_cmds_running,
+                                         max_time=180.0)
+    self.cmds_running.spawn()
+else:
+    def finished_cmds_running(self):
+        self.cmds_running = None
+        log.info("commands done")
+        self.roll_generation()
+
     def on_configure(self, server, msg):
         attrutil.pprint(msg)
 
@@ -85,6 +98,9 @@ class Worker(Broker):
             self.sm = self.game_info.get_sm()
         else:
             self.game_info.game == msg.game
+
+
+
 
         self.nn = get_manager().load_network(msg.game, msg.generation)
 
@@ -98,6 +114,9 @@ class Worker(Broker):
             self.supervisor.clear_unique_states()
 
         return msgs.Ok("configured")
+
+    def configure_self_play(self):
+        pass
 
     def cb_from_superviser(self):
         self.samples += self.supervisor.fetch_samples()

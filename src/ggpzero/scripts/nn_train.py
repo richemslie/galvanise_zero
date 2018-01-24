@@ -31,22 +31,24 @@ class Configs:
     def reversi(self, gen_prefix):
         conf = msgs.TrainNNRequest("reversi")
 
-        conf.network_size = "medium"
+        conf.network_size = "medium-large"
         conf.generation_prefix = gen_prefix
         conf.store_path = os.path.join(os.environ["GGPZERO_PATH"], "data", "reversi", "v7")
 
         conf.use_previous = False
-        conf.next_step = 31
+        conf.next_step = 52
 
         conf.validation_split = 0.9
-        conf.batch_size = 1024
-        conf.epochs = 20
-        conf.max_sample_count = 500000
-        conf.starting_step = 3
-        conf.drop_dupes_count = -1
+        conf.batch_size = 256
+        conf.epochs = 30
+        conf.max_sample_count = 2500000
+        conf.starting_step = 5
+
+        # XXX try increasing this 145
+        conf.drop_dupes_count = 7
+        conf.max_epoch_samples_count = 900000
 
         return conf
-
 
     def c4(self, gen_prefix):
         conf = msgs.TrainNNRequest("connectFour")

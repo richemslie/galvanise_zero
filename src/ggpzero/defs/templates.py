@@ -80,9 +80,9 @@ def puct_config_template(generation, name="default"):
     configs = dict(
         default=confs.PUCTPlayerConfig(name="default",
                                        verbose=True,
-                                       playouts_per_iteration=1600,
+                                       playouts_per_iteration=2400,
                                        playouts_per_iteration_noop=800,
-                                       dirichlet_noise_alpha=-1,
+                                       dirichlet_noise_alpha=0.05,
 
                                        puct_before_expansions=3,
                                        puct_before_root_expansions=5,

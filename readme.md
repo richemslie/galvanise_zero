@@ -19,8 +19,7 @@ Current games trained:
  * checkers-variant
  * escort latched breakthrough (variant) and speedChess (variant)
 
-The trained model for reversi is very strong, and plays at ntest level 7. (compare to
-[mokemokechicken's challenge history](https://github.com/mokemokechicken/reversi-alpha-zero/blob/master/challenge_history.md))
+The trained model for reversi is very strong, and plays at ntest level 7.
 
 Based on [GGPLib](https://github.com/ggplib/ggplib).
 
