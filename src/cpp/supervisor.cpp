@@ -18,10 +18,12 @@ using namespace GGPZero;
 
 Supervisor::Supervisor(GGPLib::StateMachineInterface* sm,
                        const GdlBasesTransformer* transformer,
-                       int batch_size) :
+                       int batch_size,
+                       int number_of_previous_states) :
     sm(sm->dupe()),
     transformer(transformer),
     batch_size(batch_size),
+    number_of_previous_states(number_of_previous_states),
     slow_poll_counter(0),
     inline_sp_manager(nullptr),
     in_progress_manager(nullptr),
@@ -68,6 +70,7 @@ void Supervisor::createInline(const SelfPlayConfig* config) {
     this->inline_sp_manager = new SelfPlayManager(this->sm,
                                                   this->transformer,
                                                   this->batch_size,
+                                                  this->number_of_previous_states,
                                                   &this->unique_states,
                                                   "inline");
 
@@ -78,11 +81,13 @@ void Supervisor::createWorkers(const SelfPlayConfig* config) {
     SelfPlayWorker* spw = new SelfPlayWorker(new SelfPlayManager(this->sm,
                                                                  this->transformer,
                                                                  this->batch_size,
+                                                                 this->number_of_previous_states,
                                                                  &this->unique_states,
                                                                  "sp0"),
                                              new SelfPlayManager(this->sm,
                                                                  this->transformer,
                                                                  this->batch_size,
+                                                                 this->number_of_previous_states,
                                                                  &this->unique_states,
                                                                  "sp1"),
                                              config);

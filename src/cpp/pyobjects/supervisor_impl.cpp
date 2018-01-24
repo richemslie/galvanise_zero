@@ -32,7 +32,7 @@ static PyObject* Supervisor_start_self_play(PyObject_Supervisor* self, PyObject*
 }
 
 PyObject* stateToList(const GGPLib::BaseState* bs) {
-    // ref counts all stolen :)
+    // ref counts all stolen
     PyObject* state_as_list = PyList_New(bs->size);
     for (int ii=0; ii<bs->size; ii++) {
         PyList_SetItem(state_as_list, ii, PyInt_FromLong(bs->get(ii)));
@@ -41,7 +41,19 @@ PyObject* stateToList(const GGPLib::BaseState* bs) {
     return state_as_list;
 }
 
-PyObject* policyElementToTuple(std::pair<int, float>& e) {
+template <typename V, typename F>
+PyObject* createListAndPopulate(const V& vec, const F& fn) {
+    int count = vec.size();
+    PyObject* l = PyList_New(count);
+    for (int ii=0; ii<count; ii++) {
+        // fn creates a new python object, set item on list steal the ref count.
+        PyList_SetItem(l, ii, fn(vec[ii]));
+    }
+
+    return l;
+}
+
+PyObject* policyElementToTuple(const std::pair<int, float>& e) {
     // ref counts all stolen :)
     PyObject* tup = PyTuple_New(2);
     PyTuple_SetItem(tup, 0, PyInt_FromLong(e.first));
@@ -50,56 +62,55 @@ PyObject* policyElementToTuple(std::pair<int, float>& e) {
 }
 
 void PyDict_setNewItem(PyObject* d, const char* name, PyObject* o) {
-    /* steals ref */
+    // steals ref
     ASSERT(PyDict_SetItemString(d, name, o) == 0);
     Py_DECREF(o);
 }
 
 PyObject* sampleToDict(Sample* sample) {
-    // this is basically FML - trying to steal as much ref counts as possible
+    // awesome - trying to steal as much ref counts as possible, while keeping the code as clean
+    // as possible!
+
     PyObject* sample_as_dict = PyDict_New();
 
-    // populate dict from Sample (prev_states, policy, final_score - done after)
-    PyDict_setNewItem(sample_as_dict, "state", stateToList(sample->state));
-    PyDict_setNewItem(sample_as_dict, "depth", PyInt_FromLong(sample->depth));
-    PyDict_setNewItem(sample_as_dict, "lead_role_index", PyInt_FromLong(sample->lead_role_index));
+    PyDict_setNewItem(sample_as_dict, "state",
+                      stateToList(sample->state));
 
-    PyDict_setNewItem(sample_as_dict, "game_length", PyInt_FromLong(sample->game_length));
-    PyDict_setNewItem(sample_as_dict, "match_identifier", PyString_FromString(sample->match_identifier.c_str()));
-    PyDict_setNewItem(sample_as_dict, "has_resigned", PyBool_FromLong((int) sample->has_resigned));
-    PyDict_setNewItem(sample_as_dict, "resign_false_positive", PyBool_FromLong((int) sample->resign_false_positive));
-    PyDict_setNewItem(sample_as_dict, "starting_sample_depth", PyInt_FromLong(sample->starting_sample_depth));
+    PyDict_setNewItem(sample_as_dict, "prev_states",
+                      createListAndPopulate(sample->prev_states, stateToList));
 
+    PyDict_setNewItem(sample_as_dict, "policy",
+                      createListAndPopulate(sample->policy, policyElementToTuple));
 
-    // same pattern, could abstract it out if my template skills were better
-    {
-        int num_prev_states = sample->prev_states.size();
-        PyObject* prev_states = PyList_New(num_prev_states);
-        for (int ii=0; ii<num_prev_states; ii++) {
-            PyList_SetItem(prev_states, ii, stateToList(sample->prev_states[ii]));
-        }
-        PyDict_setNewItem(sample_as_dict, "prev_state", prev_states);
-    }
+    PyDict_setNewItem(sample_as_dict, "final_score",
+                      createListAndPopulate(sample->final_score, PyFloat_FromDouble));
 
-    {
-        int num_final_score = sample->final_score.size();
-        PyObject* final_score = PyList_New(num_final_score);
-        for (int ii=0; ii<num_final_score; ii++) {
-            PyList_SetItem(final_score, ii, PyFloat_FromDouble((double) sample->final_score[ii]));
-        }
+    PyDict_setNewItem(sample_as_dict, "depth",
+                      PyInt_FromLong(sample->depth));
 
-        PyDict_setNewItem(sample_as_dict, "final_score", final_score);
-    }
+    PyDict_setNewItem(sample_as_dict, "game_length",
+                      PyInt_FromLong(sample->game_length));
 
-    {
-        int num_policy = sample->policy.size();
-        PyObject* policy = PyList_New(num_policy);
-        for (int ii=0; ii<num_policy; ii++) {
-            PyList_SetItem(policy, ii, policyElementToTuple(sample->policy[ii]));
-        }
+    PyDict_setNewItem(sample_as_dict, "lead_role_index",
+                      PyInt_FromLong(sample->lead_role_index));
 
-        PyDict_setNewItem(sample_as_dict, "policy", policy);
-    }
+    PyDict_setNewItem(sample_as_dict, "match_identifier",
+                      PyString_FromString(sample->match_identifier.c_str()));
+
+    PyDict_setNewItem(sample_as_dict, "has_resigned",
+                      PyBool_FromLong((int) sample->has_resigned));
+
+    PyDict_setNewItem(sample_as_dict, "resign_false_positive",
+                      PyBool_FromLong((int) sample->resign_false_positive));
+
+    PyDict_setNewItem(sample_as_dict, "starting_sample_depth",
+                      PyInt_FromLong(sample->starting_sample_depth));
+
+    PyDict_setNewItem(sample_as_dict, "resultant_puct_score",
+                      createListAndPopulate(sample->resultant_puct_score, PyFloat_FromDouble));
+
+    PyDict_setNewItem(sample_as_dict, "resultant_puct_visits",
+                      PyInt_FromLong(sample->resultant_puct_visits));
 
     return sample_as_dict;
 }
@@ -108,13 +119,7 @@ static PyObject* Supervisor_fetch_samples(PyObject_Supervisor* self, PyObject* a
     std::vector <Sample*> samples = self->impl->getSamples();
 
     if (!samples.empty()) {
-        int sample_count = samples.size();
-        PyObject* py_samples = PyList_New(sample_count);
-        for (int ii=0; ii<sample_count; ii++) {
-            PyList_SetItem(py_samples, ii, sampleToDict(samples[ii]));
-        }
-
-        return py_samples;
+        return createListAndPopulate(samples, sampleToDict);
     }
 
     Py_RETURN_NONE;
@@ -209,11 +214,13 @@ static PyObject* gi_Supervisor(PyObject* self, PyObject* args) {
     ssize_t ptr = 0;
     PyObject* obj = 0;
     int batch_size = 0;
+    int number_of_previous_states = 0;
 
     // sm, transformer, batch_size, expected_policy_size, role_1_index
-    if (! ::PyArg_ParseTuple(args, "nO!i", &ptr,
+    if (! ::PyArg_ParseTuple(args, "nO!ii", &ptr,
                              &(PyType_GdlBasesTransformerWrapper), &obj,
-                             &batch_size)) {
+                             &batch_size,
+                             &number_of_previous_states)) {
         return nullptr;
     }
 
@@ -222,6 +229,7 @@ static PyObject* gi_Supervisor(PyObject* self, PyObject* args) {
     GGPLib::StateMachine* sm = reinterpret_cast<GGPLib::StateMachine*> (ptr);
 
     // create the c++ object
-    Supervisor* supervisor = new Supervisor(sm, py_transformer->impl, batch_size);
+    Supervisor* supervisor = new Supervisor(sm, py_transformer->impl,
+                                            batch_size, number_of_previous_states);
     return (PyObject*) PyType_Supervisor_new(supervisor);
 }

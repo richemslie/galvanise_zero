@@ -19,11 +19,13 @@ using namespace GGPZero;
 SelfPlayManager::SelfPlayManager(GGPLib::StateMachineInterface* sm,
                                  const GdlBasesTransformer* transformer,
                                  int batch_size,
+                                 int number_of_previous_states,
                                  UniqueStates* unique_states,
                                  std::string identifier) :
     sm(sm->dupe()),
     transformer(transformer),
     batch_size(batch_size),
+    number_of_previous_states(number_of_previous_states),
     unique_states(unique_states),
     identifier(identifier),
     saw_dupes(0),
@@ -58,10 +60,27 @@ SelfPlayManager::~SelfPlayManager() {
 ///////////////////////////////////////////////////////////////////////////////
 
 // will create a new sample based on the root tree
-Sample* SelfPlayManager::createSample(const PuctNode* node) {
+Sample* SelfPlayManager::createSample(const PuctEvaluator* pe, const PuctNode* node) {
     Sample* sample = new Sample;
     sample->state = this->sm->newBaseState();
     sample->state->assign(node->getBaseState());
+
+    // Add previous states
+    int depth = node->game_depth - 1;
+    for (int ii=0; ii<this->number_of_previous_states; ii++) {
+        if (depth < 0) {
+            break;
+        }
+
+        const PuctNode* parent_node = pe->getNode(depth);
+        ASSERT(parent_node->game_depth == depth);
+
+        GGPLib::BaseState* bs = this->sm->newBaseState();
+        bs->assign(parent_node->getBaseState());
+        sample->prev_states.push_back(bs);
+
+        depth--;
+    }
 
     for (int ii=0; ii<node->num_children; ii++) {
         const PuctNodeChild* child = node->getNodeChild(this->sm->getRoleCount(), ii);
@@ -69,7 +88,11 @@ Sample* SelfPlayManager::createSample(const PuctNode* node) {
                                     child->next_prob);
     }
 
-    sample->lead_role_index = node->lead_role_index;
+    sample->resultant_puct_visits = node->visits;
+    for (int ii=0; ii<this->sm->getRoleCount(); ii++) {
+        sample->resultant_puct_score.push_back(node->getCurrentScore(ii));
+    }
+
     return sample;
 }
 

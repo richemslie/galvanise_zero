@@ -72,7 +72,7 @@ namespace GGPZero {
         // resignation during self play
         bool has_resigned;
         bool can_resign;
-        bool false_postitive_resign_check;
+        bool false_positive_resign_check;
         std::vector <float> resign_false_positive_check_scores;
 
         // random number generator

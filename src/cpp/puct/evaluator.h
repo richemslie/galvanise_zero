@@ -64,7 +64,8 @@ namespace GGPZero {
 
         void logDebug();
 
-        PuctNode* jumpRoot(int count);
+        PuctNode* jumpRoot(int depth);
+        const PuctNode* getNode(int depth) const;
 
     private:
         const PuctConfig* conf;

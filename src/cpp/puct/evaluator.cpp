@@ -561,8 +561,13 @@ void PuctEvaluator::logDebug() {
     }
 }
 
-PuctNode* PuctEvaluator::jumpRoot(int pos) {
-    ASSERT(pos >=0 && pos < (int) this->all_nodes.size());
-    this->root = this->all_nodes[pos];
+PuctNode* PuctEvaluator::jumpRoot(int depth) {
+    ASSERT(depth >=0 && depth < (int) this->all_nodes.size());
+    this->root = this->all_nodes[depth];
     return this->root;
+}
+
+const PuctNode* PuctEvaluator::getNode(int depth) const {
+    ASSERT(depth >=0 && depth < (int) this->all_nodes.size());
+    return this->all_nodes[depth];
 }

@@ -22,13 +22,14 @@ namespace GGPZero {
         SelfPlayManager(GGPLib::StateMachineInterface* sm,
                         const GdlBasesTransformer* transformer,
                         int batch_size,
+                        int number_of_previous_states,
                         UniqueStates* unique_states,
                         std::string identifier);
         ~SelfPlayManager();
 
     public:
         // the following are only called from self player
-        Sample* createSample(const PuctNode* node);
+        Sample* createSample(const PuctEvaluator* pe, const PuctNode* node);
         void addSample(Sample* sample);
 
         UniqueStates* getUniqueStates() const {
@@ -71,6 +72,9 @@ namespace GGPZero {
         const GdlBasesTransformer* transformer;
         int batch_size;
 
+        // number of previous states to store in sample
+        int number_of_previous_states;
+
         std::vector <SelfPlay*> self_plays;
 
         // local scheduler
@@ -85,6 +89,7 @@ namespace GGPZero {
         // Events
         ReadyEvent ready_event;
         PredictDoneEvent predict_done_event;
+
 
         // stats
         int saw_dupes;

@@ -72,7 +72,8 @@ namespace GGPZero {
     public:
         Supervisor(GGPLib::StateMachineInterface* sm,
                    const GdlBasesTransformer* transformer,
-                   int batch_size);
+                   int batch_size,
+                   int number_of_previous_states);
         ~Supervisor();
 
     private:
@@ -93,6 +94,7 @@ namespace GGPZero {
         GGPLib::StateMachineInterface* sm;
         const GdlBasesTransformer* transformer;
         const int batch_size;
+        const int number_of_previous_states;
 
         int slow_poll_counter;
 
