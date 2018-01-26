@@ -140,26 +140,23 @@ class PUCTEvaluator(object):
 
         self.root = None
 
-    def update_node_policy(self, node, pred_policy):
-        if node.lead_role_index == 0:
-            start_pos = 0
-        else:
-            start_pos = len(self.game_info.model.actions[0])
+    def update_node_policy(self, node, policies):
+        policy = policies[node.lead_role_index]
 
         total = 0
         assert len(node.children)
         for c in node.children:
-            ridx = start_pos + c.legal
-            c.policy_prob = pred_policy[ridx]
-
+            c.policy_prob = policy[c.legal]
             total += c.policy_prob
 
         if total < 0.0001:
-            total = 1.0
-
-        # normalise
-        for c in node.children:
-            c.policy_prob /= total
+            # no real predictions, set it uniform
+            for c in node.children:
+                c.policy_prob = 1.0 / len(node.children)
+        else:
+            # normalise
+            for c in node.children:
+                c.policy_prob /= total
 
         # sort the children now rather than every iteration
         node.children.sort(key=attrgetter("policy_prob"), reverse=True)
@@ -187,11 +184,11 @@ class PUCTEvaluator(object):
             for l in legal_state.to_list():
                 node.add_child(self.sm.legal_to_move(lead_role_index, l), l)
 
-            pred_policy, pred_final_score = self.nn.predict_1(node.state)
+            predictions = self.nn.predict_1(node.state)
 
-            node.final_score = pred_final_score
-            node.mc_score = pred_final_score[:]
-            self.update_node_policy(node, pred_policy)
+            node.final_score = predictions.scores[:]
+            node.mc_score = predictions.scores[:]
+            self.update_node_policy(node, predictions.policies)
 
         return node
 

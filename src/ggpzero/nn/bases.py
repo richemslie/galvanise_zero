@@ -12,6 +12,8 @@ from ggplib.util.symbols import SymbolFactory, Term
 # only importing for checking type (otherwise will go insane)
 from ggplib.db.lookup import GameInfo
 
+from ggpzero.defs import datadesc
+
 
 class BaseInfo(object):
     def __init__(self, index, gdl_str, symbols):
@@ -61,23 +63,43 @@ class GdlBasesTransformer(object):
     num_unhandled_states = 0
     ignore_terms = []
 
-    def __init__(self, game_info, channel_last=False):
+    # XXX horrible way to say we have multiple_policy_heads
+    policy_1_index_start = None
+
+    def __init__(self, game_info, generation_descr):
         assert isinstance(game_info, GameInfo)
+        assert isinstance(generation_descr, datadesc.GenerationDescription)
         self.game_info = game_info
 
         # for the number of outputs of the network
         sm_model = self.game_info.model
-        self.policy_dist_count = sum(len(l) for l in sm_model.actions)
+        if generation_descr.multiple_policy_heads:
+            self.policy_dist_count = [len(l) for l in sm_model.actions]
+        else:
+            assert self.role_count == 2
+            self.policy_dist_count = [sum(len(l) for l in sm_model.actions)]
+
+            # used for when we have a single policy_distribution being shared
+            self.policy_1_index_start = len(sm_model.actions[0])
+
         self.final_score_count = len(sm_model.roles)
 
-        # used for when we have a single policy_distribution being shared
-        assert self.role_count == 2
-        self.policy_1_index_start = len(sm_model.actions[0])
-
         # this is the 'image' data ordering for tensorflow/keras
-        self.channel_last = channel_last
+        self.channel_last = generation_descr.channel_last
+
+        self.num_previous_states = generation_descr.num_previous_states
+        assert self.num_previous_states >= 0
 
         self.num_of_base_controls = 0
+
+        def get_noop_idx(actions):
+            for idx, a in enumerate(actions):
+                if "noop" in a:
+                    return idx
+            assert False, "did not find noop"
+
+        self.noop_legals = map(get_noop_idx, game_info.model.actions)
+
         self.create_base_infos()
 
     @property
@@ -100,7 +122,8 @@ class GdlBasesTransformer(object):
     @property
     def num_channels(self):
         # one for each role to indicate turn, one for each pieces
-        return self.num_of_base_controls + len(self.pieces)
+        total_states = self.num_previous_states + 1
+        return self.num_of_base_controls + self.raw_channels_per_state * total_states
 
     def create_base_infos(self):
         # ############ XXX
@@ -168,21 +191,95 @@ class GdlBasesTransformer(object):
         if self.num_unhandled_states:
             log.warning("Number of unhandled states %d" % self.num_unhandled_states)
 
+    def null_state(self):
+        return tuple(0 for _ in range(len(self.base_infos)))
+
+    def identifier(self, state, prev_states=None):
+        if self.num_previous_states > 0:
+            if prev_states is None:
+                prev_states = [self.null_state() for _ in range(self.num_previous_states)]
+            else:
+                assert len(prev_states) <= self.num_previous_states
+                while len(prev_states) < self.num_previous_states:
+                    prev_states.append(self.null_state())
+        else:
+            assert not prev_states
+            prev_states = []
+
+        identifier = state[:]
+        for l in prev_states:
+            identifier += l
+
+        assert len(identifier) == len(self.base_infos) * (1 + self.num_previous_states)
+        return tuple(identifier)
+
+    def check_sample(self, sample):
+        assert len(sample.state) == len(self.base_infos)
+        assert len(sample.final_score) == self.final_score_count
+
+        total = 0.0
+        for legal, p in sample.policy:
+            assert -0.01 < p < 1.01
+            total += p
+
+        assert 0.9999 < total < 1.001
+
+        if isinstance(sample, datadesc.SampleOld):
+            assert 0 <= sample.lead_role_index <= self.role_count
+
+        else:
+            assert isinstance(sample, datadesc.Sample)
+
+            # ZZZ XXX deprecate single policy heads
+            # assert len(sample.policies) == len(self.policy_dist_count)
+
+            for idx, policy in enumerate(sample.policies):
+                total = 0.0
+                for legal, p in policy:
+
+                    # ZZZ XXX deprecate single policy heads
+                    if self.policy_1_index_start is None:
+                        assert 0 <= legal < self.policy_dist_count[idx]
+
+                    assert -0.01 < p < 1.01
+                    total += p
+
+                assert 0.9999 < total < 1.00001
+
+        return sample
+
     def state_to_channels(self, state, prev_states=None):
-        # prev_states -> list of states
-        assert prev_states is None, "unhandled for now"
+        assert prev_states is None or len(prev_states) <= self.num_previous_states
+        if prev_states is None:
+            prev_states = []
 
         # create a bunch of zero channels
         channels = [np.zeros((self.num_cols, self.num_rows))
                     for _ in range(self.num_channels)]
 
-        # simply add to channel
+        # add the state to channels
         for b_info in self.channel_base_infos:
             if state[b_info.index]:
                 channels[b_info.channel][b_info.y_idx][b_info.x_idx] = 1
 
+        # add any previous states to the channels
+        channel_incr = self.raw_channels_per_state
+        for ii in range(self.num_previous_states):
+            try:
+                prev_state = prev_states[ii]
+
+                for b_info in self.channel_base_infos:
+                    if prev_state[b_info.index]:
+                        channel_idx = b_info.channel + channel_incr
+                        channels[channel_idx][b_info.y_idx][b_info.x_idx] = 1
+
+            except IndexError:
+                pass
+
+            channel_incr += self.raw_channels_per_state
+
         # set a control state by setting entire channel to 1
-        channel_idx = len(self.pieces)
+        channel_idx = channel_incr
         for idx in self.control_states:
             if state[idx]:
                 channels[channel_idx] += 1
@@ -200,54 +297,74 @@ class GdlBasesTransformer(object):
         return channels
 
     def policy_to_array(self, policy, lead_role_index):
-        index_start = 0 if lead_role_index == 0 else self.policy_1_index_start
-        policy_outputs = np.zeros(self.policy_dist_count, dtype='float32')
+        # ZZZ XXX deprecate single policy heads
+        if self.policy_1_index_start is not None:
+            index_start = 0 if lead_role_index == 0 else self.policy_1_index_start
+            array = np.zeros(self.policy_dist_count[0], dtype='float32')
 
-        for idx, prob in policy:
-            policy_outputs[index_start + idx] = prob
+            for idx, prob in policy:
+                array[index_start + idx] = prob
 
-        return policy_outputs
+        else:
+            array = np.zeros(self.policy_dist_count[lead_role_index], dtype='float32')
+            for idx, prob in policy:
+                array[idx] = prob
 
-    def check_sample(self, sample):
-        assert len(sample.state) == len(self.base_infos)
-        assert len(sample.final_score) == self.final_score_count
+        return array
 
-        for legal, p in sample.policy:
-            assert 0 <= legal < self.policy_dist_count
-            assert -0.01 < p < 1.01
-
-        assert 0 <= sample.lead_role_index <= self.role_count
-
-    def sample_to_nn(self, sample, inputs, policies, finals):
+    def sample_to_nn(self, sample, inputs, outputs):
         # transform samples -> numpy arrays as inputs/outputs to nn
 
         # input - planes
-        inputs.append(self.state_to_channels(sample.state))
+        inputs.append(self.state_to_channels(sample.state, sample.prev_states))
 
-        # output - policy
-        policies.append(self.policy_to_array(sample.policy,
-                                             sample.lead_role_index))
+        output = []
+        # output - policies
+        if self.policy_1_index_start is not None:
+            if isinstance(sample, datadesc.SampleOld):
+                output.append(self.policy_to_array(sample.policy,
+                                                   sample.lead_role_index))
+            else:
+                assert False, "TODO"
+
+        else:
+            if isinstance(sample, datadesc.SampleOld):
+                assert self.role_count == 2
+                assert len(self.policy_dist_count) == 2
+                # ZZZ XXX deprecate single policy heads
+                # XXX HACKSHACKSHACKSHACKS
+
+                if sample.lead_role_index == 0:
+                    array = self.policy_to_array(sample.policy, 0)
+                else:
+                    array = self.policy_to_array(self.noop_policy(0), 0)
+
+                output.append(array)
+
+                if sample.lead_role_index == 1:
+                    array = self.policy_to_array(sample.policy, 1)
+                else:
+                    array = self.policy_to_array(self.noop_policy(1), 1)
+
+                output.append(array)
+
+            else:
+                assert self.role_count == 2
+                assert len(self.policy_dist_count) == 2
+                for i in range(self.role_count):
+                    array = self.policy_to_array(sample.policies[i], i)
+                    output.append(array)
 
         # output - best/final scores
-        finals.append(np.array(sample.final_score, dtype='float32'))
+        output.append(np.array(sample.final_score, dtype='float32'))
+        outputs.append(output)
+
+    def noop_policy(self, ri):
+        assert self.policy_1_index_start is None
+        return [(self.noop_legals[ri], 1.0)]
 
 
 ###############################################################################
-
-class AtariGo_7x7(GdlBasesTransformer):
-    game = 'atariGo_7x7'
-    x_cords = '1 2 3 4 5 6 7'.split()
-    y_cords = '1 2 3 4 5 6 7'.split()
-
-    base_term = "cell"
-    x_term = 1
-    y_term = 2
-    piece_term = 3
-
-    pieces = ['black', 'white']
-    ignore_terms = ['group']
-    control_base_term = 'control'
-
 
 class Breakthrough(GdlBasesTransformer):
     game = "breakthrough"
@@ -358,6 +475,37 @@ class EscortLatch(GdlBasesTransformer):
     pieces = ['wp', 'wk', 'bp', 'bk']
 
     control_base_terms = ["blackKingCaptured", "whiteKingCaptured", "control"]
+
+
+class Tron(GdlBasesTransformer):
+    TODOXXX = False
+    game = "tron_10x10"
+    x_cords = "1 2 3 4 5 6 7 8 9 10".split()
+    y_cords = "1 2 3 4 5 6 7 8 9 10".split()
+
+    base_term = "cell"
+    x_term = 1
+    y_term = 2
+    piece_term = 3
+    pieces = ['v']
+
+    control_base_terms = []
+
+
+class AtariGo_7x7(GdlBasesTransformer):
+    TODOXXX = False
+    game = 'atariGo_7x7'
+    x_cords = '1 2 3 4 5 6 7'.split()
+    y_cords = '1 2 3 4 5 6 7'.split()
+
+    base_term = "cell"
+    x_term = 1
+    y_term = 2
+    piece_term = 3
+
+    pieces = ['black', 'white']
+    ignore_terms = ['group']
+    control_base_term = 'control'
 
 
 class SpeedChess(GdlBasesTransformer):

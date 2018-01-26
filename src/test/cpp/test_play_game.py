@@ -15,6 +15,7 @@ def setup():
     from ggpzero.util.keras import init
     init()
 
+
 def test_play():
     game = "connectFour"
     gen = "test_play"

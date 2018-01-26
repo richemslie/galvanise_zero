@@ -1,28 +1,28 @@
 import os
-from ggpzero.defs import confs
-from ggpzero.nn.manager import get_manager
+from datetime import datetime
+
+from ggpzero.defs import confs, datadesc
 
 
-def nn_model_config_template(game, network_size_hint="small"):
+def nn_model_config_template(game, network_size_hint, transformer):
     ' helper for creating NNModelConfig templates '
 
     conf = confs.NNModelConfig()
 
     # from transformer
-    transformer = get_manager().get_transformer(game)
     conf.role_count = transformer.role_count
 
     conf.input_rows = transformer.num_rows
     conf.input_columns = transformer.num_cols
     conf.input_channels = transformer.num_channels
 
+    # policy distribution head
+    conf.multiple_policies = len(transformer.policy_dist_count) > 1
     conf.policy_dist_count = transformer.policy_dist_count
+    assert isinstance(conf.policy_dist_count, list) and len(conf.policy_dist_count) > 0
 
-    # ensure no regularisation
+    # no regularisation please
     conf.l2_regularisation = False
-
-    # use defaults
-    conf.learning_rate = None
 
     # normal defaults
     conf.cnn_kernel_size = 3
@@ -109,25 +109,25 @@ def puct_config_template(generation, name="default"):
         compete=confs.PUCTPlayerConfig(name="compete",
                                        verbose=True,
 
-                                       playouts_per_iteration=500,
+                                       playouts_per_iteration=400,
                                        playouts_per_iteration_noop=100,
 
-                                       resign_score_value=0.1,
+                                       resign_score_value=0.05,
                                        playouts_per_iteration_resign=25,
 
-                                       dirichlet_noise_alpha=-1,
+                                       dirichlet_noise_alpha=0.03,
 
                                        puct_before_expansions=3,
                                        puct_before_root_expansions=5,
                                        puct_constant_before=3.0,
                                        puct_constant_after=1.00,
 
-                                       temperature=1.0,
-                                       depth_temperature_max=2.0,
+                                       temperature=2.0,
+                                       depth_temperature_max=3.0,
                                        depth_temperature_start=8,
                                        depth_temperature_increment=0.1,
-                                       depth_temperature_stop=60,
-                                       random_scale=0.6,
+                                       depth_temperature_stop=70,
+                                       random_scale=0.5,
 
                                        choose="choose_temperature",
                                        max_dump_depth=2),
@@ -268,3 +268,18 @@ def server_config_template(game, generation_prefix):
 
     conf.self_play_config = selfplay_config_template()
     return conf
+
+
+def default_generation_desc(game, name="default", **kwds):
+    desc = datadesc.GenerationDescription(game)
+
+    desc.name = name
+    desc.date_created = datetime.now().strftime("%Y/%m/%d %H:%M")
+
+    desc.channel_last = False
+    desc.multiple_policy_heads = False
+    desc.num_previous_states = 0
+    for k, v in kwds.items():
+        setattr(desc, k, v)
+
+    return desc

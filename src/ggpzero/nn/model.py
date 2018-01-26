@@ -1,19 +1,12 @@
-from keras import layers as klayers
-from keras.regularizers import l2
-from keras import backend as K
-from keras.models import Model as KerasModel
-
 from ggpzero.defs import confs
+
+from ggpzero.util.keras import is_channels_first, keras_models, keras_regularizers
+from ggpzero.util.keras import keras_layers as klayers
 
 
 # kind of thought keras was taking care of this XXX
 def get_bn_axis():
     return 1 if is_channels_first() else 3
-
-
-def is_channels_first():
-    ' NCHW is cuDNN default, and what tf wants for GPU. '
-    return K.image_data_format() == "channels_first"
 
 
 def Conv2DBlock(*args, **kwds):
@@ -117,7 +110,7 @@ def get_network_model(conf):
     # fancy l2 regularizer stuff
     extra_params = {}
     if conf.l2_regularisation:
-        extra_params["kernel_regularizer"] = l2(1e-4)
+        extra_params["kernel_regularizer"] = keras_regularizers.l2(1e-4)
 
     # inputs:
     if is_channels_first():
@@ -143,22 +136,34 @@ def get_network_model(conf):
                               name="ResLayer_%s" % i,
                               **extra_params)(layer)
 
-    # residual net -> flattened for policy head
-    filters = residual_one_by_one(conf.cnn_filter_size, conf.policy_dist_count)
-    to_flatten = Conv2DBlock(filters, 1,
-                             name='to_flatten_policy_head',
-                             padding='valid',
-                             activation='relu',
-                             **extra_params)(layer)
+    number_of_policies = 1
+    if conf.multiple_policies:
+        number_of_policies = conf.role_count
 
-    flat = klayers.Flatten()(to_flatten)
+    assert number_of_policies == len(conf.policy_dist_count)
 
-    # output: policy head
-    if conf.dropout_rate_policy > 0:
-        flat = klayers.Dropout(conf.dropout_rate_policy)(flat)
+    policy_heads = []
+    for idx, count in enumerate(conf.policy_dist_count):
+        # residual net -> flattened for policy head
+        filters = residual_one_by_one(conf.cnn_filter_size, count)
+        to_flatten = Conv2DBlock(filters, 1,
+                                 name='to_flatten_policy_head_%s' % idx,
+                                 padding='valid',
+                                 activation='relu',
+                                 **extra_params)(layer)
 
-    policy_head = klayers.Dense(conf.policy_dist_count,
-                                activation="softmax", name="policy", **extra_params)(flat)
+        flat = klayers.Flatten()(to_flatten)
+
+        # output: policy head(s)
+        if conf.dropout_rate_policy > 0:
+            flat = klayers.Dropout(conf.dropout_rate_policy)(flat)
+
+        head = klayers.Dense(count,
+                             activation="softmax",
+                             name="policy_%d" % idx,
+                             **extra_params)(flat)
+
+        policy_heads.append(head)
 
     # residual net -> flattened for value head
     filters = residual_one_by_one(conf.cnn_filter_size, conf.value_hidden_size)
@@ -181,5 +186,5 @@ def get_network_model(conf):
                                activation="sigmoid", name="value", **extra_params)(hidden)
 
     # model:
-    return KerasModel(inputs=[inputs_board],
-                      outputs=[policy_head, value_head])
+    outputs = policy_heads + [value_head]
+    return keras_models.Model(inputs=[inputs_board], outputs=outputs)

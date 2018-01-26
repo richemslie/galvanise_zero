@@ -154,6 +154,27 @@ def test_attrs_listof():
     assert r.samples[0].name == "s0"
     assert r.samples[1].data[1] == 4
 
+    s0_clone = attrutil.clone(s0)
+    print s0_clone
+
+
+def test_attrs_clone():
+    s0 = Sample('s0', [1, 2, 3, 4, 5])
+    s0_clone = attrutil.clone(s0)
+    s0_clone.name = "asd"
+    s0_clone.data.append(6)
+
+    assert s0_clone.name == "asd" and s0.name == "s0"
+    assert s0_clone.data[-1] == 6
+    assert s0.data[-1] == 5
+
+    s1 = Sample('s0', (1, 2, 3, 4, 5))
+    s1.data = list(s1.data)
+    s1_clone = attrutil.clone(s1)
+    s1_clone.data[2] = 42
+    assert s1_clone.data[2] == 42
+    assert s1.data[2] == 3
+
 
 def test_runcmds():
     from twisted.internet import reactor

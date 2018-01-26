@@ -25,23 +25,6 @@ def critical_error(msg):
     sys.exit(1)
 
 
-# XXX we need a more central place for this
-def models_path(game):
-    return os.path.join(os.environ["GGPZERO_PATH"], "data", game, "models")
-
-
-def weights_path(game):
-    return os.path.join(os.environ["GGPZERO_PATH"], "data", game, "weights")
-
-
-def generations_path(game):
-    return os.path.join(os.environ["GGPZERO_PATH"], "data", game, "generations")
-
-
-def samples_path(game, generation_prefix):
-    return os.path.join(os.environ["GGPZERO_PATH"], "data", game, generation_prefix)
-
-
 class WorkerInfo(object):
     def __init__(self, worker, ping_time_sent):
         self.worker = worker
@@ -117,10 +100,11 @@ class ServerBroker(Broker):
 
     def check_files_exist(self):
         # first check that the directories exist
-        for p in (models_path(self.conf.game),
-                  weights_path(self.conf.game),
-                  generations_path(self.conf.game),
-                  samples_path(self.conf.game, self.conf.generation_prefix)):
+        man = get_manager()
+        for p in (man.models_path(self.conf.game),
+                  man.weights_path(self.conf.game),
+                  man.generations_path(self.conf.game),
+                  man.samples_path(self.conf.game, self.conf.generation_prefix)):
 
             if os.path.exists(p):
                 if not os.path.isdir(p):
@@ -158,10 +142,7 @@ class ServerBroker(Broker):
                 shutil.copy(self.conf_filename, self.conf_filename + "-bak")
 
         with open(self.conf_filename, 'w') as open_file:
-            open_file.write(attrutil.attr_to_json(self.conf,
-                                                  sort_keys=True,
-                                                  separators=(',', ': '),
-                                                  indent=4))
+            open_file.write(attrutil.attr_to_json(self.conf, pretty=True))
 
     def get_generation_name(self, step):
         ''' this is the name of the current generation '''
@@ -266,7 +247,8 @@ class ServerBroker(Broker):
 
     @property
     def sample_data_filename(self):
-        p = samples_path(self.conf.game, self.conf.generation_prefix)
+        man = get_manager()
+        p = man.samples_path(self.conf.game, self.conf.generation_prefix)
         return os.path.join(p, "gendata_%s_%s.json.gz" % (self.conf.game,
                                                           self.conf.current_step))
 
@@ -333,7 +315,6 @@ class ServerBroker(Broker):
         m.game = self.conf.game
         m.network_size = self.conf.network_size
         m.generation_prefix = self.conf.generation_prefix
-        m.store_path = samples_path(self.conf.game, self.conf.generation_prefix)
 
         m.use_previous = self.conf.retrain_network
 

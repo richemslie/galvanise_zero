@@ -1,20 +1,16 @@
-''' XXX this is not a test  More like a script? '''
-
-import os
 import sys
 
-from ggpzero.defs import msgs
+from ggpzero.defs import confs, templates
 
-from ggpzero.training.nn_train import parse_and_train
+from ggpzero.nn import train
+from ggpzero.nn.manager import get_manager
 
 
 class Configs:
     def breakthrough(self, gen_prefix):
-        conf = msgs.TrainNNRequest("breakthrough")
+        conf = confs.TrainNNConfig("breakthrough")
 
-        conf.network_size = "medium"
         conf.generation_prefix = gen_prefix
-        conf.store_path = os.path.join(os.environ["GGPZERO_PATH"], "data", "breakthrough", "v5")
 
         conf.use_previous = False
         conf.next_step = 84
@@ -29,33 +25,31 @@ class Configs:
         return conf
 
     def reversi(self, gen_prefix):
-        conf = msgs.TrainNNRequest("reversi")
+        conf = confs.TrainNNConfig("reversi")
 
-        conf.network_size = "medium-large"
         conf.generation_prefix = gen_prefix
-        conf.store_path = os.path.join(os.environ["GGPZERO_PATH"], "data", "reversi", "v7")
 
         conf.use_previous = False
-        conf.next_step = 52
+        conf.next_step = 40
 
         conf.validation_split = 0.9
         conf.batch_size = 256
-        conf.epochs = 30
+        conf.epochs = 42
         conf.max_sample_count = 2500000
-        conf.starting_step = 5
+        conf.starting_step = 10
 
-        # XXX try increasing this 145
         conf.drop_dupes_count = 7
         conf.max_epoch_samples_count = 900000
 
+        conf.compile_strategy = "amsgrad"
+
         return conf
 
-    def c4(self, gen_prefix):
-        conf = msgs.TrainNNRequest("connectFour")
 
-        conf.network_size = "medium-small"
+    def c4(self, gen_prefix):
+        conf = confs.TrainNNConfig("connectFour")
+
         conf.generation_prefix = gen_prefix
-        conf.store_path = os.path.join(os.environ["GGPZERO_PATH"], "data", "connectFour", "v7")
 
         conf.use_previous = False
         conf.next_step = 33
@@ -71,11 +65,9 @@ class Configs:
         return conf
 
     def hex(self, gen_prefix):
-        conf = msgs.TrainNNRequest("hex")
+        conf = confs.TrainNNConfig("hex")
 
-        conf.network_size = "small"
         conf.generation_prefix = gen_prefix
-        conf.store_path = os.path.join(os.environ["GGPZERO_PATH"], "data", "hex", "v7")
 
         conf.use_previous = False
         conf.next_step = 20
@@ -91,11 +83,9 @@ class Configs:
         return conf
 
     def speedChess(self, gen_prefix):
-        conf = msgs.TrainNNRequest("speedChess")
+        conf = confs.TrainNNConfig("speedChess")
 
-        conf.network_size = "medium-small"
         conf.generation_prefix = gen_prefix
-        conf.store_path = os.path.join(os.environ["GGPZERO_PATH"], "data", "speedChess", "v9")
 
         conf.use_previous = False
         conf.next_step = 12
@@ -111,16 +101,44 @@ class Configs:
         return conf
 
 
-if __name__ == "__main__":
-    from ggpzero.util.main import main_wrap
+def get_nn_model(game, transformer, size="medium-small"):
+    config = templates.nn_model_config_template(game, size, transformer)
 
+    config.dropout_rate_policy = -1
+    config.dropout_rate_value = -1
+    config.l2_regularisation = True
+
+    return config
+
+
+def retrain(args):
     game = sys.argv[1]
     gen_prefix = sys.argv[2]
+    gen_prefix_next = sys.argv[3]
 
     configs = Configs()
-    train_conf = getattr(configs, game)(gen_prefix)
+    train_config = getattr(configs, game)(gen_prefix)
 
-    def retrain():
-        parse_and_train(train_conf)
+    generation_descr = templates.default_generation_desc(train_config.game,
+                                                         multiple_policy_heads=True)
 
+    # create a transformer
+    man = get_manager()
+
+    transformer = man.get_transformer(train_config.game, generation_descr)
+
+    # create the manager
+    trainer = train.TrainManager(train_config, transformer, next_generation_prefix=gen_prefix_next)
+
+    nn_model_config = get_nn_model(train_config.game, transformer)
+    trainer.get_network(nn_model_config, generation_descr)
+
+    data = trainer.gather_data()
+
+    trainer.do_epochs(data)
+    trainer.save()
+
+
+if __name__ == "__main__":
+    from ggpzero.util.main import main_wrap
     main_wrap(retrain)

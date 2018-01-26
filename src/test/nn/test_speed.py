@@ -1,26 +1,25 @@
 ''' tests raw speed of predictions on GPU. '''
 
 import gc
-import os
 import time
 
 import numpy as np
 
-from ggplib.db import lookup
-
-from ggpzero.defs import msgs
+from ggpzero.defs import confs, templates
 
 from ggpzero.nn.manager import get_manager
-from ggpzero.training.nn_train import parse
+from ggpzero.nn import train
 
 
 def config():
-    conf = msgs.TrainNNRequest("breakthrough")
-    conf.store_path = os.path.join(os.environ["GGPZERO_PATH"], "data", "breakthrough", "v5")
-    conf.use_previous = False
-    conf.next_step = 79
+    conf = confs.TrainNNConfig("reversi")
+    conf.generation_prefix = "v7"
+    conf.overwrite_existing = True
+    conf.next_step = 20
     conf.validation_split = 1.0
     conf.max_sample_count = 500000
+    conf.starting_step = 10
+    conf.drop_dupes_count = 0
     return conf
 
 
@@ -30,30 +29,30 @@ def speed_test():
     man = get_manager()
 
     # get data
-    conf = config()
+    train_config = config()
 
     # get nn to test speed on
-    generation = "v5_0"
-    nn = man.load_network(conf.game, generation)
-    nn.summary()
-    keras_model = nn.get_model()
-    print keras_model
+    transformer = man.get_transformer(train_config.game)
+    trainer = train.TrainManager(train_config, transformer)
 
-    game_info = lookup.by_name(conf.game)
-    train_conf = parse(conf, game_info, man.get_transformer(conf.game))
+    nn_model_config = templates.nn_model_config_template(train_config.game, "small", transformer)
+    generation_descr = templates.default_generation_desc(train_config.game)
+    trainer.get_network(nn_model_config, generation_descr)
+
+    data = trainer.gather_data()
 
     res = []
 
-    batch_size = 1024
-    input_0 = train_conf.inputs[0]
-    sample_count = len(input_0)
+    batch_size = 4096
+    sample_count = len(data.inputs)
+    keras_model = trainer.nn.get_model()
 
     # warm up
     for i in range(2):
         idx, end_idx = i * batch_size, (i + 1) * batch_size
         print i, idx, end_idx
-        inputs = np.array(input_0[idx:end_idx])
-        res.append(keras_model.predict(inputs, batch_size=conf.batch_size))
+        inputs = np.array(data.inputs[idx:end_idx])
+        res.append(keras_model.predict(inputs, batch_size=batch_size))
         print res[0]
 
     for _ in range(ITERATIONS):
@@ -65,15 +64,15 @@ def speed_test():
         num_batches = sample_count / batch_size + 1
         print "batches %s, batch_size %s, inputs: %s" % (num_batches,
                                                          batch_size,
-                                                         len(input_0))
+                                                         len(data.inputs))
         for i in range(num_batches):
             idx, end_idx = i * batch_size, (i + 1) * batch_size
-            inputs = np.array(input_0[idx:end_idx])
+            inputs = np.array(data.inputs[idx:end_idx])
             print "inputs", len(inputs)
             s = time.time()
-            res.append(keras_model.predict(inputs, batch_size=batch_size))
+            Y = keras_model.predict(inputs, batch_size=batch_size)
             times.append(time.time() - s)
-            print "outputs", len(res), sum(len(r) for r in res), len(res[0])
+            print "outputs", len(Y[0])
 
         print "times taken", times
         print "total_time taken", sum(times)

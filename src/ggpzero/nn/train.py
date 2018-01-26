@@ -1,35 +1,93 @@
 import os
 import gzip
+from collections import Counter
+
+import numpy as np
 
 from ggplib.util import log
 from ggplib.db import lookup
 
 from ggpzero.util import attrutil
 
-from ggpzero.defs import msgs, confs, templates
+from ggpzero.defs import confs
 
 from ggpzero.nn.manager import get_manager
 
-
-# XXX general jumping through hoops to cache samples.  The right thing to do is store samples in an
-# efficient and preprocessed format.
+from ggpzero.nn import network
 
 
-class TrainData(object):
-    input_channels = []
-    output_policies = []
-    output_final_scores = []
+###############################################################################
 
-    validation_input_channels = []
-    validation_output_policies = []
-    validation_output_final_scores = []
+def unison_shuffle(*arrays):
+    assert arrays
+    length_of_array0 = len(arrays[0])
+    for a in arrays[1:]:
+        assert len(a) == length_of_array0
+
+    perms = np.random.permutation(length_of_array0)
+    for a in arrays:
+        return a[perms]
 
 
 class TrainException(Exception):
     pass
 
 
-class GenerationSamples(object):
+def reshape(d):
+    new_shape = [-1] + list(d[0].shape)
+    return np.concatenate(d, axis=0).reshape(new_shape)
+
+
+def transpose_and_reshape(outputs):
+    new_d = []
+    for idx in range(len(outputs[0])):
+        row = []
+        for o in outputs:
+            row.append(o[idx])
+
+        new_d.append(reshape(row))
+    return new_d
+
+
+class TrainData(object):
+    def __init__(self):
+        self.inputs = []
+        self.outputs = []
+
+        self.validation_inputs = []
+        self.validation_outputs = []
+
+    def summary(self):
+        assert len(self.inputs) == len(self.outputs)
+        assert len(self.validation_inputs) == len(self.validation_outputs)
+        log.info("SamplesBuffer - train size %d, validate size %d" % (len(self.inputs),
+                                                                      len(self.validation_inputs)))
+
+    def reshape_all(self):
+        inputs = reshape(self.inputs)
+        validation_inputs = reshape(self.validation_inputs)
+
+        outputs = transpose_and_reshape(self.outputs)
+        validation_outputs = transpose_and_reshape(self.validation_outputs)
+
+        for x in (10, 100, 420, 500, 42, 23):
+            log.info('train input, shape: %s.  Example: %s' % (inputs.shape, inputs[x]))
+            for o in outputs:
+                log.info('train output, shape: %s.  Example: %s' % (o.shape, o[x]))
+
+        return inputs, outputs, validation_inputs, validation_outputs
+
+    def strip(self, train_count, validate_count):
+        ''' Needs to throw away the tail of the list (since that is the oldest data) '''
+
+        self.inputs = self.inputs[:train_count]
+        self.outputs = self.outputs[:train_count]
+
+        self.validation_inputs = self.validation_inputs[:validate_count]
+        self.validation_outputs = self.validation_outputs[:validate_count]
+
+
+class SamplesData(object):
     def __init__(self, game, with_generation, num_samples):
         self.game = game
         self.with_generation = with_generation
@@ -37,10 +95,9 @@ class GenerationSamples(object):
 
         self.samples = []
 
-        self.states = []
-        self.input_channels = []
-        self.output_policies = []
-        self.output_final_scores = []
+        self.state_identifiers = []
+        self.inputs = []
+        self.outputs = []
         self.transformed = False
 
     def add_sample(self, sample):
@@ -48,12 +105,13 @@ class GenerationSamples(object):
 
     def transform_all(self, transformer):
         for sample in self.samples:
-            self.states.append(tuple(sample.state))
-            transformer.check_sample(sample)
-            transformer.sample_to_nn(sample,
-                                     self.input_channels,
-                                     self.output_policies,
-                                     self.output_final_scores)
+            # ask the transformer to come up with a unique identifier for sample
+            self.state_identifiers.append(transformer.identifier(sample.state,
+                                                                 sample.prev_states))
+
+            sample = transformer.check_sample(sample)
+            transformer.sample_to_nn(sample, self.inputs, self.outputs)
+
         self.transformed = True
 
         # free up memory
@@ -61,200 +119,259 @@ class GenerationSamples(object):
 
     def __iter__(self):
         assert self.transformed
-        for s, ins, pol_head, val_head in zip(self.states, self.input_channels,
-                                              self.output_policies, self.output_final_scores):
-            yield s, ins, [pol_head, val_head]
+        for s, ins, outs in zip(self.state_identifiers, self.inputs, self.outputs):
+            yield s, ins, outs
 
 
 class SamplesBuffer(object):
 
     def __init__(self):
-        self.conf = confs.TrainData()
+        self.data = TrainData()
+        self.sample_data_cache = {}
 
-    gen_data_cache = {}
+    def files_to_sample_data(self, conf):
+        man = get_manager()
 
-    @classmethod
-    def files_to_gen_samples(cls, conf):
-        assert isinstance(conf, msgs.TrainNNRequest)
+        assert isinstance(conf, confs.TrainNNConfig)
 
         step = conf.next_step - 1
         while step >= conf.starting_step:
-            fn = os.path.join(conf.store_path, "gendata_%s_%s.json.gz" % (conf.game, step))
-            if fn not in cls.gen_data_cache:
+            store_path = man.samples_path(conf.game, conf.generation_prefix)
+            fn = os.path.join(store_path, "gendata_%s_%s.json.gz" % (conf.game, step))
+            if fn not in self.sample_data_cache:
                 raw_data = attrutil.json_to_attr(gzip.open(fn).read())
-                gen_samples = GenerationSamples(raw_data.game,
-                                                raw_data.with_generation,
-                                                raw_data.num_samples)
+                data = SamplesData(raw_data.game,
+                                   raw_data.with_generation,
+                                   raw_data.num_samples)
 
                 for s in raw_data.samples:
-                    gen_samples.add_sample(s)
+                    data.add_sample(s)
 
-                cls.gen_data_cache[fn] = gen_samples
+                if len(data.samples) != data.num_samples:
+                    # pretty inconsequential, but we should at least notify
+                    msg = "num_samples (%d) versus actual samples (%s) differ... trimming"
+                    log.warning(msg % (data.num_samples, len(data.samples)))
 
-            yield fn, cls.gen_data_cache[fn]
+                    data.num_samples = min(len(data.samples), data.num_samples)
+                    data.samples = data.samples[:data.num_samples]
+
+                self.sample_data_cache[fn] = data
+
+            yield fn, self.sample_data_cache[fn]
             step -= 1
 
-    def add(self, ins, outs, validation=False):
-        if validation:
-            self.conf.validation_input_channels.append(ins)
-            self.conf.validation_output_policies.append(outs[0])
-            self.conf.validation_output_final_scores.append(outs[1])
+
+class TrainManager(object):
+    def __init__(self, train_config, transformer, next_generation_prefix=None):
+        assert isinstance(train_config, confs.TrainNNConfig)
+        attrutil.pprint(train_config)
+        self.train_config = train_config
+
+        self.transformer = transformer
+
+        # lookup via game_name (this gets statemachine & statemachine model)
+        self.game_info = lookup.by_name(train_config.game)
+
+        if next_generation_prefix is not None:
+            self.next_generation = "%s_%s" % (next_generation_prefix, train_config.next_step)
         else:
-            self.conf.input_channels.append(ins)
-            self.conf.output_policies.append(outs[0])
-            self.conf.output_final_scores.append(outs[1])
+            self.next_generation = "%s_%s" % (train_config.generation_prefix, train_config.next_step)
 
-    def strip(self, train_count, validate_count):
-        ''' Needs to throw away the tail of the list (since that is the oldest data) '''
+    def get_network(self, nn_model_config, generation_descr):
+        # abbreviate, easier on the eyes
+        conf = self.train_config
 
-        for name in "input_channels output_policies output_final_scores".split():
-            data = getattr(self.conf, name)
-            data = data[:train_count]
-            setattr(self.conf, name, data)
+        attrutil.pprint(nn_model_config)
 
-        for name in "validation_input_channels validation_output_policies validation_output_final_scores".split():
-            data = getattr(self.conf, name)
-            data = data[:validate_count]
-            setattr(self.conf, name, data)
+        man = get_manager()
+        if man.can_load(conf.game, self.next_generation):
+            msg = "Generation already exists %s / %s" % (conf.game, self.next_generation)
+            log.error(msg)
+            if not conf.overwrite_existing:
+                raise TrainException("Generation already exists %s / %s" % (conf.game,
+                                                                            self.next_generation))
+        nn = None
+        retraining = False
+        if conf.use_previous:
+            prev_generation = "%s_%s_prev" % (conf.generation_prefix,
+                                              conf.next_step - 1)
 
-    def check(self):
-        c = self.conf
-        assert len(c.input_channels) == len(c.output_policies)
-        assert len(c.input_channels) == len(c.output_final_scores)
+            if man.can_load(conf.game, prev_generation):
+                log.info("Previous generation found: %s" % prev_generation)
+                nn = man.load_network(conf.game, prev_generation)
+                retraining = True
 
-        assert len(c.validation_input_channels) == len(c.validation_output_policies)
-        assert len(c.validation_input_channels) == len(c.validation_output_final_scores)
+            else:
+                log.warning("No previous generation to use...")
 
-    def summary(self):
-        log.info("SamplesBuffer - train size %d, validate size %d" % (len(self.conf.input_channels),
-                                                                      len(self.conf.validation_input_channels)))
+        if nn is None:
+            nn = man.create_new_network(conf.game, nn_model_config, generation_descr)
 
+        nn.summary()
 
-def parse(conf, game_info, transformer):
-    assert isinstance(conf, msgs.TrainNNRequest)
+        self.nn = nn
+        self.retraining = retraining
+        log.info("Network %s, retraining: %s" % (self.nn, self.retraining))
 
-    samples_buffer = SamplesBuffer()
+    def gather_data(self):
+        # abbreviate, easier on the eyes
+        conf = self.train_config
 
-    total_samples = 0
-    from collections import Counter
-    count = Counter()
+        samples_buffer = SamplesBuffer()
 
-    for fn, gen_data in samples_buffer.files_to_gen_samples(conf):
-        assert gen_data.game == conf.game
+        total_samples = 0
+        count = Counter()
 
-        log.debug("Proccesing %s" % fn)
-        log.debug("Game %s, with gen: %s and sample count %s" % (gen_data.game,
-                                                                 gen_data.with_generation,
-                                                                 gen_data.num_samples))
+        train_data = TrainData()
 
-        if not gen_data.transformed:
-            gen_data.transform_all(transformer)
+        for fn, sample_data in samples_buffer.files_to_sample_data(conf):
+            assert sample_data.game == conf.game
 
-        data = []
+            log.debug("Proccesing %s" % fn)
+            log.debug("Game %s, with gen: %s and sample count %s" % (sample_data.game,
+                                                                     sample_data.with_generation,
+                                                                     sample_data.num_samples))
 
-        # XXX is this deduping a good idea?  Once we start using prev_states, then there will be a
-        # lot less deduping?
-        for state, ins, outs in gen_data:
-            # keep the top n only?
-            if conf.drop_dupes_count > 0 and count[state] == conf.drop_dupes_count:
-                continue
+            if not sample_data.transformed:
+                sample_data.transform_all(self.transformer)
 
-            count[state] += 1
-            data.append((ins, outs))
+            data = []
 
-        log.verbose("DROPPED DUPES %s" % (gen_data.num_samples - len(data)))
+            # XXX is this deduping a good idea?  Once we start using prev_states, then there will
+            # be a lot less deduping?  I guess it is likely not too different.
+            for state, ins, outs in sample_data:
+                # keep the top n only?
+                if conf.drop_dupes_count > 0 and count[state] == conf.drop_dupes_count:
+                    continue
 
-        num_samples = len(data)
-        log.verbose("Left over samples %d" % num_samples)
+                count[state] += 1
+                data.append((ins, outs))
 
-        train_count = int(num_samples * conf.validation_split)
+            log.verbose("DROPPED DUPES %s" % (sample_data.num_samples - len(data)))
 
-        for ins, outs in data[:train_count]:
-            samples_buffer.add(ins, outs)
+            num_samples = len(data)
+            log.verbose("Left over samples %d" % num_samples)
 
-        for ins, outs in data[train_count:]:
-            samples_buffer.add(ins, outs, validation=True)
+            train_count = int(num_samples * conf.validation_split)
 
-        total_samples += num_samples
-        if total_samples > conf.max_sample_count:
-            break
+            for ins, outs in data[:train_count]:
+                train_data.inputs.append(ins)
+                train_data.outputs.append(outs)
 
-    samples_buffer.check()
-    samples_buffer.summary()
+            for ins, outs in data[train_count:]:
+                train_data.validation_inputs.append(ins)
+                train_data.validation_outputs.append(outs)
 
-    if conf.max_sample_count < total_samples:
-        train_count = int(conf.max_sample_count * conf.validation_split)
-        validate_count = conf.max_sample_count - train_count
-        log.info("Stripping %s samples from data set" % (total_samples -
-                                                         conf.max_sample_count))
-        samples_buffer.strip(train_count, validate_count)
+            total_samples += num_samples
+            if total_samples > conf.max_sample_count:
+                break
 
-    samples_buffer.check()
-    samples_buffer.summary()
-    return samples_buffer.conf
+        train_data.summary()
 
+        if conf.max_sample_count < total_samples:
+            train_count = int(conf.max_sample_count * conf.validation_split)
+            validate_count = conf.max_sample_count - train_count
 
-def parse_and_train(conf):
-    assert isinstance(conf, msgs.TrainNNRequest)
-    attrutil.pprint(conf)
+            log.info("Stripping %s samples from data set" % (total_samples -
+                                                             conf.max_sample_count))
 
-    # lookup via game_name (this gets statemachine & statemachine model)
-    game_info = lookup.by_name(conf.game)
+            train_data.strip(train_count, validate_count)
 
-    next_generation = "%s_%s" % (conf.generation_prefix, conf.next_step)
+        train_data.summary()
+        return train_data
 
-    man = get_manager()
+    def do_epochs(self, train_data):
+        conf = self.train_config
 
-    nn = None
-    # check the generation does not already exist
+        training_logger = network.TrainingLoggerCb(conf.epochs)
+        controller = network.TrainingController(self.retraining)
 
-    retraining = False
-    if man.can_load(conf.game, next_generation):
-        msg = "Generation already exists %s / %s" % (conf.game, next_generation)
-        log.error(msg)
-        if not conf.overwrite_existing:
-            raise TrainException("Generation already exists %s / %s" % (conf.game, next_generation))
+        # XXX add hyper parameters
 
-    if conf.use_previous:
-        prev_generation = "%s_%s_prev" % (conf.generation_prefix,
-                                          conf.next_step - 1)
+        XX_value_weight_reduction = 0.333
+        XX_value_weight_min = 0.05
 
-        if man.can_load(conf.game, prev_generation):
-            log.info("Previous generation found: %s" % prev_generation)
-            nn = man.load_network(conf.game, prev_generation)
-            retraining = True
-        else:
-            log.warning("No previous generation to use...")
+        value_weight = 1.0
+        # start retraining with reduce weight
+        if self.retraining:
+            value_weight *= XX_value_weight_reduction
 
-    # XXX nn_model_conf should be passed in
-    nn_model_conf = templates.nn_model_config_template(conf.game, conf.network_size)
+        self.nn.compile(self.train_config.compile_strategy,
+                        self.train_config.learning_rate,
+                        value_weight=value_weight)
 
-    if nn is None:
-        nn = man.create_new_network(conf.game, nn_model_conf)
+        num_samples = len(train_data.inputs)
 
-    print attrutil.pprint(nn_model_conf)
-    nn.summary()
+        inputs, outputs, validation_inputs, validation_outputs = train_data.reshape_all()
 
-    train_conf = parse(conf, game_info, man.get_transformer(conf.game))
-    train_conf.epochs = conf.epochs
-    train_conf.batch_size = conf.batch_size
-    train_conf.max_epoch_samples_count = conf.max_epoch_samples_count
+        for i in range(conf.epochs):
 
-    res = nn.train(train_conf, retraining=retraining)
-    man.save_network(nn, conf.game, next_generation)
+            if controller.stop_training:
+                log.warning("Stop training early via controller")
+                break
 
-    ###############################################################################
-    # save a previous model for next time
-    if res.retrain_best is None:
-        log.warning("No retraining network")
-        return
+            # let's shuffle our data by ourselvs
+            unison_shuffle(inputs, *outputs)
 
-    log.info("Saving retraining network with val_policy_acc: %.4f" % res.retrain_best_val_policy_acc)
+            if (conf.max_epoch_samples_count > 0 and
+                conf.max_epoch_samples_count < num_samples):
+                inputs = inputs[:conf.max_epoch_samples_count]
+                outputs = [o[:conf.max_epoch_samples_count] for o in outputs]
 
-    prev_nn = man.create_new_network(conf.game, nn_model_conf)
-    prev_nn.get_model().set_weights(res.retrain_best)
+            if i > 0:
+                log.info("controller.value_loss_diff %.3f" % controller.value_loss_diff)
 
-    for_next_generation = "%s_%s_prev" % (conf.generation_prefix,
-                                          conf.next_step)
+                orig_weight = value_weight
+                if orig_weight > 0.2 and controller.value_loss_diff > 0.001:
+                    value_weight *= XX_value_weight_reduction
+                elif controller.value_loss_diff > 0.01:
+                    value_weight *= XX_value_weight_reduction
+                else:
+                    # increase it again...
+                    value_weight /= XX_value_weight_reduction
 
-    man.save_network(prev_nn, conf.game, for_next_generation)
+                value_weight = min(max(XX_value_weight_min, value_weight), 1.0)
+                if abs(value_weight - orig_weight) > 0.0001:
+                    self.nn.compile(self.train_config.compile_strategy,
+                                    self.train_config.learning_rate,
+                                    value_weight=value_weight)
+
+            self.nn.fit(inputs,
+                        outputs,
+                        validation_inputs,
+                        validation_outputs,
+                        conf.batch_size,
+                        callbacks=[training_logger, controller])
+
+        self.controller = controller
+
+    def save(self, generation_test_name=None):
+        man = get_manager()
+        if generation_test_name:
+            man.save_network(self.nn, generation_name=generation_test_name)
+            return
+
+        man.save_network(self.nn, generation_name=self.next_generation)
+
+        ###############################################################################
+        # save a previous model for next time
+        if self.controller.retrain_best is None:
+            log.warning("No retraining network")
+            return
+
+        log.info("Saving retraining network with val_policy_acc: %.4f" % (
+            self.controller.retrain_best_val_policy_acc))
+
+        # there is an undocumented keras clone function, but this is sure to work (albeit slow and evil)
+        from ggpzero.util.keras import keras_models
+
+        for_next_generation = "%s_prev" % self.next_generation
+
+        prev_model = keras_models.model_from_json(self.nn.keras_model.to_json())
+        prev_model.set_weights(self.controller.retrain_best)
+
+        prev_generation_descr = attrutil.clone(self.nn.generation_descr)
+        prev_generation_descr.name = for_next_generation
+        prev_nn = network.NeuralNetwork(self.nn.gdl_bases_transformer,
+                                        prev_model, prev_generation_descr)
+        man.save_network(prev_nn, for_next_generation)

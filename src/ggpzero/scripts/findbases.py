@@ -240,5 +240,5 @@ if __name__ == "__main__":
     except IndexError:
         game = "skirmishNew"
 
-    # determine_cords(game)
-    do_data_samples(game)
+    determine_cords(game)
+    # do_data_samples(game)

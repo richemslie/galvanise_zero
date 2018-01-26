@@ -19,6 +19,11 @@ def register_clz(clz):
 
 
 def get_clz(mod, name):
+    if mod == 'ggpzero.defs.confs' and name == 'Generation':
+        mod = 'ggpzero.defs.datadesc'
+        name = 'GenerationSamples'
+    if mod == 'ggpzero.defs.confs' and name == 'Sample':
+        mod = 'ggpzero.defs.datadesc'
     if (mod, name) not in _registered_clz:
         raise SerialiseException("Attempt to create an unregistered class: %s / %s" % (mod, name))
     return getattr(sys.modules[mod], name)
@@ -67,6 +72,9 @@ class AttrDict(dict):
 
     def _do_list(self, k, v):
         assert isinstance(v, (list, tuple))
+
+        # makes a shallow copy
+        v = v.__class__(v)
 
         # anything to do?
         if not any(attr.has(i) for i in v):
@@ -133,6 +141,12 @@ def fromdict_plus(d):
 
 def attr_to_json(obj, **kwds):
     assert attr.has(obj)
+
+    if kwds.pop("pretty", False):
+        kwds.update(sort_keys=True,
+                    separators=(',', ': '),
+                    indent=4)
+
     return json.dumps(asdict_plus(obj), **kwds)
 
 
@@ -151,3 +165,12 @@ def register_attrs(clz):
     clz = attr.s(clz, slots=True)
     register_clz(clz)
     return clz
+
+
+def clone(attr_object):
+    # this is kind of horrible - but at least we are sure it works
+    return fromdict_plus(asdict_plus(attr_object))
+
+
+attribute = attr.ib
+attr_factory = attr.Factory

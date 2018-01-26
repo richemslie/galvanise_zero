@@ -11,7 +11,39 @@ class Sample(object):
     # list of previous state (first element is immediate parent of 'state')
     prev_states = attr.ib([1, 0, 0, 1])
 
-    # polict distribution - should sum to 1.
+    # list of policy distributions - all should sum to 1.
+    policies = attr.ib([[0, 0, 0.5, 0.5], [0, 0, 0.5, 0.5]])
+
+    # list of final scores for value head of network - list has same number as number of roles
+    final_score = attr.ib([0, 1])
+
+    # game depth at which point sample is taken
+    depth = attr.ib(42)
+
+    # total length of game
+    game_length = attr.ib(42)
+
+    # these are for debug.  The match_identifier can be used to extract contigous samples from the
+    # same match.
+    match_identifier = attr.ib("agame_421")
+    has_resigned = attr.ib(False)
+    resign_false_positive = attr.ib(False)
+    starting_sample_depth = attr.ib(42)
+
+    # the results after running the puct iterations
+    resultant_puct_score = attr.ib(attr.Factory(list))
+    resultant_puct_visits = attr.ib(800)
+
+
+@register_attrs
+class SampleOld(object):
+    # state policy trained on.  This is a tuple of 0/1s.  Effectively a bit array.
+    state = attr.ib([0, 0, 0, 1])
+
+    # list of previous state (first element is immediate parent of 'state')
+    prev_states = attr.ib([1, 0, 0, 1])
+
+    # hacked policy distribution.  Combines multiple policies into one.  Should sum to 1.
     policy = attr.ib([0, 0, 0.5, 0.5])
 
     # list of final scores for value head of network - list has same number as number of roles
@@ -24,9 +56,8 @@ class Sample(object):
     game_length = attr.ib(42)
 
     # conceptually who's turn it is.  It is the role index (into sm.roles) if game has concept of
-    # 'turn'.  If not -1.  XXX this is not a GGP concept.  Each player makes a move each turn (it
-    # may be a noop).  XXX we should remove this entirely.  Unfortnately we need to keep this to
-    # index into the probability distribution.
+    # 'turn'.  If not -1.  This is not a GGP concept.  Each player makes a move each turn (it
+    # may be a noop).  This has been removed entirely.  Keeping this around have a ton of data.
     lead_role_index = attr.ib(-1)
 
     # these are for debug.  The match_identifier can be used to extract contigous samples from the
@@ -57,12 +88,22 @@ class GenerationSamples(object):
 
 
 @register_attrs
-class GenerationMetaAttributes(object):
+class GenerationDescription(object):
     ''' this describes the inputs/output to the network, provide information how the gdl
         transformations to input/outputs. and other meta information.  It does not describe the
-        internals of the neural network, which is provided by the keras json model file. '''
+        internals of the neural network, which is provided by the keras json model file.
+
+    It will ripple through everything:
+      * network model creation
+      * reloading and using a trained network
+      * the inputs/outputs from GdlTransformer
+      * the channel ordering
+        * network model creation
+        * loading
+    '''
 
     game = attr.ib("breakthrough")
+    name = attr.ib("v6_123")
     date_created = attr.ib('2018-01-24 22:28')
 
     # whether the network expects channel inputs to have channel last format

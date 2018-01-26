@@ -1,23 +1,21 @@
-import attr
-
-from ggpzero.util.attrutil import register_attrs
+from ggpzero.util.attrutil import register_attrs, attribute, attr_factory
 
 
 @register_attrs
 class ControlTerm(object):
     # pieces
-    base_term = attr.ib(3)
+    base_term = attribute(3)
 
     # list of extra terms - must match absolutely
-    extra_terms = attr.ib(default=attr.Factory(list))
+    extra_terms = attribute(default=attr_factory(list))
 
     # we set the channel to this value
-    value = attr.ib(1)
+    value = attribute(1)
 
 
 @register_attrs
 class PieceTerm(object):
-    piece_term_idx = attr.ib(3)
+    piece_term_idx = attribute(3)
 
     # allow pieces
     pieces = ['white', 'black', 'arrow']
@@ -25,13 +23,13 @@ class PieceTerm(object):
 
 @register_attrs
 class BoardTerm(object):
-    base_term = attr.ib("cell")
-    x_term_idx = attr.ib(1)
-    y_term_idx = attr.ib(2)
+    base_term = attribute("cell")
+    x_term_idx = attribute(1)
+    y_term_idx = attribute(2)
 
     # list of ExtraTerm (if any - each one will be for index 2,3,4...)
     # will create a cross product
-    pieces = attr.ib(default=attr.Factory(list))
+    pieces = attribute(default=attr_factory(list))
 
 
 @register_attrs
@@ -41,10 +39,10 @@ class GameDesc(object):
     y_cords = "1 2 3 4 5 6 7 8".split()
 
     # list of BoardTerm (length kind of needs to be >= 1, or not much using convs)
-    board_terms = attr.ib(default=attr.Factory(list))
+    board_terms = attribute(default=attr_factory(list))
 
     # list of list of BoardTerm (length kind of needs to be >= 1, or not much using convs)
-    control_terms = attr.ib(default=attr.Factory(list))
+    control_terms = attribute(default=attr_factory(list))
 
 
 class GameDefines(object):

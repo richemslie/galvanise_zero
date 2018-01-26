@@ -1,6 +1,4 @@
-import attr
-
-from ggpzero.util.attrutil import register_attrs
+from ggpzero.util.attrutil import register_attrs, attribute, attr_factory
 
 from ggpzero.defs import confs
 
@@ -17,7 +15,7 @@ class Pong(object):
 
 @register_attrs
 class Ok(object):
-    message = attr.ib("ok")
+    message = attribute("ok")
 
 
 @register_attrs
@@ -27,30 +25,31 @@ class RequestConfig(object):
 
 @register_attrs
 class WorkerConfigMsg(object):
-    conf = attr.ib(default=attr.Factory(confs.WorkerConfig))
+    conf = attribute(default=attr_factory(confs.WorkerConfig))
 
 
 @register_attrs
 class ConfigureSelfPlay(object):
-    game = attr.ib("game")
-    generation = attr.ib("gen0")
-    self_play_conf = attr.ib(default=attr.Factory(confs.SelfPlayConfig))
+    game = attribute("game")
+    generation = attribute("gen0")
+    self_play_conf = attribute(default=attr_factory(confs.SelfPlayConfig))
 
 
 @register_attrs
 class RequestSamples(object):
     # list of states (0/1 tuples) - to reduce duplicates
-    new_states = attr.ib(default=attr.Factory(list))
+    new_states = attribute(default=attr_factory(list))
 
 
 @register_attrs
 class RequestSampleResponse(object):
     # list of def.confs.Sample
-    samples = attr.ib(default=attr.Factory(list))
-    duplicates_seen = attr.ib(0)
+    samples = attribute(default=attr_factory(list))
+    duplicates_seen = attribute(0)
 
 
 @register_attrs
-class RequestTrainnNN(object):
-    game = attr.ib("game")
-    train_conf = attr.ib(default=attr.Factory(confs.TrainNNConfig))
+class RequestNetworkTrain(object):
+    game = attribute("game")
+    train_conf = attribute(default=attr_factory(confs.TrainNNConfig))
+    network_model = attribute(default=attr_factory(confs.NNModelConfig))

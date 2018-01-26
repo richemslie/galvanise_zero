@@ -2,6 +2,39 @@ from __future__ import absolute_import
 from ggplib.util import log
 
 
+def use_tf_keras():
+    return False
+
+
+if use_tf_keras():
+    # XXX well it doesnt work...
+    from tensorflow.python.keras.optimizers import SGD, Adam
+    from tensorflow.python.keras.utils.generic_utils import Progbar
+    import tensorflow.python.keras.callbacks as keras_callbacks
+    from tensorflow.python.keras import metrics as keras_metrics
+    import tensorflow.python.keras.backend as K
+
+    from tensorflow.python.keras import models as keras_models
+    from tensorflow.python.keras import layers as keras_layers
+    from tensorflow.python.keras.regularizers import l2
+
+else:
+    from keras.optimizers import SGD, Adam
+    from keras.utils.generic_utils import Progbar
+    import keras.callbacks as keras_callbacks
+    from keras import metrics as keras_metrics
+    import keras.backend as K
+
+    from keras import models as keras_models
+    from keras import layers as keras_layers
+    from keras import regularizers as keras_regularizers
+
+
+def is_channels_first():
+    ' NCHW is cuDNN default, and what tf wants for GPU. '
+    return K.image_data_format() == "channels_first"
+
+
 def constrain_resources_tf():
     ' constrain resource as tensorflow likes to assimilate your machine rendering it useless '
 
@@ -13,11 +46,11 @@ def constrain_resources_tf():
 
     if not gpu_available:
         # this doesn't strictly use just one cpu... but seems it is the best one can do
-        config = tf.ConfigProto(device_count=dict(CPU=2),
+        config = tf.ConfigProto(device_count=dict(CPU=1),
                                 allow_soft_placement=False,
                                 log_device_placement=False,
-                                intra_op_parallelism_threads=2,
-                                inter_op_parallelism_threads=2)
+                                intra_op_parallelism_threads=1,
+                                inter_op_parallelism_threads=1)
     else:
         gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.25,
                                     allow_growth=True)
@@ -26,12 +59,10 @@ def constrain_resources_tf():
 
     sess = tf.Session(config=config)
 
-    from keras import backend
-    backend.set_session(sess)
+    K.set_session(sess)
 
 
 def init(data_format='channels_first'):
-    from keras import backend as K
     assert K.backend() == "tensorflow"
 
     if K.image_data_format() != data_format:

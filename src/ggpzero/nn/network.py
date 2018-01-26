@@ -1,39 +1,45 @@
+''' mostly just an interface to keras...  hoping to try other frameworks too. '''
+
 from builtins import super
 
 import numpy as np
 
-from keras import metrics
-from keras.optimizers import SGD, Adam
-from keras.utils.generic_utils import Progbar
-import keras.callbacks
-import keras.backend as K
-
 from ggplib.util import log
-from ggpzero.defs import confs
+
+
+from ggpzero.util.keras import SGD, Adam, Progbar, keras_callbacks, keras_metrics
 
 
 def top_3_acc(y_true, y_pred):
-    return metrics.top_k_categorical_accuracy(y_true, y_pred, k=3)
+    return keras_metrics.top_k_categorical_accuracy(y_true, y_pred, k=3)
 
 
 def objective_function_for_policy(y_true, y_pred):
+    # from https://github.com/mokemokechicken/reversi-alpha-zero
+    from ggpzero.util.keras import K
     return K.sum(-y_true * K.log(y_pred + K.epsilon()), axis=-1)
 
 
-def unison_shuffle(*arrays):
-    assert arrays
-    length_of_array0 = len(arrays[0])
-    for a in arrays[1:]:
-        assert len(a) == length_of_array0
+class HeadResult(object):
+    def __init__(self, transformer, policies, values):
+        assert len(transformer.policy_dist_count) == len(policies)
 
-    perms = np.random.permutation(length_of_array0)
-    for a in arrays:
-        return a[perms]
+        # ZZZ XXX deprecate single policy heads
+        if len(transformer.policy_dist_count) == 1 and transformer.role_count == 2:
+            assert transformer.policy_1_index_start is not None
+            policies = [policies[0][:transformer.policy_1_index_start],
+                        policies[0][transformer.policy_1_index_start:]]
+
+        self.policies = policies
+        self.scores = values
+
+    def __repr__(self):
+        return "HeadResult(policies=%s, scores=%s" % (self.policies, self.scores)
 
 
 ###############################################################################
 
-class TrainingLoggerCb(keras.callbacks.Callback):
+class TrainingLoggerCb(keras_callbacks.Callback):
     ''' simple progress bar.  default was breaking with too much metrics '''
 
     def __init__(self, num_epochs):
@@ -77,8 +83,8 @@ class TrainingLoggerCb(keras.callbacks.Callback):
             strs = [fmt % (k, logs[k]) for k in names]
             return ", ".join(strs)
 
-        loss_names = "loss policy_loss value_loss".split()
-        val_loss_names = "val_loss val_policy_loss val_value_loss".split()
+        loss_names = [n for n in logs.keys() if 'loss' in n and 'val_' not in n]
+        val_loss_names = [n for n in logs.keys() if 'loss' in n and 'val_' in n]
 
         log.info(str_by_name(loss_names, 4))
         log.info(str_by_name(val_loss_names, 4))
@@ -102,7 +108,7 @@ class TrainingLoggerCb(keras.callbacks.Callback):
             log.info("%s : %s" % (output, str_by_name(val_acc)))
 
 
-class TrainingController(keras.callbacks.Callback):
+class TrainingController(keras_callbacks.Callback):
     ''' custom callback to do nice logging and early stopping '''
 
     def __init__(self, retraining):
@@ -138,8 +144,9 @@ class TrainingController(keras.callbacks.Callback):
 
         self.set_value_overfitting(logs)
 
-        policy_acc = logs['policy_acc']
-        val_policy_acc = logs['val_policy_acc']
+        # XXX deal with more than one head
+        policy_acc = logs['policy_0_acc']
+        val_policy_acc = logs['val_policy_0_acc']
 
         # store best weights as best val_policy_acc
         if val_policy_acc > self.best_val_policy_acc:
@@ -180,15 +187,14 @@ class TrainingController(keras.callbacks.Callback):
             self.model.set_weights(self.best)
 
 
-###############################################################################
-
 class NeuralNetwork(object):
     ''' combines a keras model and gdl bases transformer to give a clean interface to use as a
         network. '''
 
-    def __init__(self, gdl_bases_transformer, keras_model):
+    def __init__(self, gdl_bases_transformer, keras_model, generation_descr):
         self.gdl_bases_transformer = gdl_bases_transformer
         self.keras_model = keras_model
+        self.generation_descr = generation_descr
 
     def summary(self):
         ' log keras nn summary '
@@ -204,6 +210,7 @@ class NeuralNetwork(object):
 
         to_channels = self.gdl_bases_transformer.state_to_channels
         if prev_states:
+            assert len(prev_states) == len(states)
             X = np.array([to_channels(s, prevs)
                           for s, prevs in zip(states, prev_states)])
         else:
@@ -211,12 +218,12 @@ class NeuralNetwork(object):
 
         Y = self.keras_model.predict(X, batch_size=len(states))
 
-        assert len(Y) == 2
-
         result = []
         for i in range(len(states)):
-            policy, values = Y[0][i], Y[1][i]
-            result.append((policy, values))
+            heads = HeadResult(self.gdl_bases_transformer,
+                               [Y[k][i] for k in range(len(Y) - 1)],
+                               Y[-1][i])
+            result.append(heads)
 
         return result
 
@@ -226,108 +233,58 @@ class NeuralNetwork(object):
         else:
             return self.predict_n([state])[0]
 
-    def compile(self, use_sgd=False, learning_rate=None, value_weight=1.0):
-        if learning_rate is not None:
-            lr = learning_rate
-        else:
-            if use_sgd:
-                lr = 1e-2
+    def compile(self, compile_strategy, learning_rate=None, value_weight=1.0):
+        value_objective = "mean_squared_error"
+        if compile_strategy == "SGD":
+            policy_objective = objective_function_for_policy
+            if learning_rate:
+                optimizer = SGD(lr=lr, momentum=0.9)
             else:
-                lr = 1e-3
+                optimizer = SGD(momentum=0.9)
 
-        if use_sgd:
-            optimizer = SGD(lr=lr, momentum=0.9)
-            loss = [objective_function_for_policy, "mean_squared_error"]
+        elif compile_strategy == "adam":
+            policy_objective = 'categorical_crossentropy'
+            if learning_rate:
+                optimizer = Adam(lr=lr)
+            else:
+                optimizer = Adam()
+
+        elif compile_strategy == "amsgrad":
+            policy_objective = 'categorical_crossentropy'
+            if learning_rate:
+                optimizer = Adam(lr=lr, amsgrad=True)
+            else:
+                optimizer = Adam(amsgrad=True)
         else:
-            loss = ['categorical_crossentropy', 'mean_squared_error']
-            optimizer = Adam(lr=lr)
+            log.error("UNKNOWN compile strategy %s" % compile_strategy)
+            raise Exception("UNKNOWN compile strategy %s" % compile_strategy)
+
+        num_policies = len(self.gdl_bases_transformer.policy_dist_count)
+
+        loss = [policy_objective] * num_policies
+        loss.append(value_objective)
+
+        # weight tends to be much less on value head, it overfits really fast.
+        loss_weights = [1.0] * num_policies
+        loss_weights.append(value_weight)
 
         log.warning("Compiling with %s (value_weight=%.3f)" % (optimizer, value_weight))
 
-        # loss is much less on value.  it overfits really fast.
         self.keras_model.compile(loss=loss, optimizer=optimizer,
-                                 loss_weights=[1.0, value_weight],
+                                 loss_weights=loss_weights,
                                  metrics=["acc", top_3_acc])
 
-    def train(self, train_conf, retraining=False):
-        assert isinstance(train_conf, confs.TrainData)
+    def fit(self, input_channels, outputs, validation_input_channels,
+            validation_outputs, batch_size, callbacks):
 
-        for k in ['input_channels', 'output_policies', 'output_final_scores',
-                  'validation_input_channels', 'validation_output_policies',
-                  'validation_output_final_scores']:
-            v = getattr(train_conf, k)
-            new_shape = [-1] + list(v[0].shape)
-            log.info('train.%s count: %s.  Example:' % (k, new_shape))
-            print v[42]
-            setattr(train_conf, k, np.concatenate(v, axis=0).reshape(new_shape))
-
-        validation_data = [train_conf.validation_input_channels,
-                           [train_conf.validation_output_policies,
-                            train_conf.validation_output_final_scores]]
-
-        training_logger = TrainingLoggerCb(train_conf.epochs)
-        controller = TrainingController(retraining)
-
-        # XXX add hyper parameters
-
-        XX_value_weight_reduction = 0.333
-        XX_value_weight_min = 0.05
-
-        value_weight = 1.0
-        # start retraining with reduce weight
-        if retraining:
-            value_weight *= XX_value_weight_reduction
-
-        self.compile(value_weight=value_weight)
-
-        num_samples = len(train_conf.input_channels)
-
-        for i in range(train_conf.epochs):
-
-            if controller.stop_training:
-                log.warning("Stop training early via controller")
-                break
-
-            # let's shuffle our data by ourselvs
-            unison_shuffle(train_conf.input_channels,
-                           train_conf.output_policies,
-                           train_conf.output_final_scores)
-
-            # trim if neccessary
-            input_channels = train_conf.input_channels
-            outputs = [train_conf.output_policies,
-                       train_conf.output_final_scores]
-
-            if (train_conf.max_epoch_samples_count > 0 and
-                train_conf.max_epoch_samples_count < num_samples):
-                input_channels = input_channels[:train_conf.max_epoch_samples_count]
-                outputs = [o[:train_conf.max_epoch_samples_count] for o in outputs]
-
-            if i > 0:
-                log.info("controller.value_loss_diff %.3f" % controller.value_loss_diff)
-
-                orig_weight = value_weight
-                if orig_weight > 0.2 and controller.value_loss_diff > 0.001:
-                    value_weight *= XX_value_weight_reduction
-                elif controller.value_loss_diff > 0.01:
-                    value_weight *= XX_value_weight_reduction
-                else:
-                    # increase it again...
-                    value_weight /= XX_value_weight_reduction
-
-                value_weight = min(max(XX_value_weight_min, value_weight), 1.0)
-                if abs(value_weight - orig_weight) > 0.0001:
-                    self.compile(value_weight=value_weight)
-
-            self.keras_model.fit(input_channels,
-                                 outputs,
-                                 verbose=0,
-                                 batch_size=train_conf.batch_size,
-                                 epochs=1,
-                                 validation_data=validation_data,
-                                 callbacks=[training_logger, controller])
-
-        return controller
+        self.keras_model.fit(input_channels,
+                             outputs,
+                             verbose=0,
+                             batch_size=batch_size,
+                             epochs=1,
+                             validation_data=[validation_input_channels,
+                                              validation_outputs],
+                             callbacks=callbacks)
 
     def get_model(self):
         assert self.keras_model is not None

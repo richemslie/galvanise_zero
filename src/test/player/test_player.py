@@ -1,3 +1,4 @@
+import os
 import time
 
 from ggplib.player import get
@@ -6,13 +7,12 @@ from ggplib.db.helper import get_gdl_for_game
 
 from ggpzero.defs import confs
 from ggpzero.player.puctplayer import PUCTPlayer
-from ggpzero.player.policyplayer import PolicyPlayer
 
 import py.test
 
 ITERATIONS = 1
 
-current_gen = "v5_76"
+current_gen = "v5_90"
 
 # first in the run, completely random weights
 random_gen = "v5_0"
@@ -21,67 +21,21 @@ default_puct_config = confs.PUCTPlayerConfig(generation=current_gen,
                                              playouts_per_iteration=42,
                                              playouts_per_iteration_noop=1)
 
-default_policy_config = confs.PolicyPlayerConfig(generation=current_gen)
-
 
 def setup():
+    import tensorflow as tf
+
     from ggplib.util.init import setup_once
     setup_once()
 
     from ggpzero.util.keras import init
     init()
 
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+    tf.logging.set_verbosity(tf.logging.ERROR)
 
-def test_reversi_tournament():
-    py.test.skip("no reversi right now")
-    gm = GameMaster(get_gdl_for_game("reversi"))
-
-    # add two players
-    pymcs = get.get_player("pymcs")
-    pymcs.max_run_time = 0.25
-
-    random = get.get_player("pyrandom")
-    nn0 = PolicyPlayer("no-scores1")
-
-    gm.add_player(nn0, "black")
-    gm.add_player(random, "red")
-
-    acc_black_score = 0
-    acc_red_score = 0
-    for _ in range(ITERATIONS):
-        gm.start(meta_time=30, move_time=15)
-        gm.play_to_end()
-
-        acc_black_score += gm.scores["black"]
-        acc_red_score += gm.scores["red"]
-
-    print "black_score", gm.players_map["black"].name, acc_black_score
-    print "red_score", gm.players_map["red"].name, acc_red_score
-
-
-def test_policy_tournament():
-    gm = GameMaster(get_gdl_for_game("breakthrough"))
-
-    # add two players
-    pymcs = get.get_player("pymcs")
-    pymcs.max_run_time = 0.1
-
-    black = PolicyPlayer(conf=default_policy_config)
-
-    gm.add_player(pymcs, "white")
-    gm.add_player(black, "black")
-
-    acc_black_score = 0
-    acc_red_score = 0
-    for _ in range(ITERATIONS):
-        gm.start(meta_time=30, move_time=15)
-        gm.play_to_end()
-
-        acc_black_score += gm.scores["black"]
-        acc_red_score += gm.scores["white"]
-
-    print "white_score", gm.players_map["white"].name, acc_red_score
-    print "black_score", gm.players_map["black"].name, acc_black_score
+    import numpy as np
+    np.set_printoptions(threshold=100000)
 
 
 def test_puct_tournament():
@@ -99,30 +53,6 @@ def test_puct_tournament():
     acc_black_score = 0
     acc_red_score = 0
     for _ in range(ITERATIONS):
-        gm.start(meta_time=30, move_time=15)
-        gm.play_to_end()
-
-        acc_black_score += gm.scores["black"]
-        acc_red_score += gm.scores["white"]
-
-    print "white_score", gm.players_map["white"].name, acc_red_score
-    print "black_score", gm.players_map["black"].name, acc_black_score
-
-
-def test_tournament_2():
-    gm = GameMaster(get_gdl_for_game("breakthrough"))
-
-    # add two players
-    white = PUCTPlayer(conf=default_puct_config)
-    black = PolicyPlayer(conf=default_policy_config)
-
-    gm.add_player(black, "white")
-    gm.add_player(white, "black")
-
-    acc_black_score = 0
-    acc_red_score = 0
-    for _ in range(ITERATIONS):
-        gm.reset()
         gm.start(meta_time=30, move_time=15)
         gm.play_to_end()
 
@@ -197,39 +127,3 @@ def test_not_taking_win():
     last_move = gm.play_single_move(last_move=None)
     assert last_move[1] == "(move 7 8 6 7)"
 
-
-def test_choose_policy_random():
-    ITERATIONS = 10
-    gm = GameMaster(get_gdl_for_game("breakthrough"))
-
-    conf = confs.PolicyPlayerConfig(name="white", generation=random_gen, verbose=False)
-    conf.choose_exponential_scale = 0.15
-    white = PolicyPlayer(conf)
-
-    conf = confs.PolicyPlayerConfig(name="black_", generation=random_gen, verbose=False)
-    conf.choose_exponential_scale = 0.15
-    black = PolicyPlayer(conf)
-
-    gm.add_player(white, "white")
-    gm.add_player(black, "black")
-
-    gm.reset()
-    gm.start(meta_time=30, move_time=15)
-    gm.play_to_end()
-
-    acc_white_score = 0
-    acc_black_score = 0
-    game_depths = []
-    for _ in range(ITERATIONS):
-        gm.reset()
-        gm.start(meta_time=30, move_time=15)
-        gm.play_to_end()
-
-        acc_white_score += gm.scores["white"]
-        acc_black_score += gm.scores["black"]
-
-        game_depths.append(gm.get_game_depth())
-
-    print "white_score", gm.players_map["white"].name, acc_white_score
-    print "black_score", gm.players_map["black"].name, acc_black_score
-    print game_depths
