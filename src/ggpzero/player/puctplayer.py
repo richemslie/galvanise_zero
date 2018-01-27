@@ -20,7 +20,9 @@ from ggpzero.nn.manager import get_manager
 
 class Child(object):
     def __init__(self, parent, move, legal):
+        # for repr:
         self.parent = parent
+
         self.move = move
         self.legal = legal
 
@@ -64,10 +66,12 @@ class Child(object):
 
 
 class Node(object):
-    def __init__(self, state, lead_role_index, is_terminal):
+    def __init__(self, state, lead_role_index, is_terminal, parent):
         self.state = state
         self.lead_role_index = lead_role_index
         self.is_terminal = is_terminal
+        self.parent = parent
+
         self.children = []
 
         # from NN
@@ -107,14 +111,14 @@ class PUCTEvaluator(object):
         self.conf = conf
 
         self.nn = None
-        self.root = None
+        self.initial_root = self.root = None
 
         self.choose = getattr(self, self.conf.choose)
 
         self.identifier = "%s_%s_%s" % (self.conf.name, self.conf.playouts_per_iteration, conf.generation)
         self.sm = None
 
-    def init(self, game_info):
+    def init(self, game_info, current_state):
         self.game_info = game_info
 
         # HACK XXXX hack memory leak fix...
@@ -138,7 +142,21 @@ class PUCTEvaluator(object):
 
         self.role0_noop_legal, self.role1_noop_legal = map(get_noop_idx, game_info.model.actions)
 
-        self.root = None
+        self.initial_root = self.root = None
+        self.game_depth = 0
+
+        start_time = time.time()
+
+        if self.conf.verbose:
+            log.info('creating root')
+
+        self.root = self.create_node(current_state, None)
+        assert not self.root.is_terminal
+
+        if self.conf.verbose:
+            log.debug("time taken for root %.3f" % (time.time() - start_time))
+
+        return self.root
 
     def update_node_policy(self, node, policies):
         policy = policies[node.lead_role_index]
@@ -161,7 +179,7 @@ class PUCTEvaluator(object):
         # sort the children now rather than every iteration
         node.children.sort(key=attrgetter("policy_prob"), reverse=True)
 
-    def create_node(self, basestate):
+    def create_node(self, basestate, parent):
         self.sm.update_bases(basestate)
 
         if (self.sm.get_legal_state(0).get_count() == 1 and
@@ -173,7 +191,7 @@ class PUCTEvaluator(object):
                     self.sm.get_legal_state(1).get_legal(0) == self.role1_noop_legal)
             lead_role_index = 0
 
-        node = Node(basestate.to_list(), lead_role_index, self.sm.is_terminal())
+        node = Node(basestate.to_list(), lead_role_index, self.sm.is_terminal(), parent)
 
         if node.is_terminal:
             node.terminal_scores = [self.sm.get_goal_value(i) for i in range(2)]
@@ -192,9 +210,8 @@ class PUCTEvaluator(object):
 
         return node
 
-    def expand_child(self, child):
+    def expand_child(self, node, child):
         assert child.to_node is None
-        node = child.parent
 
         self.basestate_expand_node.from_list(node.state)
         self.sm.update_bases(self.basestate_expand_node)
@@ -207,7 +224,8 @@ class PUCTEvaluator(object):
         self.joint_move.set(node.lead_role_index, child.legal)
         self.sm.next_state(self.joint_move, self.basestate_expand_node)
 
-        child.to_node = self.create_node(self.basestate_expand_node)
+        new_node = self.create_node(self.basestate_expand_node, node)
+        child.to_node = new_node
 
     def back_propagate(self, path, scores):
         for node in reversed(path):
@@ -304,7 +322,7 @@ class PUCTEvaluator(object):
             child = self.select_child(current, len(path) - 1)
 
             if child.to_node is None:
-                self.expand_child(child)
+                self.expand_child(current, child)
                 scores = child.to_node.mc_score
 
                 path.append(child.to_node)
@@ -350,88 +368,50 @@ class PUCTEvaluator(object):
             else:
                 log.debug("Did no iterations.")
 
-    def fast_apply_move(self, next_root):
-        assert self.root is not None
-        found = False
-        for c in self.root.children:
-            if c == next_root:
-                assert not found
-                self.root = next_root.to_node
-                found = True
+    def on_apply_move(self, joint_move):
+        self.game_depth += 1
+        if self.conf.verbose:
+            log.verbose("on_apply_move @ depth %s" % self.game_depth)
 
-            c.parent = None
+        assert self.root is not None
+
+        lead = self.root.lead_role_index
+        other = 0 if lead else 1
+        if other == 0:
+            assert joint_move.get(other) == self.role0_noop_legal
+        else:
+            assert joint_move.get(other) == self.role1_noop_legal
+
+        played = joint_move.get(lead)
+
+        found = None
+        for c in self.root.children:
+            if c.legal == played:
+                found = c
+            else:
+                # allow it to be garbage collected
+                c.parent = None
+                if c.to_node is not None:
+                    c.to_node.parent = None
+                    c.to_node = None
 
         assert found
-        return self.root
-
-    def on_apply_move(self, joint_move):
-        # need to fish for it in children?
-        if self.root is not None:
-            lead = self.root.lead_role_index
-            other = 0 if lead else 1
-            if other == 0:
-                assert joint_move.get(other) == self.role0_noop_legal
-            else:
-                assert joint_move.get(other) == self.role1_noop_legal
-
-            played = joint_move.get(lead)
-
-            for c in self.root.children:
-                c.parent = None
-
-                if c.legal == played:
-                    # might be none, this is fine
-                    new_root = c.to_node
-                    found = True
-
-            assert found
-            self.root = new_root
-
-            def visit_count(node):
-                if node is None:
-                    return 0
-                total = 1
-                for c in node.children:
-                    total += visit_count(c.to_node)
-                return total
-
+        new_root = found.to_node
+        if new_root is None:
+            # need to create it
+            self.expand_child(self.root, found)
+            new_root = found.to_node
             if self.conf.verbose:
-                log.verbose("ROOT FOUND: %s / %d" % (new_root, visit_count(new_root)))
+                log.verbose("new root created in apply_move")
 
-    def reset(self):
-        self.root = None
-
-    def establish_root(self, current_state, game_depth):
-        # needed for temperature
-        self.game_depth = game_depth
-
-        if self.conf.verbose:
-            log.verbose("Debug @ depth %s" % game_depth)
-
-        start_time = time.time()
-
-        if self.root is not None:
-            if self.root.state == current_state.to_list():
-                return self.root
-            log.error("Root differs, reseting root")
-            self.root = None
-
-        if self.conf.verbose:
-            log.info('creating root')
-
-        self.root = self.create_node(current_state)
-        assert not self.root.is_terminal
-
-        if self.conf.verbose:
-            log.debug("time taken for root %.3f" % (time.time() - start_time))
-
-        return self.root
+        assert new_root is not None
+        self.root = new_root
 
     def on_next_move(self, max_iterations, finish_time):
         if self.conf.root_expansions_preset_visits > 0:
             for c in self.root.children:
                 if c.to_node is None:
-                    self.expand_child(c)
+                    self.expand_child(self.root, c)
 
                 # XXX needs to be traversal
                 c.to_node.mc_visits = max(c.to_node.mc_visits,
@@ -644,7 +624,8 @@ class PUCTPlayer(MatchPlayer):
         if self.puct_evaluator.conf.verbose:
             log.info("PUCTPlayer, match id: %s" % self.match.match_id)
 
-        self.puct_evaluator.init(self.match.game_info)
+        self.puct_evaluator.init(self.match.game_info,
+                                 self.match.get_current_state())
 
     def on_apply_move(self, joint_move):
         self.puct_evaluator.on_apply_move(joint_move)
@@ -656,25 +637,24 @@ class PUCTPlayer(MatchPlayer):
         current_state = self.match.get_current_state()
         game_depth = self.match.game_depth
 
-        pe.establish_root(current_state, game_depth)
+        assert pe.root is not None
 
-        if pe.root is not None:
-            resign = False
-            if conf.resign_score_value > 0 and pe.root.mc_score is not None:
-                for i in range(2):
-                    s = pe.root.mc_score[i]
-                    if s < conf.resign_score_value:
-                        resign = True
-                        break
+        resign = False
+        if conf.resign_score_value > 0 and pe.root.mc_score is not None:
+            for i in range(2):
+                s = pe.root.mc_score[i]
+                if s < conf.resign_score_value:
+                    resign = True
+                    break
 
-            if pe.root.lead_role_index == self.match.our_role_index:
-                max_iterations = conf.playouts_per_iteration
-            else:
-                max_iterations = conf.playouts_per_iteration_noop
+        if pe.root.lead_role_index == self.match.our_role_index:
+            max_iterations = conf.playouts_per_iteration
+        else:
+            max_iterations = conf.playouts_per_iteration_noop
 
-            if resign:
-                max_iterations = min(max_iterations, conf.playouts_per_iteration_resign)
-                print "RESIGN", max_iterations
+        if resign:
+            max_iterations = min(max_iterations, conf.playouts_per_iteration_resign)
+            print "RESIGN", max_iterations
 
         # choice here is always based on lead_role_index, and not our_role_index
         choice = pe.on_next_move(max_iterations, finish_time)
