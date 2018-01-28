@@ -5,6 +5,8 @@ import time
 
 import numpy as np
 
+import tensorflow as tf
+
 from ggplib.db import lookup
 
 from ggpzero.nn.manager import get_manager
@@ -23,7 +25,11 @@ def float_formatter1(x):
 def setup():
     from ggplib.util.init import setup_once
     setup_once()
+
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+    tf.logging.set_verbosity(tf.logging.ERROR)
+
+    np.set_printoptions(threshold=100000)
 
 
 def test_call_fn():
@@ -31,28 +37,35 @@ def test_call_fn():
     ggpzero_interface.hello_test('bobthebuilder')
 
 
-def test_transformer():
+def do_transformer(num_previous_states):
     game = "breakthrough"
 
     game_info = lookup.by_name(game)
     sm = game_info.get_sm()
 
     man = get_manager()
-    t = man.get_transformer(game)
+
+    # only multiple_policy_heads supported in c++
+    generation_descr = templates.default_generation_desc(game,
+                                                         multiple_policy_heads=True,
+                                                         num_previous_states=num_previous_states)
+
+    t = man.get_transformer(game, generation_descr)
 
     # create transformer wrapper object
     c_transformer = cppinterface.create_c_transformer(t)
 
-    nn = man.create_new_network(game)
-    verbose = False
+    nn = man.create_new_network(game, "tiny", generation_descr)
+    verbose = True
 
     total_predictions = 0
     total_s0 = 0
     total_s1 = 0
     total_s2 = 0
-    for ii in range(1000):
+    for ii in range(10):
+        print ii
         start = time.time()
-        array = c_transformer.test(cppinterface.sm_to_ptr(sm))
+        array = c_transformer.test(cppinterface.sm_to_ptr(sm), num_previous_states)
         total_s0 += time.time() - start
 
         sz = len(array) / (t.num_channels * t.channel_size)
@@ -80,6 +93,14 @@ def test_transformer():
     print total_predictions, "time taken", [s * 1000 for s in (total_s0, total_s1, total_s2)]
 
 
+def test_transformer():
+    do_transformer(0)
+
+
+def test_transformer_with_prev_states():
+    do_transformer(3)
+
+
 def test_inline_supervisor_creation():
     games = "breakthrough reversi breakthroughSmall connectFour".split()
 
@@ -90,7 +111,12 @@ def test_inline_supervisor_creation():
 
         # get statemachine
         sm = game_info.get_sm()
-        nn = man.create_new_network(game)
+
+        # only multiple_policy_heads supported in c++
+        generation_descr = templates.default_generation_desc(game,
+                                                             multiple_policy_heads=True)
+
+        nn = man.create_new_network(game, "tiny", generation_descr)
 
         for batch_size in (1, 128, 1024):
             supervisor = cppinterface.Supervisor(sm, nn, batch_size=batch_size)
@@ -101,8 +127,12 @@ def test_inline_supervisor_creation():
 def setup_c4(batch_size=1024):
     game = "connectFour"
     man = get_manager()
-    nn = man.create_new_network(game, "smaller")
-    # nn = man.load_network(game, "v6_26")
+
+    # only multiple_policy_heads supported in c++
+    generation_descr = templates.default_generation_desc(game,
+                                                         multiple_policy_heads=True)
+
+    nn = man.create_new_network(game, "smaller", generation_descr)
 
     game_info = lookup.by_name(game)
 
@@ -142,9 +172,9 @@ def get_ctx():
     return X()
 
 
-def do_test(batch_size, get_sample_count, inline=True):
+def do_test(batch_size, get_sample_count, num_workers=0):
     supervisor, conf = setup_c4(batch_size=batch_size)
-    supervisor.start_self_play(conf, inline=inline)
+    supervisor.start_self_play(conf, num_workers)
 
     nonlocal = get_ctx
     nonlocal.samples = []
@@ -169,21 +199,21 @@ def do_test(batch_size, get_sample_count, inline=True):
 
 
 def test_inline_one():
-    do_test(batch_size=1, get_sample_count=42, inline=True)
+    do_test(batch_size=1, get_sample_count=42, num_workers=0)
 
 
 def test_inline_batched():
-    do_test(batch_size=1024, get_sample_count=5000, inline=True)
+    do_test(batch_size=1024, get_sample_count=5000, num_workers=1)
 
 
 def test_workers_batched():
-    do_test(batch_size=1024, get_sample_count=5000, inline=False)
+    do_test(batch_size=1024, get_sample_count=5000, num_workers=2)
 
 
 def test_inline_unique_states():
     get_sample_count = 250
     supervisor, conf = setup_c4(batch_size=1)
-    supervisor.start_self_play(conf)
+    supervisor.start_self_play(conf, num_workers=0)
 
     nonlocal = get_ctx
     nonlocal.samples = []

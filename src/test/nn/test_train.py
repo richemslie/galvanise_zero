@@ -52,13 +52,13 @@ def get_conf_reversi():
     conf = confs.TrainNNConfig(game="reversi",
                                generation_prefix="v7",
                                use_previous=False,
-                               next_step=11,
+                               next_step=15,
                                overwrite_existing=True,
                                validation_split=0.9,
-                               batch_size=32,
+                               batch_size=256,
                                epochs=3,
-                               max_sample_count=10000,
-                               max_epoch_samples_count=2000,
+                               max_sample_count=200000,
+                               max_epoch_samples_count=100000,
                                starting_step=10,
                                drop_dupes_count=1,
                                compile_strategy="adam",
@@ -154,7 +154,7 @@ def test_trainer():
     # create the manager
     trainer = train.TrainManager(conf, transformer, next_generation_prefix="x2test")
 
-    nn_model_config = templates.nn_model_config_template(conf.game, "small", transformer)
+    nn_model_config = templates.nn_model_config_template(conf.game, "tiny", transformer)
     trainer.get_network(nn_model_config, generation_descr)
 
     data = trainer.gather_data()
