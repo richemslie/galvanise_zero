@@ -72,8 +72,12 @@ namespace GGPZero {
         }
 
         void toChannels(const GGPLib::BaseState* bs,
-                        const std::vector <GGPLib::BaseState*>& prev_states,
+                        const std::vector <const GGPLib::BaseState*>& prev_states,
                         float* buf) const;
+
+        int getNumberPrevStates() const {
+            return this->num_prev_states;
+        }
 
         // whether policy info should be on this, i dunno.  guess following python's lead.  XXX
         int getNumberPolicies() const {

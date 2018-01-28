@@ -32,7 +32,6 @@ namespace GGPZero {
 
         int depth_temperature_start;
 
-        // XXX these two names are terrible:
         float depth_temperature_increment;
         float depth_temperature_max;
 

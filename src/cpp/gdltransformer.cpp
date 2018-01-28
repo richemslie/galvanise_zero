@@ -21,7 +21,7 @@ void GdlBasesTransformer::setForState(float* local_buf, const GGPLib::BaseState*
 }
 
 void GdlBasesTransformer::toChannels(const GGPLib::BaseState* the_base_state,
-                                     const std::vector <GGPLib::BaseState*>& prev_states,
+                                     const std::vector <const GGPLib::BaseState*>& prev_states,
                                      float* buf) const {
 
     // NOTE: only supports 'channel first'.  If we really want to have 'channel last',

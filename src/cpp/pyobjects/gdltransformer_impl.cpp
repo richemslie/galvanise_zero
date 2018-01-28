@@ -69,7 +69,7 @@ static PyObject* GdlBasesTransformerWrapper_test(PyObject_GdlBasesTransformerWra
     other->assign(bs);
     sm->updateBases(bs);
 
-    std::vector <GGPLib::BaseState*> dummy;
+    std::vector <const GGPLib::BaseState*> dummy;
 
     float* pt_array_buf = array_buf;
 
@@ -98,7 +98,7 @@ static PyObject* GdlBasesTransformerWrapper_test(PyObject_GdlBasesTransformerWra
             sm->updateBases(other);
 
             if (prev_states) {
-                std::vector <GGPLib::BaseState*> prevs;
+                std::vector <const GGPLib::BaseState*> prevs;
                 for (int ii=0; ii<prev_states; ii++) {
                     prevs.push_back(other);
                 }

@@ -56,6 +56,7 @@ static PuctNode* createNode(const BaseState* base_state,
     //             (num_children * node_child_bytes));
 
     PuctNode* node = static_cast<PuctNode*> (malloc(total_bytes));
+    node->parent = nullptr;
     node->visits = 0;
 
     node->num_children = num_children;

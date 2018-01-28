@@ -61,15 +61,18 @@ PuctNode* NetworkScheduler::expandChild(PuctEvaluator* pe,
     this->sm->nextState(&child->move, this->basestate_expand_node);
 
     // create node
-    return this->createNode(pe, this->basestate_expand_node);
+    return this->createNode(pe, parent, this->basestate_expand_node);
 }
 
-PuctNode* NetworkScheduler::createNode(PuctEvaluator* pe, const GGPLib::BaseState* bs) {
+PuctNode* NetworkScheduler::createNode(PuctEvaluator* pe,
+                                       const PuctNode* parent,
+                                       const GGPLib::BaseState* bs) {
    // update the statemachine
     this->sm->updateBases(bs);
 
     const int role_count = this->sm->getRoleCount();
     PuctNode* new_node = PuctNode::create(role_count, bs, this->sm);
+    new_node->parent = parent;
 
     if (new_node->is_finalised) {
         for (int ii=0; ii<role_count; ii++) {
@@ -81,10 +84,17 @@ PuctNode* NetworkScheduler::createNode(PuctEvaluator* pe, const GGPLib::BaseStat
         return new_node;
     }
 
-    // XXX yeah, no with dummy_prev_states
-    static std::vector <GGPLib::BaseState*> dummy_prev_states;
+    std::vector <const GGPLib::BaseState*> prev_states;
+    const PuctNode* cur = parent;
+    for (int ii=0; ii<this->transformer->getNumberPrevStates(); ii++) {
+        if (cur != nullptr) {
+            prev_states.push_back(cur->getBaseState());
+            cur = cur->parent;
+        }
+    }
+
     float* buf = this->channel_buf + this->channel_buf_indx;
-    this->transformer->toChannels(bs, dummy_prev_states, buf);
+    this->transformer->toChannels(bs, prev_states, buf);
 
     this->channel_buf_indx += this->transformer->totalSize();
 

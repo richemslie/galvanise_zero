@@ -37,10 +37,11 @@ SelfPlay::~SelfPlay() {
 }
 
 float clamp(float value, float amount) {
-    if (value < amount) {
+    // 1.05 -> fixes rounding issues
+    if (value < amount * 1.05) {
         return 0.0;
 
-    } else if (value > (1.0f - amount)) {
+    } else if (value > (1.0f - amount * 1.05)) {
         return 1.0;
 
     } else {
@@ -177,7 +178,7 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
         const PuctNodeChild* choice = this->pe->onNextMove(iterations);
 
         // create a sample (call getProbabilities() to ensure probabilities are right for policy)
-        this->pe->getProbabilities(node, 1.0f);
+        this->pe->getProbabilities(node, 1.0f, true);
         Sample* s = this->manager->createSample(this->pe, node);
 
         // keep a local ref to it for when we score it
@@ -267,11 +268,12 @@ void SelfPlay::playOnce() {
                 float was_resign_score = clamp(this->resign_false_positive_check_scores[ii],
                                                this->conf->resign_score_probability);
 
-                if (std::fabs(score - was_resign_score) > 0.0001f) {
+                if (std::fabs(score - was_resign_score) > 0.01f) {
                     is_resign_false_positive = true;
 
-                    K273::l_verbose("Was a false positive resign %.2f, final %.2f",
+                    K273::l_verbose("Was a false positive resign %.2f, clamp %.2f, final %.2f",
                                     this->resign_false_positive_check_scores[ii],
+                                    was_resign_score,
                                     score);
 
                     this->manager->incrResignFalsePositives();

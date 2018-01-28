@@ -41,6 +41,9 @@ namespace GGPZero {
 
     struct PuctNode {
         // actual visits
+
+        const PuctNode* parent;
+
         int visits;
 
         uint16_t num_children;

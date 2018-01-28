@@ -47,7 +47,9 @@ namespace GGPZero {
         PuctNode* expandChild(PuctEvaluator* pe, const PuctNode* parent,
                               const PuctNodeChild* child);
 
-        PuctNode* createNode(PuctEvaluator* pe, const GGPLib::BaseState* bs);
+        PuctNode* createNode(PuctEvaluator* pe,
+                             const PuctNode* parent,
+                             const GGPLib::BaseState* bs);
 
 
     public:

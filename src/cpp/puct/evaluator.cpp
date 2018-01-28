@@ -77,7 +77,8 @@ void PuctEvaluator::expandChild(PuctNode* parent, PuctNodeChild* child) {
 }
 
 PuctNode* PuctEvaluator::createNode(const GGPLib::BaseState* state) {
-    PuctNode* new_node = this->scheduler->createNode(this, state);
+    // only root is created here... XXX rename ?
+    PuctNode* new_node = this->scheduler->createNode(this, nullptr, state);
     this->addNode(new_node);
     return new_node;
 }
@@ -342,9 +343,12 @@ void PuctEvaluator::applyMove(const GGPLib::JointMove* move) {
 
     ASSERT(this->root != nullptr);
 
-    if (this->root->isTerminal()) {
-        for (auto child : this->moves) {
-            K273::l_info("Move made %s", this->scheduler->moveString(child->move).c_str());
+    if (this->conf->verbose) {
+        // XXX why is this not triggered?
+        if (this->root->isTerminal()) {
+            for (auto child : this->moves) {
+                K273::l_info("Move made %s", this->scheduler->moveString(child->move).c_str());
+            }
         }
     }
 }
@@ -389,27 +393,31 @@ const PuctNodeChild* PuctEvaluator::onNextMove(int max_iterations, double end_ti
     ASSERT(this->root != nullptr && this->initial_root != nullptr);
 
     if (this->conf->root_expansions_preset_visits > 0) {
-
+        int number_of_expansions = 0;
         for (int ii=0; ii<this->root->num_children; ii++) {
             PuctNodeChild* c = this->root->getNodeChild(this->role_count, ii);
 
             if (c->to_node == nullptr) {
                 this->expandChild(this->root, c);
 
-                // XXX needs to be traversal
+                // XXX should be traversal on children
                 c->to_node->visits = std::max(c->to_node->visits,
                                               this->conf->root_expansions_preset_visits);
+
+                number_of_expansions++;
             }
         }
     }
 
     this->playoutLoop(max_iterations, end_time);
 
+    const PuctNodeChild* choice = this->choose();
+
     if (this->conf->verbose) {
-        this->logDebug();
+        this->logDebug(choice);
     }
 
-    return this->choose();
+    return choice;
 }
 
 float PuctEvaluator::getTemperature() const {
@@ -419,13 +427,13 @@ float PuctEvaluator::getTemperature() const {
 
     ASSERT(this->conf->temperature > 0);
 
-    float exponent = ((this->game_depth - this->conf->depth_temperature_start) *
-                      this->conf->depth_temperature_increment);
-    exponent = std::max(1.0f, exponent);
-    exponent = std::min(exponent, this->conf->depth_temperature_max);
+    float mulitplier = 1.0f + ((this->game_depth - this->conf->depth_temperature_start) *
+                               this->conf->depth_temperature_increment);
 
-    float temperature = this->conf->temperature * exponent;
-    return temperature;
+    mulitplier = std::max(1.0f, mulitplier);
+    mulitplier = std::min(mulitplier, this->conf->depth_temperature_max);
+
+    return this->conf->temperature * mulitplier;
 }
 
 const PuctNodeChild* PuctEvaluator::choose(const PuctNode* node) {
@@ -470,7 +478,14 @@ const PuctNodeChild* PuctEvaluator::chooseTemperature(const PuctNode* node) {
         return this->chooseTopVisits(node);
     }
 
-    Children dist = this->getProbabilities(this->root, temperature);
+    // subtle: when the visits is low (like 0), we want to use the policy part of the
+    // distribution. By using linger here, we get that behaviour.
+    Children dist;
+    if (root->visits < root->num_children) {
+        dist = this->getProbabilities(this->root, temperature, true);
+    } else {
+        dist = this->getProbabilities(this->root, temperature, false);
+    }
 
     float expected_probability = this->rng.get() * this->conf->random_scale;
 
@@ -490,7 +505,7 @@ const PuctNodeChild* PuctEvaluator::chooseTemperature(const PuctNode* node) {
     return dist.back();
 }
 
-Children PuctEvaluator::getProbabilities(PuctNode* node, float temperature) {
+Children PuctEvaluator::getProbabilities(PuctNode* node, float temperature, bool use_linger) {
     // XXX this makes the assumption that our legals are unique for each child.
 
     ASSERT(node->num_children > 0);
@@ -499,13 +514,19 @@ Children PuctEvaluator::getProbabilities(PuctNode* node, float temperature) {
     float node_visits = node->visits + 0.1 * node->num_children;
 
     // add some smoothness
-    float linger_pct = 0.2f;
+
+    float linger_pct = 0.1f;
 
     float total_probability = 0.0f;
     for (int ii=0; ii<node->num_children; ii++) {
         PuctNodeChild* child = node->getNodeChild(this->role_count, ii);
         int child_visits = child->to_node ? child->to_node->visits + 0.1f : 0.1f;
-        child->next_prob = linger_pct * child->policy_prob + (1 - linger_pct) * (child_visits / node_visits);
+        if (use_linger) {
+            child->next_prob = linger_pct * child->policy_prob + (1 - linger_pct) * (child_visits / node_visits);
+
+        } else {
+            child->next_prob = child_visits / node_visits;
+        }
 
         // apply temperature
         child->next_prob = ::pow(child->next_prob, temperature);
@@ -521,7 +542,7 @@ Children PuctEvaluator::getProbabilities(PuctNode* node, float temperature) {
     return PuctNode::sortedChildren(node, this->role_count, true);
 }
 
-void PuctEvaluator::logDebug() {
+void PuctEvaluator::logDebug(const PuctNodeChild* choice_root) {
     PuctNode* cur = this->root;
     for (int ii=0; ii<this->conf->max_dump_depth; ii++) {
         std::string indent = "";
@@ -535,16 +556,12 @@ void PuctEvaluator::logDebug() {
 
         const PuctNodeChild* next_choice;
 
-        // for side effects we call getProbabilities()... this might be overwritten by check
-        if (cur->num_children) {
-            this->getProbabilities(cur, 1.0f);
-        }
-
         if (cur->num_children == 0) {
             next_choice = nullptr;
+
         } else {
             if (cur == this->root) {
-                next_choice = this->choose(cur);
+                next_choice = choice_root;
             } else {
                 next_choice = this->chooseTopVisits(cur);
             }

@@ -71,21 +71,18 @@ Sample* SelfPlayManager::createSample(const PuctEvaluator* pe, const PuctNode* n
     sample->state = this->sm->newBaseState();
     sample->state->assign(node->getBaseState());
 
-    // Add previous states (XXX i don't know if I want to do it this way XXX)
-    int depth = node->game_depth - 1;
+    // Add previous states
+    const PuctNode* cur = node->parent;
     for (int ii=0; ii<this->number_of_previous_states; ii++) {
-        if (depth < 0) {
+        if (cur == nullptr) {
             break;
         }
 
-        const PuctNode* parent_node = pe->getNode(depth);
-        ASSERT(parent_node->game_depth == depth);
-
         GGPLib::BaseState* bs = this->sm->newBaseState();
-        bs->assign(parent_node->getBaseState());
+        bs->assign(cur->getBaseState());
         sample->prev_states.push_back(bs);
 
-        depth--;
+        cur = cur->parent;
     }
 
     // create empty vectors

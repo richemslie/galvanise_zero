@@ -60,9 +60,9 @@ namespace GGPZero {
         const PuctNodeChild* chooseTopVisits(const PuctNode* node);
         const PuctNodeChild* chooseTemperature(const PuctNode* node);
 
-        Children getProbabilities(PuctNode* node, float temperature);
+        Children getProbabilities(PuctNode* node, float temperature, bool use_linger=true);
 
-        void logDebug();
+        void logDebug(const PuctNodeChild* choice_root);
 
         PuctNode* jumpRoot(int depth);
         const PuctNode* getNode(int depth) const;
