@@ -24,6 +24,7 @@
 #include <k273/exception.h>
 
 #include <string>
+#include <vector>
 
 using namespace GGPZero;
 
@@ -62,9 +63,7 @@ static PuctConfig* createPuctConfig(PyObject* dict) {
         return (float) PyFloat_AsDouble(borrowed);
     };
 
-    config->name = asString("name");
     config->verbose = asInt("verbose");
-    config->generation = asString("generation");
     config->puct_before_expansions = asInt("puct_before_expansions");
     config->puct_before_root_expansions = asInt("puct_before_root_expansions");
     config->puct_constant_before = asFloat("puct_constant_before");
@@ -74,6 +73,7 @@ static PuctConfig* createPuctConfig(PyObject* dict) {
     config->dirichlet_noise_alpha = asFloat("dirichlet_noise_alpha");
     config->max_dump_depth = asInt("max_dump_depth");
     config->random_scale = asFloat("random_scale");
+
     config->temperature = asFloat("temperature");
     config->depth_temperature_start = asInt("depth_temperature_start");
     config->depth_temperature_increment = asFloat("depth_temperature_increment");
@@ -143,37 +143,39 @@ static PyObject* doPoll(T* parent_caller, PyObject* args) {
     //       made, and only once we poll for the first time - then there may be some predictions
     //       to be made!
 
-    PyArrayObject* m0 = nullptr;
-    PyArrayObject* m1 = nullptr;
-    if (!PyArg_ParseTuple(args, "O!O!", &PyArray_Type, &m0, &PyArray_Type, &m1)) {
+    // get a list of policies
+
+    int predict_count;
+    PyObject* predictions = nullptr;
+    if (!PyArg_ParseTuple(args, "iO!", &predict_count,
+                          &PyList_Type, &predictions)) {
         return nullptr;
     }
 
-    if (!PyArray_ISFLOAT(m0)) {
-        return nullptr;
+    //K273::l_verbose("# predictions %d, sizeof data %d", predict_count,
+    //                (int) PyList_Size(predictions));
+
+    std::vector <float*> data;
+    for (int ii=0; ii<PyList_Size(predictions); ii++) {
+        PyArrayObject* array = (PyArrayObject*) PyList_GET_ITEM(predictions, ii);
+
+        if (!PyArray_Check(array)) {
+            return nullptr;
+        }
+
+        if (!PyArray_ISFLOAT(array)) {
+            return nullptr;
+        }
+
+        if (!PyArray_ISCARRAY(array)) {
+            return nullptr;
+        }
+
+        data.push_back((float*) PyArray_DATA(array));
     }
-
-    if (!PyArray_ISFLOAT(m1)) {
-        return nullptr;
-    }
-
-    if (!PyArray_ISCARRAY(m0)) {
-        return nullptr;
-    }
-
-    if (!PyArray_ISCARRAY(m1)) {
-        return nullptr;
-    }
-
-    int pred_count = PyArray_DIM(m0, 0);
-    float* policies = nullptr;
-    float* final_scores = nullptr;
-
-    policies = (float*) PyArray_DATA(m0);
-    final_scores = (float*) PyArray_DATA(m1);
 
     try {
-        const ReadyEvent* event = parent_caller->poll(policies, final_scores, pred_count);
+        const ReadyEvent* event = parent_caller->poll(predict_count, data);
 
         if (event->pred_count) {
             // create a numpy array using our internal array

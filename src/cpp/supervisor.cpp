@@ -100,21 +100,24 @@ void Supervisor::createWorkers(const SelfPlayConfig* config) {
     worker_thread->promptWorker();
 }
 
-const ReadyEvent* Supervisor::poll(float* policies, float* final_scores, int pred_count) {
-    ASSERT(0 <= pred_count && pred_count <= this->batch_size);
-
+const ReadyEvent* Supervisor::poll(int predict_count, std::vector <float*>& data) {
+    ASSERT(0 <= predict_count && predict_count <= this->batch_size);
 
     auto populateEvent = [&] (SelfPlayManager* manager) {
         PredictDoneEvent* event = manager->getPredictDoneEvent();
 
         // copy stuff to ready
-        event->pred_count = pred_count;
+        event->pred_count = predict_count;
         if (event->pred_count > 0) {
-            memcpy(event->policies, policies,
-                   sizeof(float) * pred_count * this->transformer->getPolicySize());
+            int index = 0;
+            event->policies.resize(this->transformer->getNumberPolicies());
+            for (int ii=0; ii<this->transformer->getNumberPolicies(); ii++) {
+                memcpy(event->policies[ii], data[index++],
+                       sizeof(float) * predict_count * this->transformer->getPolicySize(ii));
+            }
 
-            memcpy(event->final_scores, final_scores,
-                   sizeof(float) * pred_count * this->sm->getRoleCount());
+            memcpy(event->final_scores, data[index++],
+                   sizeof(float) * predict_count * this->sm->getRoleCount());
         }
     };
 
@@ -125,9 +128,11 @@ const ReadyEvent* Supervisor::poll(float* policies, float* final_scores, int pre
         return this->inline_sp_manager->getReadyEvent();
     }
 
-    if (pred_count) {
+    if (predict_count) {
         ASSERT(this->in_progress_worker != nullptr && this->in_progress_manager != nullptr);
         populateEvent(this->in_progress_manager);
+
+        this->slowPoll(this->in_progress_manager);
         this->in_progress_worker->push(this->in_progress_manager);
 
         // wake up if need to...
@@ -141,10 +146,10 @@ const ReadyEvent* Supervisor::poll(float* policies, float* final_scores, int pre
 
     // workers run forever... kind of the whole point
     while (true) {
+
         for (auto worker : this->self_play_workers) {
             this->in_progress_manager = worker->pull();
             if (this->in_progress_manager != nullptr) {
-                this->slowPoll(this->in_progress_manager);
                 this->in_progress_worker = worker;
                 break;
             }
@@ -154,11 +159,11 @@ const ReadyEvent* Supervisor::poll(float* policies, float* final_scores, int pre
             break;
         }
 
-        ::usleep(100000);
+        //::usleep(100);
 
-        for (auto worker : this->self_play_workers) {
-            worker->getThread()->promptWorker();
-        }
+        //for (auto worker : this->self_play_workers) {
+        //    worker->getThread()->promptWorker();
+        //}
     }
 
     return this->in_progress_manager->getReadyEvent();

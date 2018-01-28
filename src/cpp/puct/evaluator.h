@@ -80,7 +80,7 @@ namespace GGPZero {
         PuctNode* initial_root;
 
         // not const PuctNodeChild, as we may need to fix tree
-        std::vector <PuctNode*> all_nodes;
+        std::vector <PuctNode*> all_chained_nodes;
         std::vector <PuctNodeChild*> moves;
 
         // root for evaluation

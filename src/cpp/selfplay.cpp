@@ -72,32 +72,38 @@ PuctNode* SelfPlay::selectNode() {
         game_depth++;
     }
 
-    // ok, we have a complete game.  Choose a starting point and start running samples from there.
-
     ASSERT(node->game_depth == game_depth);
 
-    // choose a starting point for when to start sampling
-    int sample_start_depth = 0;
-    if (game_depth - this->conf->max_number_of_samples > 0) {
-        sample_start_depth = this->rng.getWithMax(game_depth -
-                                                  this->conf->max_number_of_samples);
-    }
+    for (int ii=0; ii<10; ii++) {
+        // ok, we have a complete game.  Choose a starting point and start running samples from there.
 
-    ASSERT(sample_start_depth >= 0);
+        // choose a starting point for when to start sampling
+        int sample_start_depth = 0;
+        if (game_depth - this->conf->max_number_of_samples > 0) {
+            sample_start_depth = this->rng.getWithMax(game_depth -
+                                                      this->conf->max_number_of_samples);
+        }
 
-    node = this->pe->jumpRoot(sample_start_depth);
-    ASSERT(node->game_depth == sample_start_depth);
+        ASSERT(sample_start_depth >= 0);
 
-    // don't start as if the game is done
-    if (this->can_resign) {
-        // note this score isn't that reliable...  since likely we didn't do any iterations
-        while (node->getCurrentScore(node->lead_role_index) < this->conf->resign_score_probability) {
-            sample_start_depth--;
-            node = this->pe->jumpRoot(sample_start_depth);
+        node = this->pe->jumpRoot(sample_start_depth);
+        ASSERT(node->game_depth == sample_start_depth);
+
+        // don't start as if the game is done
+        if (this->can_resign) {
+            // note this score isn't that reliable...  since likely we didn't do any iterations
+            while (node->getCurrentScore(node->lead_role_index) < this->conf->resign_score_probability) {
+                sample_start_depth--;
+                node = this->pe->jumpRoot(sample_start_depth);
+            }
+        }
+
+        if (this->manager->getUniqueStates()->isUnique(node->getBaseState())) {
+            return node;
         }
     }
 
-    return node;
+    return nullptr;
 }
 
 bool SelfPlay::resign(PuctNode* node) {
@@ -221,6 +227,13 @@ void SelfPlay::playOnce() {
 
     // first select a starting point
     PuctNode* node = this->selectNode();
+
+    if (node == nullptr) {
+        K273::l_verbose("Failed to select a node - restarting");
+        this->manager->incrNoSamples();
+        return;
+    }
+
     ASSERT(!node->isTerminal());
 
     int starting_sample_depth = node->game_depth;
@@ -229,6 +242,7 @@ void SelfPlay::playOnce() {
 
     // no samples :(
     if (this->game_samples.empty()) {
+        K273::l_verbose("Failed to produce no samples - restarting");
         this->manager->incrNoSamples();
         return;
     }

@@ -10,9 +10,7 @@ namespace GGPZero {
     };
 
     struct PuctConfig {
-        std::string name;
         bool verbose;
-        std::string generation;
 
         int puct_before_expansions;
         int puct_before_root_expansions;

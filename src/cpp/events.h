@@ -1,10 +1,12 @@
 #pragma once
 
+#include <vector>
+
 namespace GGPZero {
 
     struct PredictDoneEvent {
         int pred_count;
-        float* policies;
+        std::vector <float*> policies;
         float* final_scores;
     };
 

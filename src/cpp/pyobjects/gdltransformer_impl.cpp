@@ -13,6 +13,8 @@
 #include <statemachine/legalstate.h>
 #include <statemachine/statemachine.h>
 
+#include <vector>
+
 using namespace GGPZero;
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -45,6 +47,7 @@ static PyObject* GdlBasesTransformerWrapper_addControlState(PyObject_GdlBasesTra
 }
 
 static PyObject* GdlBasesTransformerWrapper_test(PyObject_GdlBasesTransformerWrapper* self, PyObject* args) {
+
     const int MOVES = 4096;
     static float* array_buf = nullptr;
 
@@ -53,7 +56,8 @@ static PyObject* GdlBasesTransformerWrapper_test(PyObject_GdlBasesTransformerWra
     }
 
     ssize_t ptr = 0;
-    if (! ::PyArg_ParseTuple(args, "n", &ptr)) {
+    int prev_states = 0;
+    if (! ::PyArg_ParseTuple(args, "ni", &ptr, &prev_states)) {
         return nullptr;
     }
 
@@ -93,7 +97,18 @@ static PyObject* GdlBasesTransformerWrapper_test(PyObject_GdlBasesTransformerWra
             sm->nextState(joint_move, other);
             sm->updateBases(other);
 
-            self->impl->toChannels(other, dummy, pt_array_buf);
+            if (prev_states) {
+                std::vector <GGPLib::BaseState*> prevs;
+                for (int ii=0; ii<prev_states; ii++) {
+                    prevs.push_back(other);
+                }
+
+                self->impl->toChannels(other, prevs, pt_array_buf);
+
+            } else {
+                self->impl->toChannels(other, dummy, pt_array_buf);
+            }
+
             pt_array_buf += self->impl->totalSize();
             total_depth++;
         }
@@ -167,11 +182,31 @@ static void GdlBasesTransformerWrapper_dealloc(PyObject* ptr) {
 ///////////////////////////////////////////////////////////////////////////////
 
 static PyObject* gi_GdlBasesTransformer(PyObject* self, PyObject* args) {
-    int arg0, arg1, arg2, arg3;
-    if (! ::PyArg_ParseTuple(args, "iiii", &arg0, &arg1, &arg2, &arg3)) {
+    int channel_size, channels_per_state, num_prev_states;
+    PyObject* expected_policy_sizes;
+
+    if (! ::PyArg_ParseTuple(args, "iiiO!",
+                             &channel_size,
+                             &channels_per_state,
+                             &num_prev_states,
+                             &PyList_Type, &expected_policy_sizes)) {
         return nullptr;
     }
 
-    GdlBasesTransformer* transformer = new GdlBasesTransformer(arg0, arg1, arg2, arg3);
+    auto asInt = [expected_policy_sizes] (int index) {
+        PyObject* borrowed = PyList_GET_ITEM(expected_policy_sizes, index);
+        return PyInt_AsLong(borrowed);
+    };
+
+    std::vector <int> policy_sizes;
+    for (int ii=0; ii<PyList_Size(expected_policy_sizes); ii++) {
+        policy_sizes.push_back(asInt(ii));
+    }
+
+    GdlBasesTransformer* transformer = new GdlBasesTransformer(channel_size,
+                                                               channels_per_state,
+                                                               num_prev_states,
+                                                               policy_sizes);
+
     return (PyObject *) PyType_GdlBasesTransformerWrapper_new(transformer);
 }

@@ -297,7 +297,7 @@ PuctNode* PuctEvaluator::fastApplyMove(const PuctNodeChild* next) {
     ASSERT(this->initial_root != nullptr);
     ASSERT(this->root != nullptr);
 
-    this->all_nodes.push_back(this->root);
+    this->all_chained_nodes.push_back(this->root);
 
     PuctNode* new_root = nullptr;
     for (int ii=0; ii<this->root->num_children; ii++) {
@@ -369,7 +369,7 @@ void PuctEvaluator::reset() {
 
     // these dont own the memory, so can just clear
     this->moves.clear();
-    this->all_nodes.clear();
+    this->all_chained_nodes.clear();
 }
 
 PuctNode* PuctEvaluator::establishRoot(const GGPLib::BaseState* current_state, int game_depth) {
@@ -491,9 +491,11 @@ const PuctNodeChild* PuctEvaluator::chooseTemperature(const PuctNode* node) {
 }
 
 Children PuctEvaluator::getProbabilities(PuctNode* node, float temperature) {
+    // XXX this makes the assumption that our legals are unique for each child.
+
     ASSERT(node->num_children > 0);
 
-    // since we add 0.1 to each our children (this is so the percentage does don't drop too low
+    // since we add 0.1 to each our children (this is so the percentage does don't drop too low)
     float node_visits = node->visits + 0.1 * node->num_children;
 
     // add some smoothness
@@ -562,12 +564,12 @@ void PuctEvaluator::logDebug() {
 }
 
 PuctNode* PuctEvaluator::jumpRoot(int depth) {
-    ASSERT(depth >=0 && depth < (int) this->all_nodes.size());
-    this->root = this->all_nodes[depth];
+    ASSERT(depth >=0 && depth < (int) this->all_chained_nodes.size());
+    this->root = this->all_chained_nodes[depth];
     return this->root;
 }
 
 const PuctNode* PuctEvaluator::getNode(int depth) const {
-    ASSERT(depth >=0 && depth < (int) this->all_nodes.size());
-    return this->all_nodes[depth];
+    ASSERT(depth >=0 && depth < (int) this->all_chained_nodes.size());
+    return this->all_chained_nodes[depth];
 }

@@ -37,13 +37,16 @@ SelfPlayManager::SelfPlayManager(GGPLib::StateMachineInterface* sm,
                                            this->batch_size);
 
     // allocate buffers for predict_done_event
-    const int num_of_floats_policies = (this->transformer->getPolicySize() *
-                                        this->batch_size);
+    for (int ii=0; ii<this->transformer->getNumberPolicies(); ii++) {
+        const int num_of_floats_policies = (this->transformer->getPolicySize(ii) *
+                                            this->batch_size);
+        float* mem = new float[num_of_floats_policies];
+        this->predict_done_event.policies.push_back(mem);
+    }
 
     const int num_of_floats_final_scores = (this->sm->getRoleCount() *
                                             this->batch_size);
 
-    this->predict_done_event.policies = new float[num_of_floats_policies];
     this->predict_done_event.final_scores = new float[num_of_floats_final_scores];
     this->predict_done_event.pred_count = 0;
 }
@@ -52,7 +55,10 @@ SelfPlayManager::~SelfPlayManager() {
     delete this->sm;
     delete this->scheduler;
 
-    delete[] this->predict_done_event.policies;
+    for (float* mem : this->predict_done_event.policies) {
+        delete[] mem;
+    }
+
     delete[] this->predict_done_event.final_scores;
 }
 
@@ -65,7 +71,7 @@ Sample* SelfPlayManager::createSample(const PuctEvaluator* pe, const PuctNode* n
     sample->state = this->sm->newBaseState();
     sample->state->assign(node->getBaseState());
 
-    // Add previous states
+    // Add previous states (XXX i don't know if I want to do it this way XXX)
     int depth = node->game_depth - 1;
     for (int ii=0; ii<this->number_of_previous_states; ii++) {
         if (depth < 0) {
@@ -82,10 +88,22 @@ Sample* SelfPlayManager::createSample(const PuctEvaluator* pe, const PuctNode* n
         depth--;
     }
 
-    for (int ii=0; ii<node->num_children; ii++) {
-        const PuctNodeChild* child = node->getNodeChild(this->sm->getRoleCount(), ii);
-        sample->policy.emplace_back(child->move.get(node->lead_role_index),
+    // create empty vectors
+    sample->policies.resize(this->sm->getRoleCount());
+
+    for (int ri=0; ri<this->sm->getRoleCount(); ri++) {
+        Sample::Policy& policy = sample->policies[ri];
+        for (int ii=0; ii<node->num_children; ii++) {
+            const PuctNodeChild* child = node->getNodeChild(this->sm->getRoleCount(), ii);
+            if (ri == node->lead_role_index) {
+                policy.emplace_back(child->move.get(ri),
                                     child->next_prob);
+            } else {
+                // XXX huge hack to make it work (for now)
+                policy.emplace_back(child->move.get(ri), 1.0);
+                break;
+            }
+        }
     }
 
     sample->resultant_puct_visits = node->visits;

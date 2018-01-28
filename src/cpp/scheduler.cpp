@@ -81,6 +81,7 @@ PuctNode* NetworkScheduler::createNode(PuctEvaluator* pe, const GGPLib::BaseStat
         return new_node;
     }
 
+    // XXX yeah, no with dummy_prev_states
     static std::vector <GGPLib::BaseState*> dummy_prev_states;
     float* buf = this->channel_buf + this->channel_buf_indx;
     this->transformer->toChannels(bs, dummy_prev_states, buf);
@@ -89,12 +90,15 @@ PuctNode* NetworkScheduler::createNode(PuctEvaluator* pe, const GGPLib::BaseStat
 
     // hang onto the position of where inserted into requestors
     int idx = this->requestors.size();
-    this->requestors.emplace_back(greenlet_current());
 
-    int policy_incr = new_node->lead_role_index ? this->transformer->getRole1Index() : 0;
-    policy_incr += idx * this->transformer->getPolicySize();
+    std::vector <int> policy_incrs;
+    for (int ii=0; ii<this->transformer->getNumberPolicies(); ii++) {
+        policy_incrs.push_back(idx * this->transformer->getPolicySize(ii));
+    }
 
     int final_score_incr = idx * role_count;
+
+    this->requestors.emplace_back(greenlet_current());
 
     // see you later...
     greenlet_switch_to(this->main_loop);
@@ -102,7 +106,9 @@ PuctNode* NetworkScheduler::createNode(PuctEvaluator* pe, const GGPLib::BaseStat
     // back now! at this point we have predicted
     ASSERT(this->predict_done_event->pred_count >= idx);
 
-    float* policies_start = this->predict_done_event->policies + policy_incr;
+    // XXX for now we are only interested in new nodes lead_role_index
+    float* policies_start = this->predict_done_event->policies[new_node->lead_role_index];
+    policies_start += policy_incrs[new_node->lead_role_index];
     float* final_scores_start = this->predict_done_event->final_scores + final_score_incr;
 
     // simple go through and populate stuff

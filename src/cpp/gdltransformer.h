@@ -11,7 +11,6 @@
 #include <string>
 #include <vector>
 
-
 namespace GGPZero {
 
     class BaseInfo {
@@ -38,14 +37,18 @@ namespace GGPZero {
 
     class GdlBasesTransformer {
     public:
-        GdlBasesTransformer(int channel_size, int control_states_start, int expected_policy_size, int role_1_index) :
+        GdlBasesTransformer(int channel_size,
+                            int channels_per_state,
+                            int num_prev_states,
+                            std::vector <int>& expected_policy_sizes) :
             channel_size(channel_size),
-            control_states_start(control_states_start),
-            expected_policy_size(expected_policy_size),
-            role_1_index(role_1_index) {
+            channels_per_state(channels_per_state),
+            num_prev_states(num_prev_states),
+            expected_policy_sizes(expected_policy_sizes) {
         }
 
     public:
+        // builder methods
         void addBaseInfo(bool has_channel, int index) {
             this->base_infos.emplace_back(has_channel, index);
         }
@@ -54,29 +57,41 @@ namespace GGPZero {
             this->control_states.push_back(index);
         }
 
+    private:
+        void setForState(float* local_buf, const GGPLib::BaseState* bs) const;
+
+        int controlStatesStart() const {
+            return this->channel_size * (this->channels_per_state * (this->num_prev_states + 1));
+        }
+
+    public:
+        // client side methods
         int totalSize() const {
-            return this->control_states_start + this->channel_size * this->control_states.size();
+            return this->channel_size * (this->channels_per_state * (this->num_prev_states + 1) +
+                                         this->control_states.size());
         }
 
         void toChannels(const GGPLib::BaseState* bs,
                         const std::vector <GGPLib::BaseState*>& prev_states,
                         float* buf) const;
 
-        int getPolicySize() const {
-            return this->expected_policy_size;
+        // whether policy info should be on this, i dunno.  guess following python's lead.  XXX
+        int getNumberPolicies() const {
+            return this->expected_policy_sizes.size();
         }
 
-        int getRole1Index() const {
-            return this->role_1_index;
+        int getPolicySize(int i) const {
+            return this->expected_policy_sizes[i];
         }
 
     private:
         const int channel_size;
-        const int control_states_start;
-        const int expected_policy_size;
-        const int role_1_index;
+        const int channels_per_state;
+        const int num_prev_states;
         std::vector <int> control_states;
         std::vector <BaseInfo> base_infos;
+
+        std::vector <int> expected_policy_sizes;
     };
 
 }

@@ -85,7 +85,7 @@ namespace GGPZero {
 
         std::vector <Sample*> getSamples();
 
-        const ReadyEvent* poll(float* policies, float* final_scores, int pred_count);
+        const ReadyEvent* poll(int predict_count, std::vector <float*>& data);
 
         void addUniqueState(const GGPLib::BaseState* bs);
         void clearUniqueStates();

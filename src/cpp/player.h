@@ -6,7 +6,6 @@
 #include <statemachine/jointmove.h>
 #include <statemachine/statemachine.h>
 
-#include <deque>
 #include <vector>
 
 namespace GGPZero {
@@ -32,9 +31,10 @@ namespace GGPZero {
         void puctPlayerMove(const GGPLib::BaseState* state, int iterations, double end_time);
         int puctPlayerGetMove(int lead_role_index);
 
-        const ReadyEvent* poll(float* policies, float* final_scores, int pred_count);
+        const ReadyEvent* poll(int predict_count, std::vector <float*>& data);
 
     private:
+        const GdlBasesTransformer* transformer;
         PuctEvaluator* evaluator;
         NetworkScheduler* scheduler;
 

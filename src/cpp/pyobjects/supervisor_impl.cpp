@@ -67,6 +67,11 @@ void PyDict_setNewItem(PyObject* d, const char* name, PyObject* o) {
     Py_DECREF(o);
 }
 
+
+PyObject* toPolicies(const Sample::Policy& policy) {
+    return createListAndPopulate(policy, policyElementToTuple);
+}
+
 PyObject* sampleToDict(Sample* sample) {
     // awesome - trying to steal as much ref counts as possible, while keeping the code as clean
     // as possible!
@@ -79,8 +84,8 @@ PyObject* sampleToDict(Sample* sample) {
     PyDict_setNewItem(sample_as_dict, "prev_states",
                       createListAndPopulate(sample->prev_states, stateToList));
 
-    PyDict_setNewItem(sample_as_dict, "policy",
-                      createListAndPopulate(sample->policy, policyElementToTuple));
+    PyDict_setNewItem(sample_as_dict, "policies",
+                      createListAndPopulate(sample->policies, toPolicies));
 
     PyDict_setNewItem(sample_as_dict, "final_score",
                       createListAndPopulate(sample->final_score, PyFloat_FromDouble));
@@ -91,8 +96,8 @@ PyObject* sampleToDict(Sample* sample) {
     PyDict_setNewItem(sample_as_dict, "game_length",
                       PyInt_FromLong(sample->game_length));
 
-    PyDict_setNewItem(sample_as_dict, "lead_role_index",
-                      PyInt_FromLong(sample->lead_role_index));
+    //PyDict_setNewItem(sample_as_dict, "lead_role_index",
+    //                  PyInt_FromLong(sample->lead_role_index));
 
     PyDict_setNewItem(sample_as_dict, "match_identifier",
                       PyString_FromString(sample->match_identifier.c_str()));
@@ -231,5 +236,6 @@ static PyObject* gi_Supervisor(PyObject* self, PyObject* args) {
     // create the c++ object
     Supervisor* supervisor = new Supervisor(sm, py_transformer->impl,
                                             batch_size, number_of_previous_states);
+
     return (PyObject*) PyType_Supervisor_new(supervisor);
 }

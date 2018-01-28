@@ -10,10 +10,11 @@
 namespace GGPZero {
 
     struct Sample {
+        typedef std::vector <std::pair <int, float>> Policy;
 
         GGPLib::BaseState* state;
         std::vector <GGPLib::BaseState*> prev_states;
-        std::vector <std::pair <int, float>> policy;
+        std::vector <Policy>  policies;
         std::vector <float> final_score;
         int depth;
         int game_length;

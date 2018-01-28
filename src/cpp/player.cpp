@@ -15,6 +15,7 @@ using namespace GGPZero;
 Player::Player(GGPLib::StateMachineInterface* sm,
                const GdlBasesTransformer* transformer,
                PuctConfig* conf) :
+    transformer(transformer),
     evaluator(nullptr),
     scheduler(nullptr),
     first_play(false) {
@@ -81,11 +82,20 @@ int Player::puctPlayerGetMove(int lead_role_index) {
     return child->move.get(lead_role_index);
 }
 
-const ReadyEvent* Player::poll(float* policies, float* final_scores, int pred_count) {
+const ReadyEvent* Player::poll(int predict_count, std::vector <float*>& data) {
     // when pred_count == 0, it is used to bootstrap the main loop in scheduler
-    this->predict_done_event.pred_count = pred_count;
-    this->predict_done_event.policies = policies;
-    this->predict_done_event.final_scores = final_scores;
+    this->predict_done_event.pred_count = predict_count;
+
+    // XXX holds pointers to data - maybe we should just copy it like in supervisor case.  It isn't
+    // like this is an optimisation, I am just being lazy.
+
+    int index = 0;
+    this->predict_done_event.policies.resize(this->transformer->getNumberPolicies());
+    for (int ii=0; ii<this->transformer->getNumberPolicies(); ii++) {
+        this->predict_done_event.policies[ii] = data[index++];
+    }
+
+    this->predict_done_event.final_scores = data[index++];
 
     this->scheduler->poll(&this->predict_done_event, &this->ready_event);
 
