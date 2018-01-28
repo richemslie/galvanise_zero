@@ -30,21 +30,20 @@ class Configs:
         conf.generation_prefix = gen_prefix
 
         conf.use_previous = False
-        conf.next_step = 40
+        conf.next_step = 52
 
         conf.validation_split = 0.9
-        conf.batch_size = 256
-        conf.epochs = 42
+        conf.batch_size = 128
+        conf.epochs = 20
         conf.max_sample_count = 2500000
         conf.starting_step = 10
 
-        conf.drop_dupes_count = 7
-        conf.max_epoch_samples_count = 900000
+        conf.drop_dupes_count = 3
+        conf.max_epoch_samples_count = 2500000
 
-        conf.compile_strategy = "amsgrad"
+        conf.compile_strategy = "adam"
 
         return conf
-
 
     def c4(self, gen_prefix):
         conf = confs.TrainNNConfig("connectFour")
@@ -54,7 +53,7 @@ class Configs:
         conf.use_previous = False
         conf.next_step = 33
 
-        conf.validation_split = 0.5
+        conf.validation_split = 0.9
         conf.batch_size = 4096
         conf.epochs = 1
         conf.max_sample_count = 270000
@@ -73,7 +72,7 @@ class Configs:
         conf.next_step = 20
 
         conf.validation_split = 0.9
-        conf.batch_size = 256
+        conf.batch_size = 128
         conf.epochs = 20
         conf.max_sample_count = 300000
         conf.starting_step = 3
@@ -101,13 +100,13 @@ class Configs:
         return conf
 
 
-def get_nn_model(game, transformer, size="medium-small"):
+def get_nn_model(game, transformer, size="small"):
     config = templates.nn_model_config_template(game, size, transformer)
 
-    config.dropout_rate_policy = -1
-    config.dropout_rate_value = -1
-    config.l2_regularisation = True
-
+    # config.dropout_rate_policy = 0.1
+    # config.dropout_rate_value = 0.5
+    # config.l2_regularisation = False
+    # config.residual_layers = 12
     return config
 
 

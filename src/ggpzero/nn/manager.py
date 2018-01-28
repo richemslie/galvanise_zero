@@ -16,9 +16,8 @@ the_manager = None
 
 
 def ensure_directory_exists(path):
-    directory = os.path.dirname(path)
-    if not os.path.exists(directory):
-        os.makedirs(directory)
+    if not os.path.exists(path):
+        os.makedirs(path)
 
 
 class Manager(object):
@@ -38,22 +37,28 @@ class Manager(object):
         ensure_directory_exists(p)
         return p
 
-    def generation_path(self, game, generation):
-        filename = "%s.json" % generation
-        p = os.path.join(self.data_path, game, "generations", filename)
+    def generation_path(self, game, generation_name=None):
+        p = os.path.join(self.data_path, game, "generations")
         ensure_directory_exists(p)
+        if generation_name is not None:
+            filename = "%s.json" % generation_name
+            p = os.path.join(p, filename)
         return p
 
-    def model_path(self, game, generation):
-        filename = "%s.json" % generation
-        p = os.path.join(self.data_path, game, "models", filename)
+    def model_path(self, game, generation_name=None):
+        p = os.path.join(self.data_path, game, "models")
         ensure_directory_exists(p)
+        if generation_name is not None:
+            filename = "%s.json" % generation_name
+            p = os.path.join(p, filename)
         return p
 
-    def weights_path(self, game, generation):
-        filename = "%s.h5" % generation
-        p = os.path.join(self.data_path, game, "weights", filename)
+    def weights_path(self, game, generation_name=None):
+        p = os.path.join(self.data_path, game, "weights")
         ensure_directory_exists(p)
+        if generation_name is not None:
+            filename = "%s.h5" % generation_name
+            p = os.path.join(p, filename)
         return p
 
     def register_transformer(self, clz):
@@ -92,7 +97,9 @@ class Manager(object):
                                                                transformer=transformer)
 
         elif nn_model_conf is None:
-            nn_model_conf = templates.nn_model_config_template(game, transformer=transformer)
+            nn_model_conf = templates.nn_model_config_template(game,
+                                                               network_size_hint="small",
+                                                               transformer=transformer)
 
         assert isinstance(nn_model_conf, confs.NNModelConfig)
         assert isinstance(generation_descr, datadesc.GenerationDescription)
@@ -152,22 +159,22 @@ class Manager(object):
             print generation_descr
             self.save_network(nn)
 
-    def load_network(self, game, generation):
-        json_str = open(self.generation_path(game, generation)).read()
+    def load_network(self, game, generation_name):
+        json_str = open(self.generation_path(game, generation_name)).read()
         generation_descr = attrutil.json_to_attr(json_str)
 
-        json_str = open(self.model_path(game, generation)).read()
+        json_str = open(self.model_path(game, generation_name)).read()
         keras_model = keras_models.model_from_json(json_str)
 
-        keras_model.load_weights(self.weights_path(game, generation))
+        keras_model.load_weights(self.weights_path(game, generation_name))
         transformer = self.get_transformer(game, generation_descr)
         return NeuralNetwork(transformer, keras_model, generation_descr)
 
-    def can_load(self, game, generation):
+    def can_load(self, game, generation_name):
         exists = os.path.exists
-        return (exists(self.model_path(game, generation)) and
-                exists(self.weights_path(game, generation)) and
-                exists(self.generation_path(game, generation)))
+        return (exists(self.model_path(game, generation_name)) and
+                exists(self.weights_path(game, generation_name)) and
+                exists(self.generation_path(game, generation_name)))
 
 
 ###############################################################################

@@ -4,6 +4,7 @@ import os
 import sys
 import time
 import shutil
+import traceback
 
 from twisted.internet import reactor
 
@@ -17,8 +18,9 @@ from ggpzero.defs import msgs, confs
 from ggpzero.util.broker import Broker, BrokerClientFactory
 from ggpzero.util import cppinterface
 
-from ggpzero.training import nn_train
 from ggpzero.nn.manager import get_manager
+
+from ggpzero.nn.train import TrainManager
 
 
 def default_conf():
@@ -49,7 +51,7 @@ class Worker(Broker):
 
         self.register(msgs.ConfigureSelfPlay, self.on_configure)
         self.register(msgs.RequestSamples, self.on_request_samples)
-        self.register(msgs.TrainNNRequest, self.on_train_request)
+        self.register(msgs.RequestNetworkTrain, self.on_train_request)
 
         self.nn = None
         self.sm = None
@@ -91,16 +93,19 @@ class Worker(Broker):
             self.game_info.game == msg.game
 
         self.self_play_conf = msg.self_play_conf
+        self.with_generation_name = msg.generation_name
 
         # refresh the neural network.  May have to run some commands to get it.
         self.nn = None
         try:
             self.nn = get_manager().load_network(self.game_info.game,
-                                                 self.self_play_conf.with_generation)
+                                                 self.with_generation_name)
             self.configure_self_play()
 
         except Exception as exc:
-            log.error("Exception: %s", exc)
+            for l in traceback.format_exc().splitlines():
+                log.error(l)
+
             self.cmds_running = runprocs.RunCmds(self.conf.run_post_training_cmds,
                                                  cb_on_completion=self.finished_cmds_running,
                                                  max_time=180.0)
@@ -125,7 +130,7 @@ class Worker(Broker):
                                                       batch_size=self.conf.self_play_batch_size,
                                                       sleep_between_poll=self.conf.sleep_between_poll)
 
-            self.supervisor.start_self_play(self.self_play_conf, self.conf.inline_manager)
+            self.supervisor.start_self_play(self.self_play_conf, self.conf.num_workers)
 
         else:
             self.supervisor.update_nn(self.nn)
@@ -169,10 +174,26 @@ class Worker(Broker):
         server.send_msg(m)
 
     def on_train_request(self, server, msg):
-        log.warning("request to train %s" % msg)
-
-        nn_train.parse_and_train(msg)
+        log.warning("request to train %s")
+        print attrutil.pprint(msg)
+        self.train(msg.game, msg.train_conf, msg.network_model, msg.generation_description)
         return msgs.Ok("network_trained")
+
+    def train(self, game, train_config, network_model, generation_description):
+        assert train_config.game == game
+
+        # create a transformer
+        man = get_manager()
+
+        transformer = man.get_transformer(game, generation_description)
+
+        # create the manager
+        trainer = TrainManager(train_config, transformer)
+        trainer.get_network(network_model, generation_description)
+
+        data = trainer.gather_data()
+        trainer.do_epochs(data)
+        trainer.save()
 
 
 def start_worker_factory():

@@ -40,6 +40,7 @@ class HeadResult(object):
 ###############################################################################
 
 class TrainingLoggerCb(keras_callbacks.Callback):
+
     ''' simple progress bar.  default was breaking with too much metrics '''
 
     def __init__(self, num_epochs):
@@ -111,7 +112,7 @@ class TrainingLoggerCb(keras_callbacks.Callback):
 class TrainingController(keras_callbacks.Callback):
     ''' custom callback to do nice logging and early stopping '''
 
-    def __init__(self, retraining):
+    def __init__(self, retraining, num_policies):
         self.retraining = retraining
 
         self.stop_training = False
@@ -120,10 +121,27 @@ class TrainingController(keras_callbacks.Callback):
         self.best = None
         self.best_val_policy_acc = -1
 
+        self.num_policies = num_policies
+
         self.retrain_best = None
         self.retrain_best_val_policy_acc = -1
         self.epoch_last_set_at = None
         self.value_loss_diff = -1
+
+    def policy_acc(self, logs):
+        if self.num_policies == 1:
+            acc, val_acc = logs['policy_0_acc'], logs['val_policy_0_acc']
+
+        else:
+            acc = val_acc = 0
+            for i in range(self.num_policies):
+                acc += logs['policy_%s_acc' % i]
+                val_acc += logs['val_policy_%s_acc' % i]
+
+            acc -= 0.5 * self.num_policies
+            val_acc -= 0.5 * self.num_policies
+
+        return acc, val_acc
 
     def set_value_overfitting(self, logs):
         loss = logs['value_loss']
@@ -133,10 +151,9 @@ class TrainingController(keras_callbacks.Callback):
         self.value_loss_diff = val_loss - loss
 
     def on_epoch_begin(self, epoch, logs=None):
-        if self.retrain_best is None and self.retraining:
-            log.info('Reusing old retraining network for *next* retraining network')
-            self.retrain_best = self.model.get_weights()
-
+        # if self.retrain_best is None and self.retraining:
+        #    log.info('Reusing old retraining network for *next* retraining network')
+        #    self.retrain_best = self.model.get_weights()
         self.at_epoch += 1
 
     def on_epoch_end(self, _, logs=None):
@@ -144,9 +161,10 @@ class TrainingController(keras_callbacks.Callback):
 
         self.set_value_overfitting(logs)
 
-        # XXX deal with more than one head
-        policy_acc = logs['policy_0_acc']
-        val_policy_acc = logs['val_policy_0_acc']
+        # deals with more than one head
+        policy_acc, val_policy_acc = self.policy_acc(logs)
+
+        log.debug("combined policy accuracy %.4f/%.4f" % (policy_acc, val_policy_acc))
 
         # store best weights as best val_policy_acc
         if val_policy_acc > self.best_val_policy_acc:
@@ -183,7 +201,7 @@ class TrainingController(keras_callbacks.Callback):
 
     def on_train_end(self, logs=None):
         if self.best:
-            log.info("Switching to best weights with val_policy_acc %s" % self.best_val_policy_acc)
+            log.info("Switching to best weights with val_policy_acc %.4f" % self.best_val_policy_acc)
             self.model.set_weights(self.best)
 
 
@@ -238,21 +256,21 @@ class NeuralNetwork(object):
         if compile_strategy == "SGD":
             policy_objective = objective_function_for_policy
             if learning_rate:
-                optimizer = SGD(lr=lr, momentum=0.9)
+                optimizer = SGD(lr=learning_rate, momentum=0.9)
             else:
                 optimizer = SGD(momentum=0.9)
 
         elif compile_strategy == "adam":
             policy_objective = 'categorical_crossentropy'
             if learning_rate:
-                optimizer = Adam(lr=lr)
+                optimizer = Adam(lr=learning_rate)
             else:
                 optimizer = Adam()
 
         elif compile_strategy == "amsgrad":
             policy_objective = 'categorical_crossentropy'
             if learning_rate:
-                optimizer = Adam(lr=lr, amsgrad=True)
+                optimizer = Adam(lr=learning_rate, amsgrad=True)
             else:
                 optimizer = Adam(amsgrad=True)
         else:

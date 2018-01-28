@@ -1,6 +1,6 @@
 from ggpzero.util.attrutil import register_attrs, attribute, attr_factory
 
-from ggpzero.defs import confs
+from ggpzero.defs import confs, datadesc
 
 
 @register_attrs
@@ -31,7 +31,7 @@ class WorkerConfigMsg(object):
 @register_attrs
 class ConfigureSelfPlay(object):
     game = attribute("game")
-    generation = attribute("gen0")
+    generation_name = attribute("gen0")
     self_play_conf = attribute(default=attr_factory(confs.SelfPlayConfig))
 
 
@@ -53,3 +53,4 @@ class RequestNetworkTrain(object):
     game = attribute("game")
     train_conf = attribute(default=attr_factory(confs.TrainNNConfig))
     network_model = attribute(default=attr_factory(confs.NNModelConfig))
+    generation_description = attribute(default=attr_factory(datadesc.GenerationDescription))

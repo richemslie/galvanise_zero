@@ -71,6 +71,12 @@ class SampleOld(object):
     resultant_puct_score = attr.ib(attr.Factory(list))
     resultant_puct_visits = attr.ib(800)
 
+    # XXX wtf?
+    initial_prediction_policy_probility = attr.ib('XXX remove')
+    initial_prediction_score = attr.ib('XXX remove')
+    resultant_puct_scores = attr.ib(attr.Factory(list))
+    initial_prediction_policy_index = attr.ib(attr.Factory(list))
+
 
 @register_attrs
 class GenerationSamples(object):
@@ -83,7 +89,7 @@ class GenerationSamples(object):
     # number of samples in this generation
     num_samples = attr.ib(1024)
 
-    # the samples (list of Sample)
+    # the samples (list of either Sample/SampleOld)
     samples = attr.ib(attr.Factory(list))
 
 
@@ -118,10 +124,10 @@ class GenerationDescription(object):
     # XXX todo
     transformer_description = attr.ib(None)
 
-    # XXX the training config attributes - for debugging, historical purposes
+    # the training config attributes - for debugging, historical purposes
     # the number of samples trained on, etc
     # the number losses, validation losses, accurcacy
-    trained_losses = attr.ib('XXX')
-    trained_validation_losses = attr.ib('XXX')
-    trained_policy_accuracy = attr.ib('XXX')
-    trained_value_accuracy = attr.ib('XXX')
+    trained_losses = attr.ib('not set')
+    trained_validation_losses = attr.ib('not set')
+    trained_policy_accuracy = attr.ib('not set')
+    trained_value_accuracy = attr.ib('not set')

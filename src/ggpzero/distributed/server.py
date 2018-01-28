@@ -14,9 +14,14 @@ from ggplib.db import lookup
 from ggpzero.util import attrutil
 from ggpzero.util.broker import Broker, ServerFactory
 
-from ggpzero.defs import msgs, confs, templates
+from ggpzero.defs import msgs, confs, datadesc, templates
 
 from ggpzero.nn.manager import get_manager
+
+
+def get_date_string():
+    import datetime
+    return datetime.datetime.now().strftime("%Y/%m/%d %H:%M")
 
 
 def critical_error(msg):
@@ -76,9 +81,10 @@ class ServerBroker(Broker):
         self.unique_states = []
 
         # when a generation object is around, we are in the processing of training
-        self.generation = None
+        self.pending_gen_samples = None
         self.training_in_progress = False
 
+        # register messages:
         self.register(msgs.Pong, self.on_pong)
 
         self.register(msgs.Ok, self.on_ok)
@@ -101,9 +107,9 @@ class ServerBroker(Broker):
     def check_files_exist(self):
         # first check that the directories exist
         man = get_manager()
-        for p in (man.models_path(self.conf.game),
+        for p in (man.model_path(self.conf.game),
                   man.weights_path(self.conf.game),
-                  man.generations_path(self.conf.game),
+                  man.generation_path(self.conf.game),
                   man.samples_path(self.conf.game, self.conf.generation_prefix)):
 
             if os.path.exists(p):
@@ -119,20 +125,25 @@ class ServerBroker(Broker):
 
     def check_nn_files_exist(self):
         game = self.conf.game
-        gen = self.get_generation_name(self.conf.current_step)
+        gen_name = self.get_generation_name(self.conf.current_step)
 
         man = get_manager()
-        if not man.can_load(game, gen):
+        if not man.can_load(game, gen_name):
             if self.conf.current_step == 0:
                 log.warning("Creating the initial network.")
+
                 # create a random network and save it
-                nn_model_conf = templates.nn_model_config_template(game,
-                                                                   self.conf.network_size)
-                nn = man.create_new_network(game, nn_model_conf)
-                man.save_network(nn, game, gen)
+                nn = man.create_new_network(game,
+                                            self.conf.base_network_model,
+                                            self.conf.base_generation_description)
+                man.save_network(nn, gen_name)
 
             else:
-                critical_error("Did not find network %s.  exiting." % gen)
+                critical_error("Did not find network %s.  exiting." % gen_name)
+
+        # for debugging purposes
+        nn = man.load_network(game, gen_name)
+        nn.summary()
 
     def save_our_config(self, rolled=False):
         if os.path.exists(self.conf_filename):
@@ -149,8 +160,8 @@ class ServerBroker(Broker):
         return "%s_%s" % (self.conf.generation_prefix, step)
 
     def need_more_samples(self):
-        return len(self.accumulated_samples) < (self.conf.generation_size +
-                                                self.conf.generation_size * self.conf.max_growth_while_training)
+        return len(self.accumulated_samples) < (self.conf.num_samples_to_train +
+                                                self.conf.num_samples_to_train * self.conf.max_samples_growth)
 
     def new_broker_client(self, worker):
         self.workers[worker] = WorkerInfo(worker, time.time())
@@ -253,30 +264,33 @@ class ServerBroker(Broker):
                                                           self.conf.current_step))
 
     def save_sample_data(self):
-        gen = confs.Generation()
-        gen.game = self.conf.game
-        gen.with_generation = self.get_generation_name(self.conf.current_step)
+        gen_samples = datadesc.GenerationSamples()
+        gen_samples.game = self.conf.game
+        gen_samples.date_created = get_date_string()
+
+        gen_samples.with_generation = self.get_generation_name(self.conf.current_step)
 
         # only save the minimal number for this run
-        gen.num_samples = min(len(self.accumulated_samples), self.conf.generation_size)
-        gen.samples = self.accumulated_samples[:gen.num_samples]
+        gen_samples.num_samples = min(len(self.accumulated_samples), self.conf.num_samples_to_train)
+        gen_samples.samples = self.accumulated_samples[:gen_samples.num_samples]
 
         # write json file
         json.encoder.FLOAT_REPR = lambda f: ("%.5f" % f)
 
         log.info("writing json (gzipped): %s" % self.sample_data_filename)
         with gzip.open(self.sample_data_filename, 'w') as f:
-            f.write(attrutil.attr_to_json(gen, indent=4))
+            f.write(attrutil.attr_to_json(gen_samples, indent=4))
 
-        return gen
+        return gen_samples
 
     def load_and_check_data(self):
         log.info("checking if generation data available")
         try:
-            gen = attrutil.json_to_attr(gzip.open(self.sample_data_filename).read())
-            log.info("data exists, with generation: %s, adding %s samples" % (gen.with_generation, gen.num_samples))
+            gen_samples = attrutil.json_to_attr(gzip.open(self.sample_data_filename).read())
+            log.info("data exists, with generation: %s, adding %s samples" % (gen_samples.with_generation,
+                                                                              gen_samples.num_samples))
 
-            self.add_new_samples(gen.samples)
+            self.add_new_samples(gen_samples.samples)
 
         except IOError as exc:
             log.info("Not such file for generation: %s" % exc)
@@ -285,12 +299,12 @@ class ServerBroker(Broker):
         num_samples = len(self.accumulated_samples)
         log.verbose("entering checkpoint with %s sample accumulated" % num_samples)
         if num_samples > 0:
-            gen = self.save_sample_data()
+            gen_samples = self.save_sample_data()
 
-            if num_samples > self.conf.generation_size:
-                if self.generation is None:
+            if num_samples > self.conf.num_samples_to_train:
+                if self.pending_gen_samples is None:
                     log.info("data done for: %s" % self.get_generation_name(self.conf.current_step + 1))
-                    self.generation = gen
+                    self.pending_gen_samples = gen_samples
 
                 if not self.training_in_progress:
                     if self.the_nn_trainer is None:
@@ -307,29 +321,28 @@ class ServerBroker(Broker):
 
     def send_request_to_train_nn(self):
         assert not self.training_in_progress
-
         next_step = self.conf.current_step + 1
-        log.info("create TrainNNRequest() for step %s" % next_step)
 
-        m = msgs.TrainNNRequest()
+        log.verbose("send_request_to_train_nn() @ step %s" % next_step)
+
+        train_conf = self.conf.base_training_config
+        train_conf.use_previous = next_step % 5 != 0
+        assert train_conf.game == self.conf.game
+        assert train_conf.generation_prefix == self.conf.generation_prefix
+
+        train_conf.next_step = next_step
+
+        m = msgs.RequestNetworkTrain()
         m.game = self.conf.game
-        m.network_size = self.conf.network_size
-        m.generation_prefix = self.conf.generation_prefix
-
-        m.use_previous = self.conf.retrain_network
-
-        m.next_step = next_step
-        m.overwrite_existing = False
-        m.validation_split = self.conf.validation_split
-        m.batch_size = self.conf.batch_size
-        m.epochs = self.conf.epochs
-        m.max_sample_count = self.conf.max_sample_count
-        m.starting_step = self.conf.starting_step
-        m.drop_dupes_count = self.conf.drop_dupes_count
+        m.train_conf = train_conf
+        m.network_model = self.conf.base_network_model
+        m.generation_description = self.conf.base_generation_description
 
         # send out message to train
-        log.info("sent to the_nn_trainer")
         self.the_nn_trainer.worker.send_msg(m)
+
+        log.info("sent out request to the_nn_trainer!")
+
         self.training_in_progress = True
 
     def roll_generation(self):
@@ -344,8 +357,8 @@ class ServerBroker(Broker):
         self.create_self_play_config()
 
         # rotate these
-        self.accumulated_samples = self.accumulated_samples[self.conf.generation_size:]
-        self.unique_states = self.unique_states[self.conf.generation_size:]
+        self.accumulated_samples = self.accumulated_samples[self.conf.num_samples_to_train:]
+        self.unique_states = self.unique_states[self.conf.num_samples_to_train:]
         self.unique_states_set = set(self.unique_states)
 
         self.checkpoint()
@@ -356,7 +369,7 @@ class ServerBroker(Broker):
         # store the server config
         self.save_our_config(rolled=True)
 
-        self.generation = None
+        self.pending_gen_samples = None
         self.training_in_progress = False
 
         if self.the_nn_trainer.conf.do_self_play:
@@ -369,14 +382,14 @@ class ServerBroker(Broker):
 
     def create_self_play_config(self):
         # we use score_gen for select also XXX we should probably just go to one
-        generation = self.get_generation_name(self.conf.current_step)
+        generation_name = self.get_generation_name(self.conf.current_step)
 
         self.configure_selfplay_msg = msgs.ConfigureSelfPlay(self.conf.game,
-                                                             generation,
+                                                             generation_name,
                                                              self.conf.self_play_config)
 
     def schedule_players(self):
-        if len(self.accumulated_samples) > self.conf.generation_size:
+        if len(self.accumulated_samples) > self.conf.num_samples_to_train:
             # if we haven't started training yet, lets speed things up...
             if not self.training_in_progress:
                 self.checkpoint()
@@ -422,8 +435,11 @@ def start_server_factory():
     init()
 
     if sys.argv[1] == "-c":
-        conf = templates.server_config_template(sys.argv[2], sys.argv[3])
-        ServerBroker(sys.argv[4], conf)
+        game, generation_prefix = sys.argv[2], sys.argv[3]
+        num_prev_states = int(sys.argv[4])
+        filename = sys.argv[5]
+        conf = templates.server_config_template(game, generation_prefix, num_prev_states)
+        ServerBroker(filename, conf)
 
     else:
         filename = sys.argv[1]

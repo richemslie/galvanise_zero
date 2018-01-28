@@ -1,7 +1,42 @@
 from ggpzero.util.attrutil import register_attrs, attribute, attr_factory
 
+from ggpzero.defs.datadesc import GenerationDescription
+
 
 # DO NOT IMPORT msgs.py
+
+@register_attrs
+class PUCTEvaluatorConfig(object):
+    verbose = attribute(False)
+
+    # root level minmax ing, an old galvanise nn idea.  Expands the root node, and presets visits.
+    # -1 off.
+    root_expansions_preset_visits = attribute(-1)
+
+    # applies different constant until the following expansions are met
+    puct_before_expansions = attribute(4)
+    puct_before_root_expansions = attribute(4)
+
+    # the puct constant.  before expansions, and after expansions are met
+    puct_constant_before = attribute(0.75)
+    puct_constant_after = attribute(0.75)
+
+    # added to root child policy pct (less than 0 is off)
+    dirichlet_noise_pct = attribute(0.25)
+    dirichlet_noise_alpha = attribute(0.1)
+
+    # looks up method() to use
+    choose = attribute("choose_top_visits")
+
+    # debug, only if verbose is true
+    max_dump_depth = attribute(2)
+
+    random_scale = attribute(0.5)
+    temperature = attribute(1.0)
+    depth_temperature_start = attribute(5)
+    depth_temperature_increment = attribute(0.5)
+    depth_temperature_stop = attribute(10)
+    depth_temperature_max = attribute(5.0)
 
 
 @register_attrs
@@ -50,8 +85,6 @@ class PUCTPlayerConfig(object):
 
 @register_attrs
 class SelfPlayConfig(object):
-    with_generation = attribute("latest")
-
     # -1 is off, and defaults to alpha-zero style
     max_number_of_samples = attribute(4)
 
@@ -62,15 +95,15 @@ class SelfPlayConfig(object):
     resign_false_positive_retry_percentage = attribute(0.1)
 
     # select will get to the point where we start sampling
-    select_puct_config = attribute(default=attr_factory(PUCTPlayerConfig))
+    select_puct_config = attribute(default=attr_factory(PUCTEvaluatorConfig))
     select_iterations = attribute(100)
 
     # sample is the actual sample we take to train for.  The focus is on good policy distribution.
-    sample_puct_config = attribute(default=attr_factory(PUCTPlayerConfig))
+    sample_puct_config = attribute(default=attr_factory(PUCTEvaluatorConfig))
     sample_iterations = attribute(800)
 
     # after samples, will play to the end using this config
-    score_puct_config = attribute(default=attr_factory(PUCTPlayerConfig))
+    score_puct_config = attribute(default=attr_factory(PUCTEvaluatorConfig))
     score_iterations = attribute(100)
 
 
@@ -151,8 +184,8 @@ class WorkerConfig(object):
     # the minimum number of samples gathered before sending to the server
     min_num_samples = attribute(128)
 
-    # if this is set, no threads will be set up to poll
-    inline_manager = attribute(False)
+    # if this is set to zero, will do inline
+    num_workers = attribute(0)
 
     # run system commands to get the neural network isn't in data
     run_cmds_if_no_nn = attribute(default=attr_factory(list))
@@ -160,29 +193,27 @@ class WorkerConfig(object):
 
 @register_attrs
 class ServerConfig(object):
+    game = attribute("breakthrough")
+    generation_prefix = attribute("v42")
+
     port = attribute(9000)
 
-    game = attribute("breakthrough")
-
     current_step = attribute(0)
-    network_size = attribute("normal")
 
-    generation_prefix = attribute("v2_")
+    # number of samples to acquire before starting to train
+    num_samples_to_train = attribute(1024)
 
-    generation_size = attribute(1024)
-    max_growth_while_training = attribute(0.2)
+    # maximum growth while training
+    max_samples_growth = attribute(0.2)
 
-    validation_split = attribute(0.8)
-    batch_size = attribute(32)
-    epochs = attribute(10)
+    # the starting generation description
+    base_generation_description = attribute(default=attr_factory(GenerationDescription))
 
-    max_sample_count = attribute(250000)
-    drop_dupes_count = attribute(3)
+    # the base network model
+    base_network_model = attribute(default=attr_factory(NNModelConfig))
 
-    # this is applied even if max_sample_count can't be reached
-    starting_step = attribute(0)
-
-    retrain_network = attribute(False)
+    # the starting training config
+    base_training_config = attribute(default=attr_factory(TrainNNConfig))
 
     # the self play config
     self_play_config = attribute(default=attr_factory(SelfPlayConfig))

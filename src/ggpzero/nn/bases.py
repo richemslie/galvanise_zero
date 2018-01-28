@@ -64,6 +64,7 @@ class GdlBasesTransformer(object):
     ignore_terms = []
 
     # XXX horrible way to say we have multiple_policy_heads
+    # XXX not too worry, going to deprecate this soon
     policy_1_index_start = None
 
     def __init__(self, game_info, generation_descr):
@@ -217,34 +218,26 @@ class GdlBasesTransformer(object):
         assert len(sample.state) == len(self.base_infos)
         assert len(sample.final_score) == self.final_score_count
 
-        total = 0.0
-        for legal, p in sample.policy:
-            assert -0.01 < p < 1.01
-            total += p
-
-        assert 0.9999 < total < 1.001
-
         if isinstance(sample, datadesc.SampleOld):
+
+            total = 0.0
+            for legal, p in sample.policy:
+                assert -0.01 < p < 1.01
+                total += p
+
+            assert 0.99 < total < 1.01
+
             assert 0 <= sample.lead_role_index <= self.role_count
 
         else:
             assert isinstance(sample, datadesc.Sample)
-
-            # ZZZ XXX deprecate single policy heads
-            # assert len(sample.policies) == len(self.policy_dist_count)
-
-            for idx, policy in enumerate(sample.policies):
+            for policy in sample.policies:
                 total = 0.0
                 for legal, p in policy:
-
-                    # ZZZ XXX deprecate single policy heads
-                    if self.policy_1_index_start is None:
-                        assert 0 <= legal < self.policy_dist_count[idx]
-
                     assert -0.01 < p < 1.01
                     total += p
 
-                assert 0.9999 < total < 1.00001
+                assert 0.99 < total < 1.01
 
         return sample
 
@@ -325,7 +318,7 @@ class GdlBasesTransformer(object):
                 output.append(self.policy_to_array(sample.policy,
                                                    sample.lead_role_index))
             else:
-                assert False, "TODO"
+                assert False, "multiple policies are to be deprecated"
 
         else:
             if isinstance(sample, datadesc.SampleOld):

@@ -1,4 +1,3 @@
-import os
 from datetime import datetime
 
 from ggpzero.defs import confs, datadesc
@@ -110,24 +109,22 @@ def puct_config_template(generation, name="default"):
                                        verbose=True,
 
                                        playouts_per_iteration=400,
-                                       playouts_per_iteration_noop=100,
+                                       playouts_per_iteration_noop=400,
 
-                                       resign_score_value=0.05,
-                                       playouts_per_iteration_resign=25,
-
-                                       dirichlet_noise_alpha=0.03,
+                                       dirichlet_noise_alpha=-1,
 
                                        puct_before_expansions=3,
                                        puct_before_root_expansions=5,
                                        puct_constant_before=3.0,
                                        puct_constant_after=1.00,
 
+
                                        temperature=2.0,
-                                       depth_temperature_max=3.0,
-                                       depth_temperature_start=8,
-                                       depth_temperature_increment=0.1,
-                                       depth_temperature_stop=70,
-                                       random_scale=0.5,
+                                       depth_temperature_max=10.0,
+                                       depth_temperature_start=4,
+                                       depth_temperature_increment=0.25,
+                                       depth_temperature_stop=100,
+                                       random_scale=0.75,
 
                                        choose="choose_temperature",
                                        max_dump_depth=2),
@@ -224,7 +221,7 @@ def selfplay_config_template():
     conf.sample_iterations = 800
     conf.score_iterations = 42
 
-    conf.select_puct_config = puct_config_template("policy")
+    conf.select_puct_config = confs.PUCTEvaluatorConfig()
     conf.select_puct_config.verbose = False
     conf.select_puct_config.temperature = 0.5
     conf.select_puct_config.depth_temperature_start = 2
@@ -234,39 +231,14 @@ def selfplay_config_template():
     conf.select_puct_config.choose = "choose_temperature"
     conf.select_iterations = 0
 
-    conf.sample_puct_config = puct_config_template("train")
+    conf.sample_puct_config = confs.PUCTEvaluatorConfig()
     conf.sample_puct_config.verbose = False
     conf.sample_iterations = 400
 
-    conf.score_puct_config = puct_config_template("train")
+    conf.score_puct_config = confs.PUCTEvaluatorConfig()
     conf.score_puct_config.verbose = False
     conf.score_iterations = 75
 
-    return conf
-
-
-def server_config_template(game, generation_prefix):
-    conf = confs.ServerConfig()
-
-    conf.port = 9000
-    conf.game = game
-    conf.current_step = 0
-
-    conf.network_size = "smaller"
-
-    conf.generation_prefix = generation_prefix
-    conf.store_path = os.path.join(os.environ["GGPZERO_PATH"], "data", game, generation_prefix)
-
-    conf.generation_size = 5000
-    conf.max_growth_while_training = 0.25
-
-    conf.validation_split = 0.8
-    conf.batch_size = 64
-    conf.epochs = 20
-    conf.max_sample_count = 250000
-    conf.run_post_training_cmds = []
-
-    conf.self_play_config = selfplay_config_template()
     return conf
 
 
@@ -283,3 +255,50 @@ def default_generation_desc(game, name="default", **kwds):
         setattr(desc, k, v)
 
     return desc
+
+
+def train_config_template(game, gen_prefix):
+    conf = confs.TrainNNConfig("speedChess")
+
+    conf.generation_prefix = gen_prefix
+
+    conf.use_previous = True
+    conf.next_step = 0
+    conf.validation_split = 0.9
+    conf.batch_size = 128
+    conf.epochs = 20
+    conf.max_sample_count = 300000
+    conf.starting_step = 0
+    conf.drop_dupes_count = 3
+    conf.overwrite_existing = False
+
+    return conf
+
+
+def server_config_template(game, generation_prefix, prev_states):
+    conf = confs.ServerConfig()
+
+    conf.game = game
+    conf.generation_prefix = generation_prefix
+
+    conf.port = 9000
+
+    conf.current_step = 0
+
+    conf.num_samples_to_train = 20000
+    conf.max_samples_growth = 0.8
+
+    conf.base_generation_description = default_generation_desc(game,
+                                                               generation_prefix,
+                                                               multiple_policy_heads=True,
+                                                               num_previous_states=prev_states)
+
+    from ggpzero.nn.manager import get_manager
+    man = get_manager()
+    transformer = man.get_transformer(game, conf.base_generation_description)
+    conf.base_network_model = nn_model_config_template(game, "smaller", transformer)
+
+    conf.base_training_config = train_config_template(game, generation_prefix)
+
+    conf.self_play_config = selfplay_config_template()
+    return conf

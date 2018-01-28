@@ -70,7 +70,8 @@ class TrainData(object):
         outputs = transpose_and_reshape(self.outputs)
         validation_outputs = transpose_and_reshape(self.validation_outputs)
 
-        for x in (10, 100, 420, 500, 42, 23):
+        # good to see some outputs
+        for x in (10, 420, 42):
             log.info('train input, shape: %s.  Example: %s' % (inputs.shape, inputs[x]))
             for o in outputs:
                 log.info('train output, shape: %s.  Example: %s' % (o.shape, o[x]))
@@ -284,7 +285,8 @@ class TrainManager(object):
         conf = self.train_config
 
         training_logger = network.TrainingLoggerCb(conf.epochs)
-        controller = network.TrainingController(self.retraining)
+        controller = network.TrainingController(self.retraining,
+                                                len(self.transformer.policy_dist_count))
 
         # XXX add hyper parameters
 

@@ -202,6 +202,18 @@ class PUCTEvaluator(object):
             for l in legal_state.to_list():
                 node.add_child(self.sm.legal_to_move(lead_role_index, l), l)
 
+            # Fish for max number of previous states.
+            # XXX This will need to be passed into the c code...
+            max_prev_states = self.nn.gdl_bases_transformer.num_previous_states
+
+            prev_states = []
+            cur = node.parent
+            while len(prev_states) < max_prev_states:
+                if cur is None:
+                    break
+                prev_states.append(cur.state)
+                cur = cur.parent
+
             predictions = self.nn.predict_1(node.state)
 
             node.final_score = predictions.scores[:]
@@ -633,9 +645,6 @@ class PUCTPlayer(MatchPlayer):
     def on_next_move(self, finish_time):
         pe = self.puct_evaluator
         conf = self.puct_evaluator.conf
-
-        current_state = self.match.get_current_state()
-        game_depth = self.match.game_depth
 
         assert pe.root is not None
 

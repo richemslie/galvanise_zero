@@ -6,7 +6,7 @@ import attr
 import numpy as np
 
 import ggpzero_interface
-from ggpzero.defs import confs
+from ggpzero.defs import confs, datadesc
 
 
 def sm_to_ptr(sm):
@@ -31,11 +31,13 @@ def basestate_to_ptr(basestate):
 
 
 def create_c_transformer(transformer):
+    print transformer.num_previous_states
+    assert transformer.policy_1_index_start is None
     TransformerClz = ggpzero_interface.GdlBasesTransformer
     c_transformer = TransformerClz(transformer.channel_size,
-                                   transformer.channel_size * transformer.raw_channels_per_state,
-                                   transformer.policy_dist_count,
-                                   transformer.policy_1_index_start)
+                                   transformer.raw_channels_per_state,
+                                   transformer.num_previous_states,
+                                   transformer.policy_dist_count)
 
     # build it up
     for b in transformer.base_infos:
@@ -79,16 +81,21 @@ class PollerBase(object):
     def poll(self, do_stats=False):
         ''' POLL_AGAIN is returned, to indicate we need to call poll() again. '''
 
+        transformer = self.nn.gdl_bases_transformer
+        expect_num_arrays = len(transformer.policy_dist_count) + 1
+
         if self.poll_last is None:
             dummy = np.zeros(0)
-            policy_dists, final_scores = dummy, dummy
+            arrays = [dummy for _ in range(expect_num_arrays)]
         else:
-            policy_dists, final_scores = self.poll_last
+            arrays = list(self.poll_last)
+
+        assert len(arrays) == expect_num_arrays
 
         if do_stats:
             s0 = time.time()
 
-        pred_array = self._get_poller().poll(policy_dists, final_scores)
+        pred_array = self._get_poller().poll(len(arrays[0]), arrays)
         if pred_array is None:
             self.poll_last = None
             return
@@ -102,9 +109,7 @@ class PollerBase(object):
 
         # make sure array is correct shape for keras/tensorflow (no memory is allocated)
         pred_array = pred_array.reshape(num_predictions, t.num_channels, t.num_cols, t.num_rows)
-        policy_dists, final_scores = self.nn.get_model().predict_on_batch(pred_array)
-
-        self.poll_last = policy_dists, final_scores
+        self.poll_last = self.nn.get_model().predict_on_batch(pred_array)
 
         if do_stats:
             s2 = time.time()
@@ -166,7 +171,8 @@ class Supervisor(PollerBase):
 
         self.c_supervisor = ggpzero_interface.Supervisor(sm_to_ptr(sm),
                                                          self.c_transformer,
-                                                         batch_size)
+                                                         batch_size,
+                                                         transformer.num_previous_states)
         if workers:
             self.c_supervisor.set_num_workers(workers)
 
@@ -177,18 +183,14 @@ class Supervisor(PollerBase):
     def _get_poller(self):
         return self.c_supervisor
 
-    def start_self_play(self, conf, inline=True):
+    def start_self_play(self, conf, num_workers):
         assert isinstance(conf, confs.SelfPlayConfig)
-        if inline:
-            num_workers = 0
-        else:
-            num_workers = 1
         return self.c_supervisor.start_self_play(num_workers, attr.asdict(conf))
 
     def fetch_samples(self):
         res = self.c_supervisor.fetch_samples()
         if res:
-            return [confs.Sample(**d) for d in res]
+            return [datadesc.Sample(**d) for d in res]
         else:
             return []
 

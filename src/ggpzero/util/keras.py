@@ -2,32 +2,21 @@ from __future__ import absolute_import
 from ggplib.util import log
 
 
-def use_tf_keras():
-    return False
+from keras.optimizers import SGD, Adam
+from keras.utils.generic_utils import Progbar
+import keras.callbacks as keras_callbacks
+from keras import metrics as keras_metrics
+import keras.backend as K
+
+from keras import models as keras_models
+from keras import layers as keras_layers
+from keras import regularizers as keras_regularizers
 
 
-if use_tf_keras():
-    # XXX well it doesnt work...
-    from tensorflow.python.keras.optimizers import SGD, Adam
-    from tensorflow.python.keras.utils.generic_utils import Progbar
-    import tensorflow.python.keras.callbacks as keras_callbacks
-    from tensorflow.python.keras import metrics as keras_metrics
-    import tensorflow.python.keras.backend as K
-
-    from tensorflow.python.keras import models as keras_models
-    from tensorflow.python.keras import layers as keras_layers
-    from tensorflow.python.keras.regularizers import l2
-
-else:
-    from keras.optimizers import SGD, Adam
-    from keras.utils.generic_utils import Progbar
-    import keras.callbacks as keras_callbacks
-    from keras import metrics as keras_metrics
-    import keras.backend as K
-
-    from keras import models as keras_models
-    from keras import layers as keras_layers
-    from keras import regularizers as keras_regularizers
+def _bla():
+    ' i am here to confuse flake8 '
+    print SGD, Adam, Progbar, keras_callbacks, keras_metrics
+    print keras_models, keras_layers, keras_regularizers
 
 
 def is_channels_first():
