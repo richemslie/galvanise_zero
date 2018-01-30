@@ -33,13 +33,13 @@ results @ 30th January
 
 Plan
 ----
-20 generations with 2 samples per game - 10k each, 200k total
+(rough)
 
-15 generations with 4 samples per game - 40k each, 600k total
-15 generations with 6 samples per game - 40k each. 600k total
-
-15 generations with 8 samples per game - 60k each. 800k total
-15 generations with 10 samples per game - 60k each. 800k total
+* 20 generations with 2 samples per game - 10k each, 200k total
+* 15 generations with 4 samples per game - 40k each, 600k total
+* 15 generations with 6 samples per game - 40k each. 600k total
+* 15 generations with 8 samples per game - 60k each. 800k total
+* 15 generations with 10 samples per game - 60k each. 800k total
 
 
 major features testing
@@ -81,7 +81,7 @@ opponents
 problems anticipated
 --------------------
 Without dropout on policy heads, I imagine it will overfit really fast.  As training the network is
-using early stopping with accuracy of the policy, we may not be training as long as we used to.
+using early stopping with accuracy of the policy, it may not be training as long as it used to.
 
 
 configuration
@@ -255,11 +255,11 @@ with the resampling, drop more at the tail
 
 gen 38 issues/changes
 ---------------------
-We are barely running any epochs like we prior to multiple policies.  I don't want to change the
-early stopping logic mid run.  And I really didn't want to make any massive changes to the network
+Barely running any epochs like before introducing multiple policies.  I don't want to change the
+early stopping logic mid-run.  And I really didn't want to make any massive changes to the network
 structure either.  However, playing around with some configurations - decided to add in leaky relus
 and increase the batch_size during training to 1024.  Just going to go with that.  If it becomes
-unstable, then we abandon the run.
+unstable, then will abandon the run.
 
 * base_network_model.config.leaky_relu = True
 * base_training_config.batch_size = 1024
