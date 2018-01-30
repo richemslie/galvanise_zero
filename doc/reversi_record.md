@@ -4,9 +4,13 @@ reversi generation 0
 restarted again!
 
 
-Results
+results
 -------
 results @ 30th January
+
+* gzero_x_y - where x is generation, y is number of playouts per move * 100.
+* ntest_x - where x is nboard depth/level
+* results - win/loss/draw
 
 | player     | opponent   | black_result   | white_result   |
 |:-----------|:-----------|:---------------|:---------------|
@@ -29,9 +33,20 @@ results @ 30th January
 | gzero_35_8 | ntest_2    | 2/3/0          | 3/2/0          |
 | gzero_40_4 | ntest_2    | 1/4/0          | 3/2/0          |
 
+gzero run with no dirichlet noise, small amount of random choice of action.
 
 
-Plan
+opponents
+---------
+* random - completely random player
+* pymcs - a monte carlo player, with no tree.  number iterations 4k per move
+* simplecmts - a vanilla MCTS player.  number iterations 4k per move
+* gurgeh - a multithreaded fast MCTS player, with some extra bells&whistles.
+  number iterations 40k per move
+* ntest lvl 1-20 - [ntest](https://github.com/weltyc/ntest)
+
+
+plan
 ----
 (rough)
 
@@ -56,26 +71,6 @@ Start with a small network, and progresively increase the size (manually).
 Also manually reduce resign_false_positive_retry_percentage.
 
 At the end of every 5th/10th generation, perform an evaluation against opponents.
-
-
-evaluation configuration
-------------------------
-No dirichlet noise, small amount of random choice of action.
-
- * gzero-1 : 100 sims per turn.
- * gzero-2 : 200 sims per turn.
- * gzero-4 : 400 sims per turn.
- * gzero-8 : 800 sims per turn.
-
-
-opponents
----------
-* random
-* pymcs - a monte carlo player, with no tree.  number iterations 4k per move
-* simplecmts - a vanilla mcts player.  number iterations 4k per move
-* gurgeh - a multithreaded fast mcts player, with some extra bells&whistles.
-  number iterations 40k per move
-* ntest lvl 1-20
 
 
 problems anticipated
