@@ -4,26 +4,11 @@ ggp-zero
 recent
 ------
 
-[reversi training](https://github.com/ggplib/ggp-zero/blob/dev/doc/reversi-record.md).
+[reversi training](https://github.com/ggplib/ggp-zero/blob/dev/doc/reversi_record.md).
 
 [Watch live! *Be back soon*!](http://simulated.tech:8800/index.html/)
 
 Post to https://github.com/mokemokechicken/reversi-alpha-zero/issues/40
-
-I have started a recent run.  This is using (ggp-zero)[https://github.com/ggplib/ggp-zero] (
-reversi-alpha-zero implementation was inspiration!).  ggp-zero is a generic implementation of a
-'zero' method, and can train many different games.  ie By zero I mean start with a random network
-and train via self play using (PUCT or variant) MCTS.  However, at this point the implementation
-(and goals) are very divirgent from AlphaZero (I also drew inspiration from 'Thinking Fast and
-Slow').  For this run, I am running with multiple policies and multiple value heads, with no turn
-flipping of the network and no symmetry/rotation of the network.
-
-A previous run achieved approximately ntest level 7, however there were no records.
-
-This time going to keep detailed record [here](https://github.com/ggplib/ggp-zero/blob/dev/doc/reversi-record.md), currently
-approximately ntest level 2.
-
-
 
 about
 ------
