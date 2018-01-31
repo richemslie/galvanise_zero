@@ -33,16 +33,23 @@ Based on [GGPLib](https://github.com/ggplib/ggplib).
 
 roadmap
 -------
+ * create PUCT+ evaluator, bunch of the galvanise ideas carried over to PUCT MCTS
+
+ * fix bases transformer to use a game description, and not harded coded classes.  add enough
+   support to transform chess & skirmish & tron.
+
  * flesh out "zero battleground", visualisation and pretty elo graphs
 
  * train new variant of escort latched breakthrough - which is super hard for mcts players (and
-   since method of learning is similar to mcts, can it learn to play?)
+   since method of learning is similar to MCTS, can it learn to play?  Without guidance MCTS will
+   score 50/50.)
 
- * add previous states & multiple policy heads
+ * train a non-zero sum game (skirmish), and a simultaneous game (tron)
 
- * lots of refactoring
+ * train chess!
 
- * update install instructions.  finish refactoring & quick polish up.  write a little about how it works.  post first working version.
+ * docs.  update install instructions.  finish refactoring & quick polish up.  write a little about
+   how it works.  post first working version.
 
 
 other

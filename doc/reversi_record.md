@@ -1,37 +1,50 @@
 reversi generation 0
 ====================
 
-restarted again!
+Restarted again!  Started on 29th January.
 
+This is the second time training reversi.  This time running with multiple policy and value heads.
+
+A previous run achieved approximately ntest level 7, however there were no records.
 
 results
 -------
-results @ 30th January
+results @ 31th January
 
 * gzero_x_y - where x is generation, y is number of playouts per move * 100.
+
 * ntest_x - where x is nboard depth/level
 * results - win/loss/draw
 
 | player     | opponent   | black_result   | white_result   |
 |:-----------|:-----------|:---------------|:---------------|
-| gzero_5_1  | random     | 3/2/0          | 3/2/0          |
-| gzero_10_1 | random     | 5/0/0          | 3/2/0          |
-| gzero_10_1 | pymcs      | 0/2/0          | 0/2/0          |
-| gzero_15_2 | pymcs      | 2/3/0          | 1/2/1          |
-| gzero_20_1 | random     | 5/0/0          | 5/0/0          |
-| gzero_20_2 | pymcs      | 3/1/1          | 2/2/0          |
-| gzero_20_4 | simplecmts | 2/0/0          | 1/1/0          |
-| gzero_30_1 | pymcs      | 5/0/0          | 4/1/0          |
-| gzero_30_4 | ntest_1    | 5/0/0          | 4/1/0          |
-| gzero_30_4 | ntest_2    | 0/6/4          | 1/9/0          |
-| gzero_30_8 | ntest_2    | 1/4/0          | 1/4/0          |
-| gzero_35_1 | pymcs      | 5/0/0          | 4/1/0          |
-| gzero_35_1 | simplecmts | 4/1/0          | 3/2/0          |
-| gzero_35_2 | simplecmts | 5/0/0          | 4/1/0          |
-| gzero_35_4 | ntest_1    | 5/0/0          | 4/1/0          |
-| gzero_35_4 | ntest_2    | 0/5/0          | 1/4/0          |
-| gzero_35_8 | ntest_2    | 2/3/0          | 3/2/0          |
+| gzero_50_8 | ntest_5    | 2/3/0          | 3/2/0          |
+| gzero_50_4 | ntest_2    | 6/4/1          | 10/1/0         |
+| gzero_50_4 | ntest_1    | 3/0/0          | 3/0/0          |
+| gzero_50_1 | simplecmts | 4/1/0          | 4/1/0          |
+| gzero_50_1 | pymcs_1    | 4/1/0          | 4/1/0          |
+| gzero_45_8 | ntest_4    | 5/0/0          | 3/0/2          |
+| gzero_45_8 | ntest_3    | 5/0/0          | 5/0/0          |
+| gzero_45_4 | ntest_2    | 21/26/0        | 35/14/0        |
+| gzero_45_4 | ntest_1    | 4/1/0          | 5/0/0          |
 | gzero_40_4 | ntest_2    | 1/4/0          | 3/2/0          |
+| gzero_35_8 | ntest_2    | 2/3/0          | 3/2/0          |
+| gzero_35_4 | ntest_2    | 0/5/0          | 1/4/0          |
+| gzero_35_4 | ntest_1    | 5/0/0          | 4/1/0          |
+| gzero_35_2 | simplecmts | 5/0/0          | 4/1/0          |
+| gzero_35_1 | simplecmts | 4/1/0          | 3/2/0          |
+| gzero_35_1 | pymcs      | 5/0/0          | 4/1/0          |
+| gzero_30_8 | ntest_2    | 1/4/0          | 1/4/0          |
+| gzero_30_4 | ntest_2    | 0/6/4          | 1/9/0          |
+| gzero_30_4 | ntest_1    | 5/0/0          | 4/1/0          |
+| gzero_30_1 | pymcs      | 5/0/0          | 4/1/0          |
+| gzero_20_4 | simplecmts | 2/0/0          | 1/1/0          |
+| gzero_20_2 | pymcs      | 3/1/1          | 2/2/0          |
+| gzero_20_1 | random     | 5/0/0          | 5/0/0          |
+| gzero_15_2 | pymcs      | 2/3/0          | 1/2/1          |
+| gzero_10_1 | pymcs      | 0/2/0          | 0/2/0          |
+| gzero_10_1 | random     | 5/0/0          | 3/2/0          |
+| gzero_5_1  | random     | 3/2/0          | 3/2/0          |
 
 gzero run with no dirichlet noise, small amount of random choice of action.
 
@@ -262,6 +275,54 @@ unstable, then will abandon the run.
 * base_training_config.resample_buckets =  [[5, 1.0], [15, 0.8], [25, 0.6], [35, 0.4], [45, 0.2], [0, 0.1]]
 
 
+gen 47 changes
+--------------
+still overfitting... going to ignore this for now, as seems to be learning quite well.
+
+buffers are overflowing, so increase:
+
+* base_training_config.max_sample_count = 1500000
+* base_training_config.starting_step = 10
+
+XXX those two should be renamed now (starting_generation & samples_for_epoch)
+
+not seeing many false positives resignations:
+
+* self_play_config.resign_false_positive_retry_percentage = 0.4
+* self_play_config.resign_score_probability = 0.1
+
+deduping is becoming a bottleneck nearly 1 million samples.  Also it is not so important with the
+sampling.  Bit of a big change at this point in the run, but oh well.
+
+# -1 is off
+* self_play_config.drop_dupes_count = -1
+
+Planning to leave configuration alone for next 24 hours, hence upping the number of samples per
+game earlier than planned.
+
+* num_samples_to_train = 60000
+* self_play_config.max_number_of_samples = 8
+
+
+self play local optima
+----------------------
+There is an issue when playing against pymcs/simplemcts with low number of playouts (play is much
+more reliant on the policy rather than value part of the network). In about 10% of these games -
+after about 10 or 20 moves in, there is a way for pymcs/simplemcts to play whereby there is no
+moves left for gzero.  Therefore it loses these games, even when it had thought its winning
+probability is 95%.
+
+Unfortunately, this sudden death scenario is rare and it is unlikely to see it during self play.
+Especially not now now that the policy side of things is quite 'opinionated'.
+
+Not sure what the solution is or if there is a solution other than starting over (perhaps more
+randomness during selection?), but it would definitely benefit augmenting the PUCT evaluator with
+some of the prover MCTS logic (sudden death takes many iterations to converge, whereas prover MCTS
+instantaneous).
+
+This is definitely a learned local optima - it doesn't happen in early generations.
+
+
 raw results json
 ----------------
 
@@ -289,9 +350,21 @@ raw results json
 
               [ ["gzero", 35, 4], ["ntest", 1, -1], [5, 0, 0], [4, 1, 0] ],
               [ ["gzero", 35, 4], ["ntest", 2, -1], [0, 5, 0], [1, 4, 0] ],
-              [ ["gzero", 35, 8], ["ntest", 2, -1], [2, 3, 0], [3, 2, 0] ]
+              [ ["gzero", 35, 8], ["ntest", 2, -1], [2, 3, 0], [3, 2, 0] ],
 
-              [ ["gzero", 40, 4], ["ntest", 2, -1], [1, 4, 0], [3, 2, 0] ]
-              ] }
+              [ ["gzero", 40, 4], ["ntest", 2, -1], [1, 4, 0], [3, 2, 0] ],
+
+              [ ["gzero", 45, 4], ["ntest", 1, -1], [4, 1, 0], [5, 0, 0] ],
+              [ ["gzero", 45, 4], ["ntest", 2, -1], [21, 26, 0], [35, 14, 0] ],
+              [ ["gzero", 45, 8], ["ntest", 3, -1], [5, 0, 0], [5, 0, 0] ],
+              [ ["gzero", 45, 8], ["ntest", 4, -1], [5, 0, 0], [3, 0, 2] ],
+
+              [ ["gzero", 50, 1], ["pymcs", 1, -1], [4, 1, 0], [4, 1, 0] ],
+              [ ["gzero", 50, 1], ["simplecmts", -1, -1], [4, 1, 0], [4, 1, 0] ],
+              [ ["gzero", 50, 4], ["ntest", 1, -1], [3, 0, 0], [3, 0, 0] ],
+              [ ["gzero", 50, 4], ["ntest", 2, -1], [6, 4, 1], [10, 1, 0] ],
+              [ ["gzero", 50, 8], ["ntest", 5, -1], [2, 3, 0], [3, 2, 0] ]
+
+] }
 
 ```
