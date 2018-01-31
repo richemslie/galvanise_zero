@@ -222,6 +222,8 @@ class ServerBroker(Broker):
 
         if msg.message == "network_trained":
             self.roll_generation()
+            # force a checkpoint so save our leftover data straightaway
+            self.checkpoint()
 
     def add_new_samples(self, samples):
         dupe_count = 0
