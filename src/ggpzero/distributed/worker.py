@@ -59,6 +59,9 @@ class Worker(Broker):
         self.supervisor = None
         self.self_play_conf = None
 
+        # will be created on demand
+        self.trainer = None
+
         self.cmds_running = []
 
         # connect to server
@@ -103,6 +106,7 @@ class Worker(Broker):
             self.configure_self_play()
 
         except Exception as exc:
+            log.error("error in on_configure(): %s" % exc)
             for l in traceback.format_exc().splitlines():
                 log.error(l)
 
@@ -182,18 +186,21 @@ class Worker(Broker):
     def train(self, game, train_config, network_model, generation_description):
         assert train_config.game == game
 
-        # create a transformer
-        man = get_manager()
+        if self.trainer is None:
+            # create a transformer
+            man = get_manager()
 
-        transformer = man.get_transformer(game, generation_description)
+            transformer = man.get_transformer(game, generation_description)
 
-        # create the manager
-        trainer = TrainManager(train_config, transformer)
-        trainer.get_network(network_model, generation_description)
+            # create the manager
+            self.trainer = TrainManager(train_config, transformer)
 
-        data = trainer.gather_data()
-        trainer.do_epochs(data)
-        trainer.save()
+        self.trainer.update_config(train_config)
+        self.trainer.get_network(network_model, generation_description)
+
+        data = self.trainer.gather_data()
+        self.trainer.do_epochs(data)
+        self.trainer.save()
 
 
 def start_worker_factory():
