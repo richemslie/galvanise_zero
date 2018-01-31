@@ -263,6 +263,7 @@ class NeuralNetwork(object):
         elif compile_strategy == "adam":
             policy_objective = 'categorical_crossentropy'
             if learning_rate:
+                print 'here', learning_rate
                 optimizer = Adam(lr=learning_rate)
             else:
                 optimizer = Adam()
@@ -286,14 +287,17 @@ class NeuralNetwork(object):
         loss_weights = [1.0] * num_policies
         loss_weights.append(value_weight)
 
-        log.warning("Compiling with %s (value_weight=%.3f)" % (optimizer, value_weight))
+        if learning_rate is not None:
+            log.warning("Compiling with %s (learning_rate=%.4f, value_weight=%.3f)" % (optimizer, learning_rate, value_weight))
+        else:
+            log.warning("Compiling with %s (value_weight=%.3f)" % (optimizer, value_weight))
 
         self.keras_model.compile(loss=loss, optimizer=optimizer,
                                  loss_weights=loss_weights,
                                  metrics=["acc", top_3_acc])
 
     def fit(self, input_channels, outputs, validation_input_channels,
-            validation_outputs, batch_size, callbacks):
+            validation_outputs, batch_size, callbacks, **kwds):
 
         self.keras_model.fit(input_channels,
                              outputs,
@@ -302,7 +306,8 @@ class NeuralNetwork(object):
                              epochs=1,
                              validation_data=[validation_input_channels,
                                               validation_outputs],
-                             callbacks=callbacks)
+                             callbacks=callbacks,
+                             **kwds)
 
     def get_model(self):
         assert self.keras_model is not None

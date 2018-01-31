@@ -159,5 +159,33 @@ def test_trainer():
 
     data = trainer.gather_data()
 
+    print data
+
+    trainer.do_epochs(data)
+    trainer.save()
+
+
+def test_trainer_update_config():
+
+    # we need the data for this test
+    conf = get_conf_reversi()
+
+    # create a transformer
+    man = get_manager()
+    generation_descr = templates.default_generation_desc(conf.game)
+    generation_descr.num_previous_states = 2
+    generation_descr.multiple_policy_heads = True
+    transformer = man.get_transformer(conf.game, generation_descr)
+
+    # create the manager
+    trainer = train.TrainManager(conf, transformer, next_generation_prefix="x2test")
+
+    nn_model_config = templates.nn_model_config_template(conf.game, "tiny", transformer)
+    trainer.get_network(nn_model_config, generation_descr)
+
+    data = trainer.gather_data()
+
+    print data
+
     trainer.do_epochs(data)
     trainer.save()

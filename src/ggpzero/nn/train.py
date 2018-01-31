@@ -1,5 +1,6 @@
 import os
 import gzip
+
 from collections import Counter
 
 import numpy as np
@@ -25,8 +26,8 @@ def unison_shuffle(*arrays):
         assert len(a) == length_of_array0
 
     perms = np.random.permutation(length_of_array0)
-    for a in arrays:
-        return a[perms]
+
+    return [a[perms] for a in arrays]
 
 
 class TrainException(Exception):
@@ -38,54 +39,24 @@ def reshape(d):
     return np.concatenate(d, axis=0).reshape(new_shape)
 
 
-def transpose_and_reshape(outputs):
-    new_d = []
-    for idx in range(len(outputs[0])):
-        row = []
-        for o in outputs:
-            row.append(o[idx])
+class Buckets(object):
+    def __init__(self, bucket_def):
+        self.bucket_def = bucket_def
 
-        new_d.append(reshape(row))
-    return new_d
+    def get(self, depth, max_depth):
+        if not self.bucket_def:
+            return 1.0
 
+        for idx, (cut_off, pct) in enumerate(self.bucket_def):
+            if cut_off <= 0:
+                return self.get2(depth, max_depth, self.bucket_def[idx:])
 
-class TrainData(object):
-    def __init__(self):
-        self.inputs = []
-        self.outputs = []
+            if depth < cut_off:
+                return pct
 
-        self.validation_inputs = []
-        self.validation_outputs = []
-
-    def summary(self):
-        assert len(self.inputs) == len(self.outputs)
-        assert len(self.validation_inputs) == len(self.validation_outputs)
-        log.info("SamplesBuffer - train size %d, validate size %d" % (len(self.inputs),
-                                                                      len(self.validation_inputs)))
-
-    def reshape_all(self):
-        inputs = reshape(self.inputs)
-        validation_inputs = reshape(self.validation_inputs)
-
-        outputs = transpose_and_reshape(self.outputs)
-        validation_outputs = transpose_and_reshape(self.validation_outputs)
-
-        # good to see some outputs
-        for x in (10, 420, 42):
-            log.info('train input, shape: %s.  Example: %s' % (inputs.shape, inputs[x]))
-            for o in outputs:
-                log.info('train output, shape: %s.  Example: %s' % (o.shape, o[x]))
-
-        return inputs, outputs, validation_inputs, validation_outputs
-
-    def strip(self, train_count, validate_count):
-        ''' Needs to throw away the tail of the list (since that is the oldest data) '''
-
-        self.inputs = self.inputs[:train_count]
-        self.outputs = self.outputs[:train_count]
-
-        self.validation_inputs = self.validation_inputs[:validate_count]
-        self.validation_outputs = self.validation_outputs[:validate_count]
+    def get2(self, depth, max_depth, stripped_def):
+        assert len(stripped_def) == 1
+        return stripped_def[0][1]
 
 
 class SamplesData(object):
@@ -103,6 +74,37 @@ class SamplesData(object):
 
     def add_sample(self, sample):
         self.samples.append(sample)
+
+    def verify_samples(self, sm):
+        # create a basestate
+        basestate = sm.new_base_state()
+
+        from collections import Counter
+        counters = [Counter(), Counter()]
+        max_values = [{}, {}]
+        min_values = [{}, {}]
+        for s in self.samples:
+            basestate.from_list(s.state)
+            sm.update_bases(basestate)
+
+            # get legals...
+            for ri in range(2):
+                ls = sm.get_legal_state(ri)
+                policy = s.policies[ri]
+                for legal in ls.to_list():
+                    found = False
+                    for ll, pp in policy:
+                        if ll == legal:
+                            max_values[ri][legal] = max(max_values[ri].get(legal, -1), pp)
+                            min_values[ri][legal] = min(max_values[ri].get(legal, 2), pp)
+                            found = True
+                            break
+                    assert found
+                    counters[ri][legal] += 1
+        for ri in range(2):
+            print sm.legal_to_move(ri, 57)
+            print "count", counters[ri][57]
+            print "min/max", min_values[ri][57], max_values[ri][57]
 
     def transform_all(self, transformer):
         for sample in self.samples:
@@ -127,7 +129,6 @@ class SamplesData(object):
 class SamplesBuffer(object):
 
     def __init__(self):
-        self.data = TrainData()
         self.sample_data_cache = {}
 
     def files_to_sample_data(self, conf):
@@ -162,16 +163,174 @@ class SamplesBuffer(object):
             step -= 1
 
 
+class LevelData(object):
+    def __init__(self, level):
+        self.level = level
+        self.inputs = []
+        self.outputs = None
+
+        # set in validation_split
+        self.validation_inputs = self.validation_outputs = None
+
+    def add(self, ins, outs):
+        self.inputs.append(ins)
+        if self.outputs is None:
+            # create a list for each output
+            self.outputs = [[] for _ in outs]
+
+        for o, outputs in zip(outs, self.outputs):
+            outputs.append(o)
+
+    def shuffle(self):
+        # faster np version
+        perms = np.random.permutation(len(self.inputs))
+        self.inputs = self.inputs[perms]
+        self.outputs = [o[perms] for o in self.outputs]
+
+    def validation_split(self, validation_split):
+        ' shuffle input/outputs and split '
+
+        self.inputs = reshape(self.inputs)
+        self.outputs = [reshape(o) for o in self.outputs]
+
+        self.shuffle()
+
+        train_count = int(len(self.inputs) * validation_split)
+
+        self.inputs, self.validation_inputs = self.inputs[:train_count], self.inputs[train_count:]
+
+        # go through each output.  We have to do it here, as we want nicely shuffled data
+        outputs, validation_outputs = [], []
+        for o in self.outputs:
+            outputs.append(o[:train_count])
+            validation_outputs.append(o[train_count:])
+        self.outputs = outputs
+        self.validation_outputs = validation_outputs
+
+    def get(self, percent):
+        self.shuffle()
+        count = int(len(self.inputs) * percent)
+        return self.inputs[:count], self.outputs[:count]
+
+    def get_number_outputs(self):
+        return len(self.outputs)
+
+    def validation(self, percent):
+        count = int(len(self.inputs) * percent)
+        outputs = [o[:count] for o in self.validation_outputs]
+        return self.validation_inputs[:count], outputs
+
+    def resample(self, percent):
+        self.shuffle()
+        count = int(len(self.inputs) * percent)
+        outputs = [o[:count] for o in self.outputs]
+        return self.inputs[:count], outputs
+
+    def debug(self):
+        # good to see some outputs
+        for x in (10, 420, 42):
+            log.info('train input, shape: %s.  Example: %s' % (self.inputs.shape, self.inputs[x]))
+            for o in self.outputs:
+                log.info('train output, shape: %s.  Example: %s' % (o.shape, o[x]))
+
+    def __len__(self):
+        return len(self.inputs)
+
+
+def validation_data(leveled_data, buckets):
+    assert leveled_data
+
+    number_outputs = leveled_data[0].get_number_outputs()
+
+    # will concatenate at end
+    v_inputs = []
+    v_outputs = [[] for _ in range(number_outputs)]
+
+    for depth, level_data in enumerate(leveled_data):
+        percent = buckets.get(depth, len(leveled_data))
+        ins, outs = level_data.validation(percent)
+        v_inputs.append(ins)
+        for o, o2 in zip(v_outputs, outs):
+            o.append(o2)
+
+    inputs = np.concatenate(v_inputs)
+    outputs = []
+    for o in v_outputs:
+        outputs.append(np.concatenate(o))
+
+    # finally shuffle
+    r = unison_shuffle(inputs, *outputs)
+    inputs, outputs = r[0], r[1:]
+    return inputs, outputs
+
+
+def resample_data(leveled_data, buckets):
+    assert leveled_data
+
+    number_outputs = leveled_data[0].get_number_outputs()
+
+    # will concatenate at end
+    v_inputs = []
+    v_outputs = [[] for _ in range(number_outputs)]
+
+    for depth, level_data in enumerate(leveled_data):
+        percent = buckets.get(depth, len(leveled_data))
+        ins, outs = level_data.resample(percent)
+        v_inputs.append(ins)
+        for o, o2 in zip(v_outputs, outs):
+            o.append(o2)
+
+    inputs = np.concatenate(v_inputs)
+    outputs = []
+    for o in v_outputs:
+        outputs.append(np.concatenate(o))
+
+    # finally shuffle
+    r = unison_shuffle(inputs, *outputs)
+    inputs, outputs = r[0], r[1:]
+    return inputs, outputs
+
+
 class TrainManager(object):
-    def __init__(self, train_config, transformer, next_generation_prefix=None):
+    def __init__(self, train_config, transformer):
+        # take a copy of the initial train_config
         assert isinstance(train_config, confs.TrainNNConfig)
+        self.train_config = attrutil.clone(train_config)
+
         attrutil.pprint(train_config)
-        self.train_config = train_config
 
         self.transformer = transformer
 
         # lookup via game_name (this gets statemachine & statemachine model)
         self.game_info = lookup.by_name(train_config.game)
+
+        # will be created in gather_data
+        self.buckets = None
+        self.samples_buffer = None
+        self.next_generation = "%s_%s" % (train_config.generation_prefix, train_config.next_step)
+
+    def update_config(self, train_config, next_generation_prefix=None):
+        assert train_config.game == self.train_config.game
+
+        # simply update these
+        for attr_name in ("use_previous next_step overwrite_existing "
+                          "validation_split batch_size epochs max_sample_count "
+                          "compile_strategy learning_rate".split()):
+            value = getattr(train_config, attr_name)
+            setattr(self.train_config, attr_name, value)
+
+        rebuild_cache = False
+        if train_config.drop_dupes_count < self.train_config.drop_dupes_count:
+            rebuild_cache = True
+
+        if train_config.starting_step < self.train_config.drop_dupes_count:
+            rebuild_cache = True
+
+        self.train_config.starting_step = train_config.starting_step
+        self.train_config.drop_dupes_count = train_config.drop_dupes_count
+        if rebuild_cache:
+            self.buckets = None
+            self.samples_buffer = None
 
         if next_generation_prefix is not None:
             self.next_generation = "%s_%s" % (next_generation_prefix, train_config.next_step)
@@ -218,14 +377,15 @@ class TrainManager(object):
         # abbreviate, easier on the eyes
         conf = self.train_config
 
-        samples_buffer = SamplesBuffer()
+        if self.samples_buffer is None:
+            print "Recreating samples buffer"
+            self.samples_buffer = SamplesBuffer()
+            self.buckets = Buckets(conf.resample_buckets)
 
         total_samples = 0
         count = Counter()
-
-        train_data = TrainData()
-
-        for fn, sample_data in samples_buffer.files_to_sample_data(conf):
+        leveled_data = []
+        for fn, sample_data in self.samples_buffer.files_to_sample_data(conf):
             assert sample_data.game == conf.game
 
             log.debug("Proccesing %s" % fn)
@@ -234,9 +394,10 @@ class TrainManager(object):
                                                                      sample_data.num_samples))
 
             if not sample_data.transformed:
+                # sample_data.verify_samples(self.game_info.get_sm())
                 sample_data.transform_all(self.transformer)
 
-            data = []
+            level_data = LevelData(len(leveled_data))
 
             # XXX is this deduping a good idea?  Once we start using prev_states, then there will
             # be a lot less deduping?  I guess it is likely not too different.
@@ -246,43 +407,28 @@ class TrainManager(object):
                     continue
 
                 count[state] += 1
-                data.append((ins, outs))
+                level_data.add(ins, outs)
 
-            log.verbose("DROPPED DUPES %s" % (sample_data.num_samples - len(data)))
-
-            num_samples = len(data)
+            num_samples = len(level_data)
+            log.verbose("DROPPED DUPES %s" % (sample_data.num_samples - num_samples))
             log.verbose("Left over samples %d" % num_samples)
 
-            train_count = int(num_samples * conf.validation_split)
+            log.verbose("Validation split")
+            level_data.validation_split(conf.validation_split)
 
-            for ins, outs in data[:train_count]:
-                train_data.inputs.append(ins)
-                train_data.outputs.append(outs)
-
-            for ins, outs in data[train_count:]:
-                train_data.validation_inputs.append(ins)
-                train_data.validation_outputs.append(outs)
+            leveled_data.append(level_data)
 
             total_samples += num_samples
-            if total_samples > conf.max_sample_count:
-                break
 
-        train_data.summary()
+        log.info("total samples: %s" % total_samples)
 
-        if conf.max_sample_count < total_samples:
-            train_count = int(conf.max_sample_count * conf.validation_split)
-            validate_count = conf.max_sample_count - train_count
+        return leveled_data
 
-            log.info("Stripping %s samples from data set" % (total_samples -
-                                                             conf.max_sample_count))
-
-            train_data.strip(train_count, validate_count)
-
-        train_data.summary()
-        return train_data
-
-    def do_epochs(self, train_data):
+    def do_epochs(self, leveled_data):
         conf = self.train_config
+
+        # first get validation data, then we can forget about it as it doesn't need reshuffled
+        validation_inputs, validation_outputs = validation_data(leveled_data, self.buckets)
 
         training_logger = network.TrainingLoggerCb(conf.epochs)
         controller = network.TrainingController(self.retraining,
@@ -294,6 +440,7 @@ class TrainManager(object):
         XX_value_weight_min = 0.05
 
         value_weight = 1.0
+
         # start retraining with reduce weight
         if self.retraining:
             value_weight *= XX_value_weight_reduction
@@ -302,9 +449,7 @@ class TrainManager(object):
                         self.train_config.learning_rate,
                         value_weight=value_weight)
 
-        num_samples = len(train_data.inputs)
-
-        inputs, outputs, validation_inputs, validation_outputs = train_data.reshape_all()
+        # num_samples = len(train_data.inputs)
 
         for i in range(conf.epochs):
 
@@ -312,13 +457,14 @@ class TrainManager(object):
                 log.warning("Stop training early via controller")
                 break
 
-            # let's shuffle our data by ourselvs
-            unison_shuffle(inputs, *outputs)
+            # resample the samples!
+            inputs, outputs = resample_data(leveled_data, self.buckets)
 
-            if (conf.max_epoch_samples_count > 0 and
-                conf.max_epoch_samples_count < num_samples):
-                inputs = inputs[:conf.max_epoch_samples_count]
-                outputs = [o[:conf.max_epoch_samples_count] for o in outputs]
+            if len(inputs) > conf.max_sample_count:
+                log.warning("stripping samples before training: %s > %s" % (len(inputs),
+                                                                            conf.max_sample_count))
+                inputs = inputs[:conf.max_sample_count]
+                outputs = [o[:conf.max_sample_count] for o in outputs]
 
             if i > 0:
                 log.info("controller.value_loss_diff %.3f" % controller.value_loss_diff)
@@ -343,6 +489,7 @@ class TrainManager(object):
                         validation_inputs,
                         validation_outputs,
                         conf.batch_size,
+                        shuffle=False,
                         callbacks=[training_logger, controller])
 
         self.controller = controller

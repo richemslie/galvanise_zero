@@ -24,14 +24,20 @@ def Conv2DBlock(*args, **kwds):
     bn_name = name + '_bn'
     act_name = name + '_act'
 
+    do_bn = activation != "selu"
+
     def block(x):
         x = klayers.Conv2D(*args,
                            name=conv_name, **kwds)(x)
 
-        x = klayers.BatchNormalization(axis=get_bn_axis(),
-                                       name=bn_name)(x)
+        if do_bn:
+            x = klayers.BatchNormalization(axis=get_bn_axis(),
+                                           name=bn_name)(x)
 
-        x = klayers.Activation(activation, name=act_name)(x)
+        if activation == "leakyrelu":
+            x = klayers.LeakyReLU(alpha=0.03, name=act_name)(x)
+        else:
+            x = klayers.Activation(activation, name=act_name)(x)
         return x
 
     return block
@@ -41,10 +47,7 @@ def ResidualBlock(*args, **kwds):
     # args, kwds -> passed through to Conv2D
     assert "padding" not in kwds
 
-    try:
-        name = kwds.pop('name',)
-    except KeyError:
-        name = 'residual_block'
+    name = kwds.pop('name', 'residual_block')
 
     name_conv0 = name + "_conv0"
     name_conv1 = name + "_conv1"
@@ -53,6 +56,8 @@ def ResidualBlock(*args, **kwds):
     name_act0 = name + "_act0"
     name_act_after = name + "_act_after"
     name_add = name + "_add"
+
+    activation = kwds.pop('activation', "relu")
 
     def block(tensor):
         x = klayers.Conv2D(*args,
@@ -63,7 +68,10 @@ def ResidualBlock(*args, **kwds):
         x = klayers.BatchNormalization(axis=get_bn_axis(),
                                        name=name_bn0)(x)
 
-        x = klayers.Activation("relu", name=name_act0)(x)
+        if activation == "leakyrelu":
+            x = klayers.LeakyReLU(alpha=0.03, name=name_act0)(x)
+        else:
+            x = klayers.Activation(activation, name=name_act0)(x)
 
         x = klayers.Conv2D(*args,
                            name=name_conv1,
@@ -74,7 +82,10 @@ def ResidualBlock(*args, **kwds):
                                        name=name_bn1)(x)
 
         x = klayers.add([tensor, x], name=name_add)
-        x = klayers.Activation("relu", name=name_act_after)(x)
+        if activation == "leakyrelu":
+            x = klayers.LeakyReLU(alpha=0.03, name=name_act_after)(x)
+        else:
+            x = klayers.Activation(activation, name=name_act_after)(x)
 
         return x
 
@@ -112,6 +123,8 @@ def get_network_model(conf):
     if conf.l2_regularisation:
         extra_params["kernel_regularizer"] = keras_regularizers.l2(1e-4)
 
+    activation = 'leakyrelu' if conf.leaky_relu else 'relu'
+
     # inputs:
     if is_channels_first():
         inputs_board = klayers.Input(shape=(conf.input_channels,
@@ -127,13 +140,14 @@ def get_network_model(conf):
     # initial conv2d /Resnet on cords
     layer = Conv2DBlock(conf.cnn_filter_size, conf.cnn_kernel_size,
                         padding='same',
-                        activation='relu',
+                        activation=activation,
                         name='initial', **extra_params)(inputs_board)
 
     for i in range(conf.residual_layers):
         layer = ResidualBlock(conf.cnn_filter_size,
                               conf.cnn_kernel_size,
                               name="ResLayer_%s" % i,
+                              activation=activation,
                               **extra_params)(layer)
 
     number_of_policies = 1
@@ -149,7 +163,7 @@ def get_network_model(conf):
         to_flatten = Conv2DBlock(filters, 1,
                                  name='to_flatten_policy_head_%s' % idx,
                                  padding='valid',
-                                 activation='relu',
+                                 activation=activation,
                                  **extra_params)(layer)
 
         flat = klayers.Flatten()(to_flatten)
@@ -170,7 +184,7 @@ def get_network_model(conf):
     to_flatten = Conv2DBlock(filters, 1,
                              name='to_flatten_value_head',
                              padding='valid',
-                             activation='relu',
+                             activation=activation,
                              **extra_params)(layer)
 
     flat = klayers.Flatten()(to_flatten)
