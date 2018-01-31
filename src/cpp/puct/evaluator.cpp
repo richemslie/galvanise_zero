@@ -427,13 +427,13 @@ float PuctEvaluator::getTemperature() const {
 
     ASSERT(this->conf->temperature > 0);
 
-    float mulitplier = 1.0f + ((this->game_depth - this->conf->depth_temperature_start) *
+    float multiplier = 1.0f + ((this->game_depth - this->conf->depth_temperature_start) *
                                this->conf->depth_temperature_increment);
 
-    mulitplier = std::max(1.0f, mulitplier);
-    mulitplier = std::min(mulitplier, this->conf->depth_temperature_max);
+    multiplier = std::max(1.0f, multiplier);
+    multiplier = std::min(multiplier, this->conf->depth_temperature_max);
 
-    return this->conf->temperature * mulitplier;
+    return this->conf->temperature * multiplier;
 }
 
 const PuctNodeChild* PuctEvaluator::choose(const PuctNode* node) {
