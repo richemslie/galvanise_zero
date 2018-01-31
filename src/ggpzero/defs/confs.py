@@ -132,6 +132,8 @@ class NNModelConfig(object):
     dropout_rate_policy = attribute(0.333)
     dropout_rate_value = attribute(0.5)
 
+    leaky_relu = attribute(False)
+
 
 @register_attrs
 class TrainNNConfig(object):
@@ -152,10 +154,6 @@ class TrainNNConfig(object):
     # if the total number of samples is met, will trim the oldest samples
     max_sample_count = attribute(250000)
 
-    # <= 0 off.  Idea is we have more samples in the data, we take a sample a different
-    # subset each epoch.
-    max_epoch_samples_count = attribute(250000)
-
     # this is applied even if max_sample_count can't be reached
     starting_step = attribute(0)
 
@@ -165,6 +163,13 @@ class TrainNNConfig(object):
     # one of adam / amsgrad/ SGD
     compile_strategy = attribute("adam")
     learning_rate = attribute(None)
+
+    # experimental:
+    # list of tuple.  Idea is that at epoch we take a percentage of the samples to train.
+    # [(5, 1.0), (10, 0.8), (0, 0.5), (-5, 0.2)]
+    # which translates into, take all samples of first 5, 80% of next 10, 50% of next n, and 20% of
+    # the last 5.  also assert number of gens is more than sum(abs(k) for k,_ in resample_buckets)
+    resample_buckets = attribute(default=attr_factory(list))
 
 
 @register_attrs
