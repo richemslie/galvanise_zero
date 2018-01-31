@@ -117,6 +117,7 @@ class PUCTEvaluator(object):
 
         self.identifier = "%s_%s_%s" % (self.conf.name, self.conf.playouts_per_iteration, conf.generation)
         self.sm = None
+        self.num_predictions = 0
 
     def init(self, game_info, current_state):
         self.game_info = game_info
@@ -163,9 +164,24 @@ class PUCTEvaluator(object):
 
         total = 0
         assert len(node.children)
+        disaster = False
         for c in node.children:
             c.policy_prob = policy[c.legal]
+            if c.policy_prob < 0.0001:
+                disaster = True
             total += c.policy_prob
+
+        if len(node.children) > 1 and disaster:
+            log.warning("disasterdisasterdisaster!!!!")
+            print total
+            for p in policies:
+                print "policy:"
+                print p
+
+            for c in node.children:
+                print c
+                if c.policy_prob < 0.0001:
+                    print c.legal, policy[c.legal], c.policy_prob
 
         if total < 0.0001:
             # no real predictions, set it uniform
@@ -219,7 +235,7 @@ class PUCTEvaluator(object):
             node.final_score = predictions.scores[:]
             node.mc_score = predictions.scores[:]
             self.update_node_policy(node, predictions.policies)
-
+            self.num_predictions += 1
         return node
 
     def expand_child(self, node, child):
@@ -356,7 +372,11 @@ class PUCTEvaluator(object):
         if max_iterations < 0:
             max_iterations = sys.maxint
 
-        while iterations < max_iterations:
+        self.num_predictions = 0
+        while iterations < max_iterations * 8:
+            if self.num_predictions > max_iterations:
+                break
+
             if time.time() > finish_time:
                 log.info("RAN OUT OF TIME")
                 break
@@ -372,8 +392,10 @@ class PUCTEvaluator(object):
 
         if self.conf.verbose:
             if iterations:
-                log.info("Time taken for %s iteratons %.3f" % (iterations,
-                                                               time.time() - start_time))
+                log.info("Iterations: %d, predictions %d" % (iterations,
+                                                             self.num_predictions))
+
+                log.info("Time taken  %.3f" % (time.time() - start_time))
 
                 log.debug("The average depth explored: %.2f, max depth: %d" % (total_depth / float(iterations),
                                                                                max_depth))
@@ -424,10 +446,7 @@ class PUCTEvaluator(object):
             for c in self.root.children:
                 if c.to_node is None:
                     self.expand_child(self.root, c)
-
-                # XXX needs to be traversal
-                c.to_node.mc_visits = max(c.to_node.mc_visits,
-                                          self.conf.root_expansions_preset_visits)
+                    c.to_node.mc_visits = self.conf.root_expansions_preset_visits
 
         self.playout_loop(self.root, max_iterations, finish_time)
         return self.choose(finish_time)
@@ -596,12 +615,9 @@ class PUCTEvaluator(object):
 
         assert c.temperature > 0
 
-        exponent = (self.game_depth - c.depth_temperature_start) * c.depth_temperature_increment
-        exponent = max(1, exponent)
-        exponent = min(exponent, c.depth_temperature_max)
-
-        temp = c.temperature * float(exponent)
-        return temp
+        multiplier = 1.0 + (self.game_depth - c.depth_temperature_start) * c.depth_temperature_increment
+        multiplier = max(1.0, multiplier)
+        return min(c.temperature * float(multiplier), c.depth_temperature_max)
 
     def choose_temperature(self, finish_time):
         # apply temperature
@@ -697,7 +713,13 @@ def main():
     if len(sys.argv) > 3:
         config_name = sys.argv[3]
 
+
     conf = templates.puct_config_template(generation, config_name)
+
+    if len(sys.argv) > 4:
+        playouts_multiplier = int(sys.argv[4])
+        conf.playouts_per_iteration *= playouts_multiplier
+
     player = PUCTPlayer(conf=conf)
 
     from ggplib.play import play_runner
