@@ -213,12 +213,22 @@ void SelfPlayWorker::doWork() {
             this->outbound_queue.push(this->man1);
         }
 
+        int did_nothing = 0;
         while (true) {
+            did_nothing++;
             while (!this->inbound_queue.empty()) {
+                did_nothing = 0;
+
                 SelfPlayManager* manager = this->inbound_queue.pop();
                 manager->poll();
                 this->thread_self->done();
                 this->outbound_queue.push(manager);
+            }
+
+            if (did_nothing > 100000) {
+                did_nothing = 0;
+                // sleep for 1 millisecond
+                usleep(1000);
             }
         }
 
