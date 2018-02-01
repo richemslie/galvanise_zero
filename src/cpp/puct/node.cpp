@@ -126,13 +126,14 @@ static int initialiseChildHelper(PuctNode* node, int role_index, int child_index
 
 
 // This is a static method.
-PuctNode* PuctNode::create(int role_count,
+PuctNode* PuctNode::create(PuctNode* parent,
                            const BaseState* base_state,
                            StateMachineInterface* sm) {
 
-    int lead_role_index = 0;
+    const int role_count = sm->getRoleCount();
     sm->updateBases(base_state);
 
+    int lead_role_index = 0;
     bool is_finalised = true;
     int total_children = 0;
     if (!sm->isTerminal()) {
@@ -170,20 +171,32 @@ PuctNode* PuctNode::create(int role_count,
                 lead_role_index = LEAD_ROLE_INDEX_SIMULTANEOUS;
             }
         }
-
     }
 
-    PuctNode* node = createNode(base_state,
-                                is_finalised,
-                                lead_role_index,
-                                total_children,
-                                role_count);
+    PuctNode* node = ::createNode(base_state,
+                                  is_finalised,
+                                  lead_role_index,
+                                  total_children,
+                                  role_count);
+
+    // XXX best place to do this?  or pass it in to ::createNode()...
+    node->parent = parent;
+
     if (!node->is_finalised) {
         char buf[JointMove::mallocSize(role_count)];
         JointMove* move = (JointMove*) buf;
         int count = initialiseChildHelper(node, 0, 0, role_count, sm, move);
         ASSERT (count == total_children);
+
+    } else {
+        // set the scores
+        for (int ii=0; ii<role_count; ii++) {
+            int score = sm->getGoalValue(ii);
+            node->setFinalScore(ii, score / 100.0);
+            node->setCurrentScore(ii, score / 100.0);
+        }
     }
+
 
     return node;
 }

@@ -136,7 +136,7 @@ namespace GGPZero {
             return this->num_children == 0;
         }
 
-        static PuctNode* create(int role_count,
+        static PuctNode* create(PuctNode* parent,
                                 const GGPLib::BaseState* base_state,
                                 GGPLib::StateMachineInterface* sm);
 
