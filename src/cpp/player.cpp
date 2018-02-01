@@ -22,10 +22,12 @@ Player::Player(GGPLib::StateMachineInterface* sm,
 
     // first create a scheduler
     const int batch_size = 1;
-    this->scheduler = new NetworkScheduler(sm->dupe(), transformer, batch_size);
+    this->scheduler = new NetworkScheduler(transformer, sm->getRoleCount(), batch_size);
 
-    // and then the evaluator
-    this->evaluator = new PuctEvaluator(conf, this->scheduler);
+    // ... and then the evaluator...
+    // dupe statemachine here, as the PuctEvaluator thinks it is sharing a statemachine (ie it
+    // doesn't dupe the statemachine itself)
+    this->evaluator = new PuctEvaluator(sm->dupe(), conf, this->scheduler);
 }
 
 Player::~Player() {

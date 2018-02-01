@@ -32,8 +32,8 @@ SelfPlayManager::SelfPlayManager(GGPLib::StateMachineInterface* sm,
     no_samples_taken(0),
     false_positive_resigns(0) {
 
-    this->scheduler = new NetworkScheduler(this->sm->dupe(),
-                                           this->transformer,
+    this->scheduler = new NetworkScheduler(this->transformer,
+                                           this->sm->getRoleCount(),
                                            this->batch_size);
 
     // allocate buffers for predict_done_event
@@ -124,7 +124,10 @@ void SelfPlayManager::startSelfPlayers(const SelfPlayConfig* config) {
 
     // create a bunch of self plays
     for (int ii=0; ii<this->batch_size; ii++) {
-        PuctEvaluator* pe = new PuctEvaluator(config->select_puct_config, this->scheduler);
+        // the statemachine is shared between all puctevaluators of this mananger.  Just be careful.
+        PuctEvaluator* pe = new PuctEvaluator(this->sm,
+                                              config->select_puct_config,
+                                              this->scheduler);
         std::string self_play_identifier = this->identifier + K273::fmtString("_%d", ii);
         SelfPlay* sp = new SelfPlay(this, config, pe, this->sm->getInitialState(),
                                     this->sm->getRoleCount(), self_play_identifier);
