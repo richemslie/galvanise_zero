@@ -6,11 +6,6 @@
 
 #include "greenlet/greenlet.h"
 
-#include <statemachine/basestate.h>
-#include <statemachine/jointmove.h>
-#include <statemachine/statemachine.h>
-
-
 #include <k273/exception.h>
 
 #include <deque>
@@ -27,30 +22,16 @@ namespace GGPZero {
 
     class NetworkScheduler {
     public:
-        NetworkScheduler(GGPLib::StateMachineInterface* sm,
-                         const GdlBasesTransformer* transformer,
-                         int batch_size);
+        NetworkScheduler(const GdlBasesTransformer* transformer,
+                         int role_count, int batch_size);
         ~NetworkScheduler();
 
+    private:
+        void updateFromPolicyHead(const int idx, PuctNode* node);
+        void updateFromValueHead(const int idx, PuctNode* node);
+
     public:
-        // interface called back from puct evaluator:
-        std::string moveString(const GGPLib::JointMove& move);
-        void dumpNode(const PuctNode* node, const PuctNodeChild* highlight,
-                      const std::string& indent, bool sort_by_next_probability);
-
-        Sample* createSample(const PuctNode* node);
-
-        int getRoleCount() const {
-            return this->sm->getRoleCount();
-        }
-
-        PuctNode* expandChild(PuctEvaluator* pe, const PuctNode* parent,
-                              const PuctNodeChild* child);
-
-        PuctNode* createNode(PuctEvaluator* pe,
-                             const PuctNode* parent,
-                             const GGPLib::BaseState* bs);
-
+        void evaluateNode(PuctEvaluator* pe, PuctNode* node);
 
     public:
         // called from client:
@@ -74,11 +55,10 @@ namespace GGPZero {
         void mainLoop();
 
     private:
-        GGPLib::StateMachineInterface* sm;
         const GdlBasesTransformer* transformer;
+        const int role_count;
         const unsigned int batch_size;
 
-        GGPLib::BaseState* basestate_expand_node;
         std::vector <greenlet_t*> requestors;
         std::deque <greenlet_t*> runnables;
 

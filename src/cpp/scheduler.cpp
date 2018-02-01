@@ -15,19 +15,15 @@
 
 using namespace GGPZero;
 
-NetworkScheduler::NetworkScheduler(GGPLib::StateMachineInterface* sm,
-                                   const GdlBasesTransformer* transformer,
-                                   int batch_size) :
-    sm(sm),
+NetworkScheduler::NetworkScheduler(const GdlBasesTransformer* transformer,
+                                   int role_count, int batch_size) :
     transformer(transformer),
+    role_count(role_count),
     batch_size(batch_size),
-    basestate_expand_node(nullptr),
     main_loop(nullptr),
     top(nullptr),
     channel_buf(nullptr),
     channel_buf_indx(0) {
-
-    this->basestate_expand_node = this->sm->newBaseState();
 
     const int num_floats = this->transformer->totalSize() * this->batch_size;
     K273::l_debug("Creating channel_buf of size %d", num_floats);
@@ -36,56 +32,62 @@ NetworkScheduler::NetworkScheduler(GGPLib::StateMachineInterface* sm,
 }
 
 NetworkScheduler::~NetworkScheduler() {
-    free(this->basestate_expand_node);
     delete[] this->channel_buf;
-
-    delete this->sm;
     delete this->transformer;
 }
 
-std::string NetworkScheduler::moveString(const GGPLib::JointMove& move) {
-    return PuctNode::moveString(move, this->sm);
-}
+void NetworkScheduler::updateFromPolicyHead(const int idx, PuctNode* node) {
+    // XXX for now we are only interested in new nodes lead_role_index.  For PUCTPlus will want to
+    // populate all policies.
 
-void NetworkScheduler::dumpNode(const PuctNode* node,
-                                const PuctNodeChild* highlight,
-                                const std::string& indent,
-                                bool sort_by_next_probability) {
-    PuctNode::dumpNode(node, highlight, indent, sort_by_next_probability, this->sm);
-}
+    float* policies_start = this->predict_done_event->policies[node->lead_role_index];
+    policies_start += idx * this->transformer->getPolicySize(node->lead_role_index);
 
-PuctNode* NetworkScheduler::expandChild(PuctEvaluator* pe,
-                                        const PuctNode* parent, const PuctNodeChild* child) {
-    // update the statemachine
-    this->sm->updateBases(parent->getBaseState());
-    this->sm->nextState(&child->move, this->basestate_expand_node);
-
-    // create node
-    return this->createNode(pe, parent, this->basestate_expand_node);
-}
-
-PuctNode* NetworkScheduler::createNode(PuctEvaluator* pe,
-                                       const PuctNode* parent,
-                                       const GGPLib::BaseState* bs) {
-   // update the statemachine
-    this->sm->updateBases(bs);
-
-    const int role_count = this->sm->getRoleCount();
-    PuctNode* new_node = PuctNode::create(role_count, bs, this->sm);
-    new_node->parent = parent;
-
-    if (new_node->is_finalised) {
-        for (int ii=0; ii<role_count; ii++) {
-            int score = this->sm->getGoalValue(ii);
-            new_node->setFinalScore(ii, score / 100.0);
-            new_node->setCurrentScore(ii, score / 100.0);
+    // Update children in new_node with prediction
+    float total_prediction = 0.0f;
+    for (int ii=0; ii<node->num_children; ii++) {
+        PuctNodeChild* c = node->getNodeChild(this->role_count, ii);
+        c->policy_prob = *(policies_start + c->move.get(node->lead_role_index));
+        if (c->policy_prob < 0.001) {
+            // XXX stats?
+            c->policy_prob = 0.001;
         }
 
-        return new_node;
+        total_prediction += c->policy_prob;
     }
 
+    if (total_prediction > std::numeric_limits<float>::min()) {
+        // normalise:
+        for (int ii=0; ii<node->num_children; ii++) {
+            PuctNodeChild* c = node->getNodeChild(this->role_count, ii);
+            c->policy_prob /= total_prediction;
+        }
+
+    } else {
+        // well that sucks - absolutely no predictions, just make it uniform then...
+        for (int ii=0; ii<node->num_children; ii++) {
+            PuctNodeChild* c = node->getNodeChild(this->role_count, ii);
+            c->policy_prob = 1.0 / node->num_children;
+        }
+    }
+}
+
+void NetworkScheduler::updateFromValueHead(const int idx, PuctNode* node) {
+    const int final_score_incr = idx * role_count;
+    float* final_scores_start = this->predict_done_event->final_scores + final_score_incr;
+
+    for (int ii=0; ii<role_count; ii++) {
+        float s = *(final_scores_start + ii);
+        node->setFinalScore(ii, s);
+        node->setCurrentScore(ii, s);
+    }
+}
+
+void NetworkScheduler::evaluateNode(PuctEvaluator* pe, PuctNode* node) {
+
+    // XXX be more optimal to have this vector the scheduler
     std::vector <const GGPLib::BaseState*> prev_states;
-    const PuctNode* cur = parent;
+    const PuctNode* cur = node->parent;
     for (int ii=0; ii<this->transformer->getNumberPrevStates(); ii++) {
         if (cur != nullptr) {
             prev_states.push_back(cur->getBaseState());
@@ -93,20 +95,15 @@ PuctNode* NetworkScheduler::createNode(PuctEvaluator* pe,
         }
     }
 
+    // index into the current position of the channel buffer
     float* buf = this->channel_buf + this->channel_buf_indx;
-    this->transformer->toChannels(bs, prev_states, buf);
+    this->transformer->toChannels(node->getBaseState(), prev_states, buf);
 
+    // increment index for the next evaluateNode()
     this->channel_buf_indx += this->transformer->totalSize();
 
     // hang onto the position of where inserted into requestors
-    int idx = this->requestors.size();
-
-    std::vector <int> policy_incrs;
-    for (int ii=0; ii<this->transformer->getNumberPolicies(); ii++) {
-        policy_incrs.push_back(idx * this->transformer->getPolicySize(ii));
-    }
-
-    int final_score_incr = idx * role_count;
+    const int idx = this->requestors.size();
 
     this->requestors.emplace_back(greenlet_current());
 
@@ -116,46 +113,11 @@ PuctNode* NetworkScheduler::createNode(PuctEvaluator* pe,
     // back now! at this point we have predicted
     ASSERT(this->predict_done_event->pred_count >= idx);
 
-    // XXX for now we are only interested in new nodes lead_role_index
-    float* policies_start = this->predict_done_event->policies[new_node->lead_role_index];
-    policies_start += policy_incrs[new_node->lead_role_index];
-    float* final_scores_start = this->predict_done_event->final_scores + final_score_incr;
-
-    // simple go through and populate stuff
-
-    // Update children in new_node with prediction
-    float total_prediction = 0.0f;
-    for (int ii=0; ii<new_node->num_children; ii++) {
-        PuctNodeChild* c = new_node->getNodeChild(this->sm->getRoleCount(), ii);
-        c->policy_prob = *(policies_start + c->move.get(new_node->lead_role_index));
-        total_prediction += c->policy_prob;
-    }
-
-    if (total_prediction > std::numeric_limits<float>::min()) {
-        // normalise:
-        for (int ii=0; ii<new_node->num_children; ii++) {
-            PuctNodeChild* c = new_node->getNodeChild(this->sm->getRoleCount(), ii);
-            c->policy_prob /= total_prediction;
-        }
-
-    } else {
-        // well that sucks - absolutely no predictions, just make it uniform them
-        for (int ii=0; ii<new_node->num_children; ii++) {
-            PuctNodeChild* c = new_node->getNodeChild(this->sm->getRoleCount(), ii);
-            c->policy_prob = 1.0 / new_node->num_children;
-        }
-    }
-
-    for (int ii=0; ii<role_count; ii++) {
-        float s = *(final_scores_start + ii);
-        new_node->setFinalScore(ii, s);
-        new_node->setCurrentScore(ii, s);
-    }
+    this->updateFromPolicyHead(idx, node);
+    this->updateFromValueHead(idx, node);
 
     // we return before continuing, we will be pushed back onto runnables queue
     greenlet_switch_to(this->main_loop);
-
-    return new_node;
 }
 
 void NetworkScheduler::mainLoop() {
