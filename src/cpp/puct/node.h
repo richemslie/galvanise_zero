@@ -89,13 +89,13 @@ namespace GGPZero {
             return *(scores + role_index);
         }
 
-        Score setFinalScore(int role_index, Score score) {
+        void setFinalScore(int role_index, Score score) {
             /* score as per predicted by NN value head, or the terminal scores */
             uint8_t* mem = this->data;
             mem += this->final_score_ptr_incr;
 
-            const Score* scores = reinterpret_cast<const Score*> (mem);
-            return *(scores + role_index);
+            Score* scores = reinterpret_cast<Score*> (mem);
+            *(scores + role_index) = score;
         }
 
         GGPLib::BaseState* getBaseState() {
