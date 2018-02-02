@@ -284,7 +284,7 @@ not seeing many false positives resignations:
 deduping is becoming a bottleneck nearly 1 million samples.  Also it is not so important with the
 sampling.  Bit of a big change at this point in the run, but oh well.
 
-# -1 is off
+turning off dupes
 * self_play_config.drop_dupes_count = -1
 
 Planning to leave configuration alone for next 24 hours, hence upping the number of samples per

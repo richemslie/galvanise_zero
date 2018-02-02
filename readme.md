@@ -4,7 +4,8 @@ ggp-zero
 recent
 ------
 
-[reversi training](https://github.com/ggplib/ggp-zero/blob/dev/doc/reversi_record.md).
+[reversi training v10](https://github.com/ggplib/ggp-zero/blob/dev/doc/reversi_record.md).
+[reversi training v9](https://github.com/ggplib/ggp-zero/blob/dev/doc/reversi_record_v9.md).
 
 [Watch live! *Be back soon*!](http://simulated.tech:8800/index.html/)
 

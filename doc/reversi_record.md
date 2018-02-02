@@ -13,25 +13,11 @@ results @ 2nd February
 * ntest_x - where x is nboard depth/level
 * results - win/loss/draw
 
-| player     | opponent   | black_result   | white_result   |
-|:-----------|:-----------|:---------------|:---------------|
-| gzero_35_8 | ntest_2    | 2/3/0          | 3/2/0          |
-| gzero_35_4 | ntest_2    | 0/5/0          | 1/4/0          |
-| gzero_35_4 | ntest_1    | 5/0/0          | 4/1/0          |
-| gzero_35_2 | simplecmts | 5/0/0          | 4/1/0          |
-| gzero_35_1 | simplecmts | 4/1/0          | 3/2/0          |
-| gzero_35_1 | pymcs      | 5/0/0          | 4/1/0          |
-| gzero_30_8 | ntest_2    | 1/4/0          | 1/4/0          |
-| gzero_30_4 | ntest_2    | 0/6/4          | 1/9/0          |
-| gzero_30_4 | ntest_1    | 5/0/0          | 4/1/0          |
-| gzero_30_1 | pymcs      | 5/0/0          | 4/1/0          |
-| gzero_20_4 | simplecmts | 2/0/0          | 1/1/0          |
-| gzero_20_2 | pymcs      | 3/1/1          | 2/2/0          |
-| gzero_20_1 | random     | 5/0/0          | 5/0/0          |
-| gzero_15_2 | pymcs      | 2/3/0          | 1/2/1          |
-| gzero_10_1 | pymcs      | 0/2/0          | 0/2/0          |
-| gzero_10_1 | random     | 5/0/0          | 3/2/0          |
-| gzero_5_1  | random     | 3/2/0          | 3/2/0          |
+| player    | opponent   | black_result   | white_result   |
+|:----------|:-----------|:---------------|:---------------|
+| gzero_5_1 | pymcs      | 0/0/0          | 0/0/0          |
+| gzero_2_1 | random     | 5/0/0          | 5/0/0          |
+
 
 gzero run with no dirichlet noise, small amount of random choice of action.
 
@@ -78,8 +64,7 @@ At the end of every 5th/10th generation, perform an evaluation against opponents
 
 problems anticipated
 --------------------
-Without dropout on policy heads, I imagine it will overfit really fast.  As training the network is
-using early stopping with accuracy of the policy, it may not be training as long as it used to.
+Lots of changes.  Complete lack of testing.
 
 
 configuration
@@ -218,36 +203,8 @@ raw results json
 
 ```json
 { "results" : [
-              [ ["gzero", 5, 1], ["random", -1, -1], [3, 2, 0], [3, 2, 0] ],
-
-              [ ["gzero", 10, 1], ["random", -1, -1], [5, 0, 0], [3, 2, 0] ],
-              [ ["gzero", 10, 1], ["pymcs", -1, -1], [0, 2, 0], [0, 2, 0] ],
-
-              [ ["gzero", 15, 2], ["pymcs", -1, -1], [2, 3, 0], [1, 2, 1] ],
-
-              [ ["gzero", 20, 1], ["random", -1, -1], [5, 0, 0], [5, 0, 0] ],
-              [ ["gzero", 20, 2], ["pymcs", -1, -1], [3, 1, 1], [2, 2, 0] ],
-              [ ["gzero", 20, 4], ["simplecmts", -1, -1], [2, 0, 0], [1, 1, 0] ],
-
-              [ ["gzero", 30, 1], ["pymcs", -1, -1], [5, 0, 0], [4, 1, 0] ],
-              [ ["gzero", 30, 4], ["ntest", 1, -1], [5, 0, 0], [4, 1, 0] ],
-              [ ["gzero", 30, 4], ["ntest", 2, -1], [0, 6, 4], [1, 9, 0] ],
-              [ ["gzero", 30, 8], ["ntest", 2, -1], [1, 4, 0], [1, 4, 0] ],
-
-              [ ["gzero", 35, 1], ["pymcs", -1, -1], [5, 0, 0], [4, 1, 0] ],
-              [ ["gzero", 35, 1], ["simplecmts", -1, -1], [4, 1, 0], [3, 2, 0] ],
-              [ ["gzero", 35, 2], ["simplecmts", -1, -1], [5, 0, 0], [4, 1, 0] ],
-
-              [ ["gzero", 35, 4], ["ntest", 1, -1], [5, 0, 0], [4, 1, 0] ],
-              [ ["gzero", 35, 4], ["ntest", 2, -1], [0, 5, 0], [1, 4, 0] ],
-              [ ["gzero", 35, 8], ["ntest", 2, -1], [2, 3, 0], [3, 2, 0] ],
-
-              [ ["gzero", 40, 8], ["ntest", 2, -1], [2, 7, 1], [7, 3, 0] ],
-              [ ["gzero", 45, 8], ["ntest", 2, -1], [1, 4, 0], [2, 3, 0] ],
-
-              [ ["gzero", 50, 8], ["ntest", 2, -1], [9, 1, 0], [9, 1, 0] ],
-              [ ["gzero", 50, 8], ["ntest", 3, -1], [0, 5, 0], [2, 3, 0] ],
-
-] }
+              [ ["gzero", 2, 1], ["random", -1, -1], [5, 0, 0], [5, 0, 0] ],
+              [ ["gzero", 5, 1], ["pymcs", -1, -1], [0, 0, 0], [0, 0, 0] ]
+}
 
 ```
