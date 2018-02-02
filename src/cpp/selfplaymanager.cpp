@@ -108,6 +108,8 @@ Sample* SelfPlayManager::createSample(const PuctEvaluator* pe, const PuctNode* n
         sample->resultant_puct_score.push_back(node->getCurrentScore(ii));
     }
 
+    sample->depth = node->game_depth;
+
     return sample;
 }
 
