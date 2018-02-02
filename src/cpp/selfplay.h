@@ -20,11 +20,6 @@ namespace GGPZero {
         // -1 is off, and defaults to alpha-zero style
         int max_number_of_samples;
 
-        // if the probability of losing drops below - then resign
-        float resign_score_probability;
-
-        // ignore resignation - and continue to end
-        float resign_false_positive_retry_percentage;
 
         PuctConfig* select_puct_config;
         int select_iterations;
@@ -34,6 +29,11 @@ namespace GGPZero {
 
         PuctConfig* score_puct_config;
         int score_iterations;
+
+        float resign0_score_probability;
+        float resign0_false_positive_retry_percentage;
+        float resign1_score_probability;
+        float resign1_false_positive_retry_percentage;
     };
 
     class SelfPlay {
@@ -48,6 +48,10 @@ namespace GGPZero {
         bool resign(PuctNode* node);
         PuctNode* collectSamples(PuctNode* node);
         PuctNode* runToEnd(PuctNode* node);
+
+        bool checkFalsePositive(const std::vector <float>& false_positive_check_scores,
+                                float resign_probability, float final_score,
+                                int role_index);
 
     public:
         void playOnce();
@@ -71,9 +75,11 @@ namespace GGPZero {
 
         // resignation during self play
         bool has_resigned;
-        bool can_resign;
-        bool false_positive_resign_check;
-        std::vector <float> resign_false_positive_check_scores;
+        bool can_resign0;
+        bool can_resign1;
+
+        std::vector <float> resign0_false_positive_check_scores;
+        std::vector <float> resign1_false_positive_check_scores;
 
         // random number generator
         K273::xoroshiro128plus32 rng;

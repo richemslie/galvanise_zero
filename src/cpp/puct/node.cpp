@@ -76,10 +76,10 @@ static PuctNode* createNode(const BaseState* base_state,
     // store the allocated size
     node->allocated_size = total_bytes;
 
-    // initialise all scores to zero (XXX why bother?)
+    // initialise all scores to zero (will be set by evaluation/statemachine anyways)
     for (int ii=0; ii<role_count; ii++) {
-        node->setCurrentScore(ii, 0.0);
         node->setFinalScore(ii, 0.0);
+        node->setCurrentScore(ii, 0.0);
     }
 
     // copy the base state
@@ -197,7 +197,6 @@ PuctNode* PuctNode::create(PuctNode* parent,
         }
     }
 
-
     return node;
 }
 
@@ -235,13 +234,14 @@ void PuctNode::dumpNode(const PuctNode* node,
     }
 
     string finalised_top = node->is_finalised ? "[Final]" : ".";
-    K273::l_verbose("%s(%d) :: %s == %.4f / #childs %d / %s / Lead : %d",
+    K273::l_verbose("%s(%d) :: %s == %.4f / #childs %d / %s / Depth: %d, Lead : %d",
                     indent.c_str(),
                     node->visits,
                     scoreString(node, sm).c_str(),
                     total_score,
                     node->num_children,
                     finalised_top.c_str(),
+                    node->game_depth,
                     node->lead_role_index);
 
 

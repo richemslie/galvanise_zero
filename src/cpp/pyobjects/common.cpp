@@ -116,8 +116,11 @@ static SelfPlayConfig* createSelfPlayConfig(PyObject* dict) {
 
     config->max_number_of_samples = asInt("max_number_of_samples");
 
-    config->resign_score_probability = asFloat("resign_score_probability");
-    config->resign_false_positive_retry_percentage = asFloat("resign_false_positive_retry_percentage");
+    config->resign0_score_probability = asFloat("resign0_score_probability");
+    config->resign0_false_positive_retry_percentage = asFloat("resign0_false_positive_retry_percentage");
+
+    config->resign1_score_probability = asFloat("resign1_score_probability");
+    config->resign1_false_positive_retry_percentage = asFloat("resign1_false_positive_retry_percentage");
 
     config->select_puct_config = ::createPuctConfig(asDict("select_puct_config"));
     config->select_iterations = asInt("select_iterations");

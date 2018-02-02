@@ -20,18 +20,23 @@ namespace GGPZero {
 
     class PuctEvaluator {
     public:
-        PuctEvaluator(const PuctConfig* conf, NetworkScheduler* scheduler);
+        PuctEvaluator(GGPLib::StateMachineInterface* sm, const PuctConfig* conf,
+                      NetworkScheduler* scheduler);
         virtual ~PuctEvaluator();
 
     public:
         void updateConf(const PuctConfig* conf);
 
     private:
+        Sample* createSample(const PuctNode* node);
+
+    private:
         void addNode(PuctNode* new_node);
         void removeNode(PuctNode* n);
 
+        void lookAheadTerminals(PuctNode* node);
         void expandChild(PuctNode* parent, PuctNodeChild* child);
-        PuctNode* createNode(const GGPLib::BaseState* state);
+        PuctNode* createNode(PuctNode* parent, const GGPLib::BaseState* state);
 
         // set dirichlet noise on node
         bool setDirichletNoise(int depth);
@@ -45,13 +50,13 @@ namespace GGPZero {
 
         void backPropagate(float* new_scores);
         int treePlayout();
-        void playoutLoop(int max_iterations, double end_time);
+        void playoutLoop(int max_evaluations, double end_time);
 
         void reset();
         PuctNode* fastApplyMove(const PuctNodeChild* next);
         PuctNode* establishRoot(const GGPLib::BaseState* current_state, int game_depth);
 
-        const PuctNodeChild* onNextMove(int max_iterations, double end_time=-1);
+        const PuctNodeChild* onNextMove(int max_evaluations, double end_time=-1);
         void applyMove(const GGPLib::JointMove* move);
 
         float getTemperature() const;
@@ -65,16 +70,19 @@ namespace GGPZero {
         void logDebug(const PuctNodeChild* choice_root);
 
         PuctNode* jumpRoot(int depth);
-        const PuctNode* getNode(int depth) const;
 
     private:
+        // statemachine shared between evaluators - be careful with its use
+        GGPLib::StateMachineInterface* sm;
+        GGPLib::BaseState* basestate_expand_node;
+
         const PuctConfig* conf;
         NetworkScheduler* scheduler;
 
-        int role_count;
         std::string identifier;
 
         int game_depth;
+        int evaluations;
 
         // tree for the entire game
         PuctNode* initial_root;

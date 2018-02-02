@@ -78,6 +78,12 @@ void NetworkScheduler::updateFromValueHead(const int idx, PuctNode* node) {
 
     for (int ii=0; ii<role_count; ii++) {
         float s = *(final_scores_start + ii);
+        if (s > 1.0) {
+            s = 1.0f;
+        } else if (s < 0.0) {
+            s = 0.0f;
+        }
+
         node->setFinalScore(ii, s);
         node->setCurrentScore(ii, s);
     }
