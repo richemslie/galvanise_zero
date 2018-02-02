@@ -88,12 +88,6 @@ class SelfPlayConfig(object):
     # -1 is off, and defaults to alpha-zero style
     max_number_of_samples = attribute(4)
 
-    # if the probability of losing drops below - then resign
-    resign_score_probability = attribute(0.9)
-
-    # ignore resignation - and continue to end
-    resign_false_positive_retry_percentage = attribute(0.1)
-
     # select will get to the point where we start sampling
     select_puct_config = attribute(default=attr_factory(PUCTEvaluatorConfig))
     select_iterations = attribute(100)
@@ -105,6 +99,14 @@ class SelfPlayConfig(object):
     # after samples, will play to the end using this config
     score_puct_config = attribute(default=attr_factory(PUCTEvaluatorConfig))
     score_iterations = attribute(100)
+
+    # if the probability of losing drops below - then resign
+    # and ignore resignation - and continue to end
+    # two levels, resign0 should have more freedom than resign1
+    resign0_score_probability = attribute(0.9)
+    resign0_false_positive_retry_percentage = attribute(0.5)
+    resign1_score_probability = attribute(0.975)
+    resign1_false_positive_retry_percentage = attribute(0.1)
 
 
 @register_attrs
