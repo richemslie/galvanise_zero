@@ -313,6 +313,36 @@ instantaneous).
 This is definitely a learned local optima - it doesn't happen in early generations.
 
 
+suspended/abandoned run
+-----------------------
+Unfortnately it is worse than just above case (self play local optima).  What I am seeing is that
+in this run (and to a lesser extent in the previous run), against ntest level > 2, the model is
+reporting a win of .96 proability of winning, and then in last few moves suddenly it flips to <
+0.1.
+
+This needs to be investigated, my initial thoughts are:
+
+1.  800 iterations during self play wasn't enough on its own to determine whether the MCTS tree
+    would converge.  Thus missing obvious wins.
+2.  There are no actual network evaluations during the end of play games, as hitting terminal
+    nodes.  (XXX change iterations to evaluations, these terminal hitting iterations take a couple
+    of microseconds, a single evaluation is like 250 msecs).
+3.  When the probability of winning is that high, MCTS plays sort of willy nilly, and that isn't
+    ideal for the network to learn.
+4.  The resignation logic is causing catastrophic memory loss.
+5.  There is a bug puct evaluator, or somewhere else in the code that causing this issue.
+6.  The network is overfitting.
+
+As I needed to remove a bunch of hacks to make multiple policies work during self play, I am going
+to back and fix that.  Hopefully during the process I can see if there is a bug (4) and implement
+prover MCTS logic, and change to evaluation (versus iterations) while I am it.
+
+7.  Another thing, when the proability of winning is low, the PUCT evaluation is dominated by the
+policy value.  Conversely, if the winning probabilty is high the policy value is basically
+ignored.  I implemented balancing logic for this before, but removed it.  It might be that over the
+course of many iterations, this has compounded upon it via self play and retraining the network.
+
+
 raw results json
 ----------------
 
@@ -340,7 +370,13 @@ raw results json
 
               [ ["gzero", 35, 4], ["ntest", 1, -1], [5, 0, 0], [4, 1, 0] ],
               [ ["gzero", 35, 4], ["ntest", 2, -1], [0, 5, 0], [1, 4, 0] ],
-              [ ["gzero", 35, 8], ["ntest", 2, -1], [2, 3, 0], [3, 2, 0] ]
+              [ ["gzero", 35, 8], ["ntest", 2, -1], [2, 3, 0], [3, 2, 0] ],
+
+              [ ["gzero", 40, 8], ["ntest", 2, -1], [2, 7, 1], [7, 3, 0] ],
+              [ ["gzero", 45, 8], ["ntest", 2, -1], [1, 4, 0], [2, 3, 0] ],
+
+              [ ["gzero", 50, 8], ["ntest", 2, -1], [9, 1, 0], [9, 1, 0] ],
+              [ ["gzero", 50, 8], ["ntest", 3, -1], [0, 5, 0], [2, 3, 0] ],
 
 ] }
 
