@@ -116,6 +116,7 @@ class PUCTEvaluator(object):
         self.choose = getattr(self, self.conf.choose)
 
         self.identifier = "%s_%s_%s" % (self.conf.name, self.conf.playouts_per_iteration, conf.generation)
+
         self.sm = None
         self.num_predictions = 0
 
@@ -167,11 +168,14 @@ class PUCTEvaluator(object):
         disaster = False
         for c in node.children:
             c.policy_prob = policy[c.legal]
-            if c.policy_prob < 0.0001:
+            if c.policy_prob < 0.001:
+                c.policy_prob = 0.001
                 disaster = True
             total += c.policy_prob
 
-        if len(node.children) > 1 and disaster:
+        # was it really a disaster?
+
+        if False and len(node.children) > 1 and disaster and max(node.final_score) < 0.97:
             log.warning("disasterdisasterdisaster!!!!")
             print total
             for p in policies:
@@ -277,7 +281,7 @@ class PUCTEvaluator(object):
         expansions = self.conf.puct_before_root_expansions if node is self.root else self.conf.puct_before_expansions
 
         expanded = sum(1 for c in node.children if c.to_node is not None)
-        if expanded < expansions:
+        if expanded == len(node.children) or expanded < expansions:
             constant = self.conf.puct_constant_before
 
         return constant
@@ -310,6 +314,9 @@ class PUCTEvaluator(object):
                 # basically dumb moves, if it thinks it will win regardless)
                 if cn.is_terminal:
                     node_score *= 1.02
+
+                # squash scores (we want to keep the score 0 if not expanded)
+                node_score = node_score / 4.0 + 0.4
 
             child_pct = child.policy_prob
 
@@ -700,6 +707,31 @@ class PUCTPlayer(MatchPlayer):
 
 ##############################################################################
 
+compete = confs.PUCTPlayerConfig(name="cl",
+                                 verbose=True,
+
+                                 playouts_per_iteration=100,
+                                 playouts_per_iteration_noop=0,
+
+                                 dirichlet_noise_alpha=-1,
+
+                                 root_expansions_preset_visits=-1,
+                                 puct_before_expansions=3,
+                                 puct_before_root_expansions=5,
+                                 puct_constant_before=5.0,
+                                 puct_constant_after=1.0,
+
+                                 choose="choose_temperature",
+                                 temperature=1.0,
+                                 depth_temperature_max=6.0,
+                                 depth_temperature_start=0,
+                                 depth_temperature_increment=1.0,
+                                 depth_temperature_stop=20,
+                                 random_scale=0.9,
+
+                                 max_dump_depth=3)
+
+
 def main():
     from ggpzero.util.keras import init
 
@@ -713,8 +745,9 @@ def main():
     if len(sys.argv) > 3:
         config_name = sys.argv[3]
 
-
-    conf = templates.puct_config_template(generation, config_name)
+    # templates.puct_config_template(generation, config_name)
+    conf = compete
+    conf.generation = generation
 
     if len(sys.argv) > 4:
         playouts_multiplier = int(sys.argv[4])

@@ -6,7 +6,7 @@ import attr
 from ggplib.util import log
 from ggplib.player.base import MatchPlayer
 
-from ggpzero.defs import templates
+from ggpzero.defs import confs, templates
 
 from ggpzero.util.cppinterface import joint_move_to_ptr, basestate_to_ptr, PlayPoller
 
@@ -80,6 +80,32 @@ class CppPUCTPlayer(MatchPlayer):
 
 
 ###############################################################################
+# 6/2/2
+
+compete = confs.PUCTPlayerConfig(name="cpp_cl",
+                                 verbose=True,
+
+                                 playouts_per_iteration=100,
+                                 playouts_per_iteration_noop=0,
+
+                                 dirichlet_noise_alpha=-1,
+
+                                 root_expansions_preset_visits=-1,
+                                 puct_before_expansions=3,
+                                 puct_before_root_expansions=5,
+                                 puct_constant_before=5.0,
+                                 puct_constant_after=1.0,
+
+                                 choose="choose_temperature",
+                                 temperature=1.0,
+                                 depth_temperature_max=6.0,
+                                 depth_temperature_start=0,
+                                 depth_temperature_increment=1.0,
+                                 depth_temperature_stop=20,
+                                 random_scale=0.9,
+
+                                 max_dump_depth=3)
+
 
 def main():
     from ggpzero.util.keras import init
@@ -94,8 +120,15 @@ def main():
     if len(sys.argv) > 3:
         config_name = sys.argv[3]
 
-    conf = templates.puct_config_template(generation, config_name)
+    # conf = templates.puct_config_template(generation, config_name)
+    conf = compete
+    conf.generation = generation
+
     player = CppPUCTPlayer(conf=conf)
+
+    if len(sys.argv) > 4:
+        playouts_multiplier = int(sys.argv[4])
+        conf.playouts_per_iteration *= playouts_multiplier
 
     from ggplib.play import play_runner
     play_runner(player, port)
