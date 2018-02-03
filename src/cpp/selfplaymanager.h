@@ -44,8 +44,12 @@ namespace GGPZero {
             this->no_samples_taken++;
         }
 
-        void incrResignFalsePositives() {
-            this->false_positive_resigns++;
+        void incrResign0FalsePositives() {
+            this->false_positive_resigns0++;
+        }
+
+        void incrResign1FalsePositives() {
+            this->false_positive_resigns1++;
         }
 
     public:
@@ -94,6 +98,7 @@ namespace GGPZero {
         // stats
         int saw_dupes;
         int no_samples_taken;
-        int false_positive_resigns;
+        int false_positive_resigns0;
+        int false_positive_resigns1;
     };
 }

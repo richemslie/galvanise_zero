@@ -18,7 +18,6 @@ namespace GGPZero {
         std::vector <float> final_score;
         int depth;
         int game_length;
-        int lead_role_index;
         std::string match_identifier;
         bool has_resigned;
         bool resign_false_positive;

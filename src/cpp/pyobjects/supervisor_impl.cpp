@@ -96,9 +96,6 @@ PyObject* sampleToDict(Sample* sample) {
     PyDict_setNewItem(sample_as_dict, "game_length",
                       PyInt_FromLong(sample->game_length));
 
-    //PyDict_setNewItem(sample_as_dict, "lead_role_index",
-    //                  PyInt_FromLong(sample->lead_role_index));
-
     PyDict_setNewItem(sample_as_dict, "match_identifier",
                       PyString_FromString(sample->match_identifier.c_str()));
 

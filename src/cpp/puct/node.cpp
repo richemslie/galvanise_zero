@@ -63,6 +63,7 @@ static PuctNode* createNode(const BaseState* base_state,
     node->num_children_expanded = 0;
 
     node->is_finalised = is_finalised;
+    node->checked_for_finals = false;
 
     node->lead_role_index = lead_role_index;
 
@@ -220,6 +221,18 @@ string PuctNode::moveString(const JointMove& move, StateMachineInterface* sm) {
     return res;
 }
 
+string finalisedString(const PuctNodeChild* child) {
+    if (child->to_node == nullptr) {
+        return "?";
+    } else if (child->to_node->isTerminal()) {
+        return "T";
+    } else if (child->to_node->is_finalised) {
+        return "F";
+    } else {
+        return "*";
+    }
+}
+
 void PuctNode::dumpNode(const PuctNode* node,
                         const PuctNodeChild* highlight,
                         const std::string& indent,
@@ -233,7 +246,7 @@ void PuctNode::dumpNode(const PuctNode* node,
         total_score += node->getCurrentScore(ii);
     }
 
-    string finalised_top = node->is_finalised ? "[Final]" : ".";
+    string finalised_top = node->isTerminal() ? "[Terminal]" : (node->is_finalised ? "[Final]" : ".");
     K273::l_verbose("%s(%d) :: %s == %.4f / #childs %d / %s / Depth: %d, Lead : %d",
                     indent.c_str(),
                     node->visits,
@@ -248,12 +261,11 @@ void PuctNode::dumpNode(const PuctNode* node,
     auto children = PuctNode::sortedChildren(node, role_count, sort_by_next_probability);
 
     for (auto child : children) {
-        string finalised = "?";
+        string finalised = finalisedString(child);
         string move = moveString(child->move, sm);
         string score = "(----, ----)";
         int visits = 0;
         if (child->to_node != nullptr) {
-            finalised = child->to_node->is_finalised ? "T" : "*";
             score = scoreString(child->to_node, sm);
             visits = child->to_node->visits;
         }

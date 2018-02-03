@@ -76,6 +76,13 @@ void PuctEvaluator::removeNode(PuctNode* node) {
 }
 
 void PuctEvaluator::lookAheadTerminals(PuctNode* node) {
+    ASSERT(!node->checked_for_finals);
+    node->checked_for_finals = true;
+
+    if (node->is_finalised) {
+        return;
+    }
+
     const int role_count = this->sm->getRoleCount();
 
     for (int ii=0; ii<node->num_children; ii++) {
@@ -83,7 +90,9 @@ void PuctEvaluator::lookAheadTerminals(PuctNode* node) {
 
         this->sm->updateBases(node->getBaseState());
 
-        ASSERT (c->to_node == nullptr);
+        if (c->to_node != nullptr) {
+            return;
+        }
 
         // apply move
         this->sm->nextState(&c->move, this->basestate_expand_node);
@@ -122,9 +131,6 @@ void PuctEvaluator::expandChild(PuctNode* parent, PuctNodeChild* child) {
     child->to_node = new_node;
     parent->num_children_expanded++;
     new_node->game_depth = parent->game_depth + 1;
-
-    // XXX add config option (should be part of puctplus)
-    this->lookAheadTerminals(new_node);
 }
 
 PuctNode* PuctEvaluator::createNode(PuctNode* parent, const GGPLib::BaseState* state) {
@@ -264,6 +270,16 @@ void PuctEvaluator::backPropagate(float* new_scores) {
 PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, int depth) {
     ASSERT(!node->isTerminal());
 
+    const double game_expected_depth = 60;
+    if (!node->checked_for_finals) {
+        // chance can easily become greater than one here
+        double chance = (node->game_depth / game_expected_depth + node->visits / 40.0);
+
+        if (this->rng.get() > (1 - chance)) {
+            this->lookAheadTerminals(node);
+        }
+    }
+
     bool do_dirichlet_noise = this->setDirichletNoise(depth);
 
     float puct_constant = this->getPuctConstant(node);
@@ -317,9 +333,6 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, int depth) {
 
                 node_score *= 1.02f;
             }
-
-            // squash score
-            node_score = node_score / 4.0f + (1.0f / 4.0f);
         }
 
         float child_pct = c->policy_prob;

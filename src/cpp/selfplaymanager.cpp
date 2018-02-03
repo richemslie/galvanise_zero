@@ -30,7 +30,8 @@ SelfPlayManager::SelfPlayManager(GGPLib::StateMachineInterface* sm,
     identifier(identifier),
     saw_dupes(0),
     no_samples_taken(0),
-    false_positive_resigns(0) {
+    false_positive_resigns0(0),
+    false_positive_resigns1(0) {
 
     this->scheduler = new NetworkScheduler(this->transformer,
                                            this->sm->getRoleCount(),
@@ -153,6 +154,9 @@ void SelfPlayManager::poll() {
 }
 
 void SelfPlayManager::reportAndResetStats() {
+
+    // XXX report every 5 minutes
+
     if (this->saw_dupes) {
         K273::l_info("Number of dupe states seen %d", this->saw_dupes);
         this->saw_dupes = 0;
@@ -163,8 +167,13 @@ void SelfPlayManager::reportAndResetStats() {
         this->no_samples_taken = 0;
     }
 
-    if (this->false_positive_resigns) {
-        K273::l_info("Number of false positive resigns seen %d", this->false_positive_resigns);
-        this->false_positive_resigns = 0;
+    if (this->false_positive_resigns0) {
+        K273::l_info("Number of false positive resigns (0) seen %d", this->false_positive_resigns0);
+        this->false_positive_resigns0 = 0;
+    }
+
+    if (this->false_positive_resigns1) {
+        K273::l_info("Number of false positive resigns (1) seen %d", this->false_positive_resigns1);
+        this->false_positive_resigns1 = 0;
     }
 }
