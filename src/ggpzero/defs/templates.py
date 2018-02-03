@@ -214,8 +214,10 @@ def puct_config_template(generation, name="default"):
 def selfplay_config_template():
     conf = confs.SelfPlayConfig()
     conf.max_number_of_samples = 4
-    conf.resign_score_probability = 0.1
-    conf.resign_false_positive_retry_percentage = 0.1
+    conf.resign0_score_probability = 0.1
+    conf.resign0_false_positive_retry_percentage = 0.95
+    conf.resign1_score_probability = 0.02
+    conf.resign1_false_positive_retry_percentage = 0.95
 
     conf.select_iterations = 0
     conf.sample_iterations = 800
