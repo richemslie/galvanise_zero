@@ -173,7 +173,7 @@ class TrainingController(keras_callbacks.Callback):
             self.best_val_policy_acc = val_policy_acc
             self.epoch_last_set_at = epoch
 
-        store_retraining_weights = ((policy_acc + 0.01) < val_policy_acc and
+        store_retraining_weights = ((policy_acc + 0.015) < val_policy_acc and
                                     val_policy_acc > self.retrain_best_val_policy_acc)
 
         if store_retraining_weights:
@@ -187,12 +187,12 @@ class TrainingController(keras_callbacks.Callback):
             (self.retraining and epoch >= 3)):
 
             # if we are overfitting
-            if policy_acc - 0.02 > val_policy_acc:
+            if policy_acc - 0.03 > val_policy_acc:
                 log.info("Early stopping... since policy accuracy overfitting")
                 self.stop_training = True
 
             # if things havent got better - STOP.  We can go on forever without improving.
-            if self.epoch_last_set_at is not None and epoch > self.epoch_last_set_at + 4:
+            if self.epoch_last_set_at is not None and epoch > self.epoch_last_set_at + 3:
                 log.info("Early stopping... since not improving")
                 self.stop_training = True
 
@@ -263,7 +263,6 @@ class NeuralNetwork(object):
         elif compile_strategy == "adam":
             policy_objective = 'categorical_crossentropy'
             if learning_rate:
-                print 'here', learning_rate
                 optimizer = Adam(lr=learning_rate)
             else:
                 optimizer = Adam()
@@ -283,7 +282,6 @@ class NeuralNetwork(object):
         loss = [policy_objective] * num_policies
         loss.append(value_objective)
 
-        # weight tends to be much less on value head, it overfits really fast.
         loss_weights = [1.0] * num_policies
         loss_weights.append(value_weight)
 
