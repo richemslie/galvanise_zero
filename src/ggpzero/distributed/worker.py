@@ -165,14 +165,13 @@ class Worker(Broker):
         start_time = time.time()
         self.supervisor.poll_loop(do_stats=True, cb=self.cb_from_superviser)
 
-        log.info("Number of samples %s, prediction calls %d, predictions %d" % (len(self.samples),
-                                                                                self.supervisor.num_predictions_calls,
-                                                                                self.supervisor.total_predictions))
-        log.info("time takens python/predict/all %.2f / %.2f / %.2f" % (self.supervisor.acc_time_polling,
-                                                                        self.supervisor.acc_time_prediction,
-                                                                        time.time() - start_time))
-
-        log.info("Done all samples")
+        msg = "#samp %d, pred()s %d/%d, py/pred/all %.1f/%.1f/%.1f"
+        log.info(msg % (len(self.samples),
+                        self.supervisor.num_predictions_calls,
+                        self.supervisor.total_predictions,
+                        self.supervisor.acc_time_polling,
+                        self.supervisor.acc_time_prediction,
+                        time.time() - start_time))
 
         m = msgs.RequestSampleResponse(self.samples, 0)
         server.send_msg(m)
