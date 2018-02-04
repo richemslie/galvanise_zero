@@ -27,6 +27,7 @@ class Child(object):
         self.legal = legal
 
         # from NN
+        self.init_policy_prob = None
         self.policy_prob = None
 
         # to the next node
@@ -118,7 +119,6 @@ class PUCTEvaluator(object):
         self.identifier = "%s_%s_%s" % (self.conf.name, self.conf.playouts_per_iteration, conf.generation)
 
         self.sm = None
-        self.num_predictions = 0
 
     def init(self, game_info, current_state):
         self.game_info = game_info
@@ -167,6 +167,7 @@ class PUCTEvaluator(object):
         assert len(node.children)
         disaster = False
         for c in node.children:
+            c.init_policy_prob = policy[c.legal]
             c.policy_prob = policy[c.legal]
             if c.policy_prob < 0.001:
                 c.policy_prob = 0.001
@@ -223,7 +224,6 @@ class PUCTEvaluator(object):
                 node.add_child(self.sm.legal_to_move(lead_role_index, l), l)
 
             # Fish for max number of previous states.
-            # XXX This will need to be passed into the c code...
             max_prev_states = self.nn.gdl_bases_transformer.num_previous_states
 
             prev_states = []
@@ -239,7 +239,6 @@ class PUCTEvaluator(object):
             node.final_score = predictions.scores[:]
             node.mc_score = predictions.scores[:]
             self.update_node_policy(node, predictions.policies)
-            self.num_predictions += 1
         return node
 
     def expand_child(self, node, child):
@@ -315,9 +314,6 @@ class PUCTEvaluator(object):
                 if cn.is_terminal:
                     node_score *= 1.02
 
-                # squash scores (we want to keep the score 0 if not expanded)
-                node_score = node_score / 4.0 + 0.4
-
             child_pct = child.policy_prob
 
             if dirichlet_noise is not None:
@@ -379,11 +375,7 @@ class PUCTEvaluator(object):
         if max_iterations < 0:
             max_iterations = sys.maxint
 
-        self.num_predictions = 0
-        while iterations < max_iterations * 8:
-            if self.num_predictions > max_iterations:
-                break
-
+        while iterations < max_iterations:
             if time.time() > finish_time:
                 log.info("RAN OUT OF TIME")
                 break
@@ -399,9 +391,7 @@ class PUCTEvaluator(object):
 
         if self.conf.verbose:
             if iterations:
-                log.info("Iterations: %d, predictions %d" % (iterations,
-                                                             self.num_predictions))
-
+                log.info("Iterations: %d" % iterations)
                 log.info("Time taken  %.3f" % (time.time() - start_time))
 
                 log.debug("The average depth explored: %.2f, max depth: %d" % (total_depth / float(iterations),
@@ -500,7 +490,7 @@ class PUCTEvaluator(object):
 
             cols.append(child.move)
             cols.append(child.visits())
-            cols.append(child.policy_prob * 100)
+            cols.append(child.init_policy_prob * 100)
             cols.append(prob * 100)
 
             node_type = '?'
@@ -707,31 +697,6 @@ class PUCTPlayer(MatchPlayer):
 
 ##############################################################################
 
-compete = confs.PUCTPlayerConfig(name="cl",
-                                 verbose=True,
-
-                                 playouts_per_iteration=100,
-                                 playouts_per_iteration_noop=0,
-
-                                 dirichlet_noise_alpha=-1,
-
-                                 root_expansions_preset_visits=-1,
-                                 puct_before_expansions=3,
-                                 puct_before_root_expansions=5,
-                                 puct_constant_before=5.0,
-                                 puct_constant_after=1.0,
-
-                                 choose="choose_temperature",
-                                 temperature=1.0,
-                                 depth_temperature_max=6.0,
-                                 depth_temperature_start=0,
-                                 depth_temperature_increment=1.0,
-                                 depth_temperature_stop=20,
-                                 random_scale=0.9,
-
-                                 max_dump_depth=3)
-
-
 def main():
     from ggpzero.util.keras import init
 
@@ -745,14 +710,7 @@ def main():
     if len(sys.argv) > 3:
         config_name = sys.argv[3]
 
-    # templates.puct_config_template(generation, config_name)
-    conf = compete
-    conf.generation = generation
-
-    if len(sys.argv) > 4:
-        playouts_multiplier = int(sys.argv[4])
-        conf.playouts_per_iteration *= playouts_multiplier
-
+    conf = templates.puct_config_template(generation, config_name)
     player = PUCTPlayer(conf=conf)
 
     from ggplib.play import play_runner
