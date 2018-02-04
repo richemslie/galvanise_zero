@@ -44,11 +44,22 @@ void Player::puctPlayerReset() {
 void Player::puctApplyMove(const GGPLib::JointMove* move) {
     this->scheduler->createMainLoop();
 
-    auto f = [this, move]() {
-        this->evaluator->applyMove(move);
-    };
+    if (this->first_play) {
+        this->first_play = false;
+        auto f = [this, move]() {
+            this->evaluator->establishRoot(nullptr, 0);
+            this->evaluator->applyMove(move);
+        };
 
-    this->scheduler->addRunnable(f);
+        this->scheduler->addRunnable(f);
+
+    } else {
+        auto f = [this, move]() {
+            this->evaluator->applyMove(move);
+        };
+
+        this->scheduler->addRunnable(f);
+    }
 }
 
 void Player::puctPlayerMove(const GGPLib::BaseState* state, int iterations, double end_time) {

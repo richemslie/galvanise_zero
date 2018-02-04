@@ -14,6 +14,16 @@
 
 namespace GGPZero {
 
+    struct PathElement {
+        PathElement(PuctNodeChild* c, PuctNode* n) :
+            child(c),
+            to_node(n) {
+        }
+
+        PuctNodeChild* child;
+        PuctNode* to_node;
+    };
+
     // forwards
     class Sample;
     class NetworkScheduler;
@@ -96,7 +106,7 @@ namespace GGPZero {
         int number_of_nodes;
         long node_allocated_memory;
 
-        std::vector <PuctNode*> path;
+        std::vector <PathElement> path;
 
         // random number generator
         K273::xoroshiro128plus32 rng;

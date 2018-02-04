@@ -206,21 +206,23 @@ void PuctEvaluator::backPropagate(float* new_scores) {
     bool only_once = true;
 
     // back propagation:
-    for (int index=start_index; index >= 0; index--) {
-        PuctNode* node = this->path[index];
+    const PathElement* prev = nullptr;
 
-        if (only_once && !node->is_finalised && node->lead_role_index >= 0) {
+    for (int index=start_index; index >= 0; index--) {
+        const PathElement& cur = this->path[index];
+
+        if (only_once && !cur.to_node->is_finalised && cur.to_node->lead_role_index >= 0) {
             only_once = false;
 
             const PuctNodeChild* best = nullptr;
             {
                 float best_score = -1;
                 bool more_to_explore = false;
-                for (int ii=0; ii<node->num_children; ii++) {
-                    const PuctNodeChild* c = node->getNodeChild(role_count, ii);
+                for (int ii=0; ii<cur.to_node->num_children; ii++) {
+                    const PuctNodeChild* c = cur.to_node->getNodeChild(role_count, ii);
 
                     if (c->to_node != nullptr && c->to_node->is_finalised) {
-                        float score = c->to_node->getCurrentScore(node->lead_role_index);
+                        float score = c->to_node->getCurrentScore(cur.to_node->lead_role_index);
                         if (score > best_score) {
                             best_score = score;
                             best = c;
@@ -244,26 +246,75 @@ void PuctEvaluator::backPropagate(float* new_scores) {
 
             if (best != nullptr) {
                 for (int ii=0; ii<role_count; ii++) {
-                    node->setCurrentScore(ii, best->to_node->getCurrentScore(ii));
+                    cur.to_node->setCurrentScore(ii, best->to_node->getCurrentScore(ii));
                 }
 
-                node->is_finalised = true;
+                cur.to_node->is_finalised = true;
             }
         }
 
-        if (node->is_finalised) {
+        if (prev != nullptr) {
+        }
+
+
+        if (cur.to_node->is_finalised) {
             for (int ii=0; ii<role_count; ii++) {
-                new_scores[ii] = node->getCurrentScore(ii);
+                new_scores[ii] = cur.to_node->getCurrentScore(ii);
             }
 
         } else {
+            const int some_min_max_visit_config = 8;
+
+            if (some_min_max_visit_config > 0 &&
+                cur.to_node->visits > some_min_max_visit_config
+                && prev != nullptr) {
+
+                const PuctNodeChild* best = nullptr;
+                {
+                    // find the best
+                    int best_visits = -1;
+
+                    for (int ii=0; ii<cur.to_node->num_children; ii++) {
+                        const PuctNodeChild* c = cur.to_node->getNodeChild(role_count, ii);
+                        if (c->to_node != nullptr && c->to_node->visits > best_visits) {
+                            best = c;
+                            best_visits = c->to_node->visits;
+                        }
+                    }
+                }
+
+                ASSERT(best != nullptr && best->to_node != nullptr);
+
+                if (prev->child != best && prev->to_node->visits != best->to_node->visits) {
+
+                    const int role_index = cur.to_node->lead_role_index;
+
+                    if (role_index != -1) {
+                        float best_score = best->to_node->getCurrentScore(role_index);
+                        bool improving = new_scores[role_index] > best_score;
+
+                        // if it looks like it improving, then let it go
+                        // i mean, I am all for exploration - but does it have to mess up the tree
+                        // in the process? ...
+                        if (!improving) {
+                            for (int ii=0; ii<this->sm->getRoleCount(); ii++) {
+
+                                new_scores[ii] = (0.6 * best->to_node->getCurrentScore(ii) +
+                                                  0.4 * new_scores[ii]);
+                            }
+                        }
+                    }
+                }
+            }
+
             for (int ii=0; ii<this->sm->getRoleCount(); ii++) {
-                float score = (node->visits * node->getCurrentScore(ii) + new_scores[ii]) / (node->visits + 1.0);
-                node->setCurrentScore(ii, score);
+                float score = (cur.to_node->visits * cur.to_node->getCurrentScore(ii) + new_scores[ii]) / (cur.to_node->visits + 1.0);
+                cur.to_node->setCurrentScore(ii, score);
             }
         }
 
-        node->visits++;
+        cur.to_node->visits++;
+        prev = &cur;
     }
 }
 
@@ -371,9 +422,10 @@ int PuctEvaluator::treePlayout() {
     this->path.clear();
     float scores[this->sm->getRoleCount()];
 
+    PuctNodeChild* child = nullptr;
     while (true) {
         ASSERT(current != nullptr);
-        this->path.push_back(current);
+        this->path.emplace_back(child, current);
 
         // End of the road
         if (current->isTerminal()) {
@@ -387,7 +439,7 @@ int PuctEvaluator::treePlayout() {
         if (child->to_node == nullptr) {
             this->expandChild(current, child);
             current = child->to_node;
-            this->path.push_back(current);
+            this->path.emplace_back(child, current);
             break;
         }
 
@@ -537,6 +589,10 @@ PuctNode* PuctEvaluator::establishRoot(const GGPLib::BaseState* current_state, i
 
     ASSERT(this->root == nullptr && this->initial_root == nullptr);
 
+    if (current_state == nullptr) {
+        current_state = this->sm->getInitialState();
+    }
+
     this->initial_root = this->root = this->createNode(nullptr, current_state);
     this->initial_root->game_depth = this->game_depth;
 
@@ -618,6 +674,23 @@ const PuctNodeChild* PuctEvaluator::chooseTopVisits(const PuctNode* node) {
     }
 
     auto children = PuctNode::sortedChildren(node, this->sm->getRoleCount());
+
+    // check top two comparison
+    if (children.size() >= 2) {
+        PuctNode* n0 = children[0]->to_node;
+        PuctNode* n1 = children[1]->to_node;
+
+        if (n0 != nullptr && n1 != nullptr) {
+            const int role_index = node->lead_role_index;
+
+            if (n1->getCurrentScore(role_index) > n0->getCurrentScore(role_index)) {
+                return children[1];
+            } else {
+                return children[0];
+            }
+        }
+    }
+
     ASSERT(children.size() > 0);
     return children[0];
 }
