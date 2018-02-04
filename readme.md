@@ -3,13 +3,10 @@ ggp-zero
 
 recent
 ------
-
-[reversi training v10](https://github.com/ggplib/ggp-zero/blob/dev/doc/reversi_record.md).
-[reversi training v9](https://github.com/ggplib/ggp-zero/blob/dev/doc/reversi_record_v9.md).
+[reversi training](https://github.com/ggplib/ggp-zero/blob/dev/doc/reversi_record.md).
+Post to https://github.com/mokemokechicken/reversi-alpha-zero/issues/40
 
 [Watch live! *Be back soon*!](http://simulated.tech:8800/index.html/)
-
-Post to https://github.com/mokemokechicken/reversi-alpha-zero/issues/40
 
 about
 ------
@@ -19,15 +16,14 @@ reinforcement learning, starting from zero.
 
 Current games trained:
 
- * reversi (strong)
- * breakthrough (strong)
- * cittaceot (solved, network reports 99% probability of first move win)
+ * reversi
+ * breakthrough
+ * breakthroughSmall
+ * cittaceot
  * hex
  * connect four
  * checkers-variant
  * escort latched breakthrough (variant) and speedChess (variant)
-
-The trained model for reversi is very strong, and plays at ntest level 7.
 
 Based on [GGPLib](https://github.com/ggplib/ggplib).
 
