@@ -14,7 +14,9 @@ results
 
 | player     | opponent   | black_result   | white_result   |
 |:-----------|:-----------|:---------------|:---------------|
+| gzero_50_8 | ntest_10   | 3/2/0          | 0/5/0          |
 | gzero_50_8 | ntest_9    | 0/5/0          | 0/5/0          |
+| gzero_50_8 | ntest_8    | 1/0/4          | 5/0/0          |
 | gzero_50_8 | ntest_7    | 4/5/1          | 6/4/0          |
 | gzero_50_8 | ntest_5    | 1/3/1          | 5/0/0          |
 | gzero_50_4 | ntest_7    | 1/4/0          | 0/5/0          |
