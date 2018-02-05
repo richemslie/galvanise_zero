@@ -4,6 +4,13 @@ reversi training
 Started on 2nd February.
 
 
+finished
+--------
+5th February.  Ran 400k more samples (4 more gens) after gen 50, and it started
+stagnating/regressing, and don't really have the time to figure out why.
+So that's it folks for now.  Not too bad result.
+
+
 results
 -------
 * gzero_x_y - where x is generation, y is number of playouts per move * 100.
@@ -221,7 +228,6 @@ initial
 
 gen 5 changes
 --------------
-
 * base_network_model.dropout_rate_policy = 0.2
 * self_play_config.sample_iterations = 800
 * base_training_config.starting_step = 2
@@ -252,5 +258,4 @@ gen 20 changes
 
 gen 50 changes
 --------------
-Lost track... trying hard not to change things, but there has been lots.  Will just paste it here
-later (at gen 37 right now).
+Lost track... trying hard not to change things, but there has been lots.
