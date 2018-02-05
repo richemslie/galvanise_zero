@@ -11,8 +11,22 @@ results
 * ntest_x - where x is nboard depth/level
 * results - win/loss/draw
 
+
 | player     | opponent   | black_result   | white_result   |
 |:-----------|:-----------|:---------------|:---------------|
+| gzero_50_8 | ntest_9    | 0/5/0          | 0/5/0          |
+| gzero_50_8 | ntest_7    | 4/5/1          | 6/4/0          |
+| gzero_50_8 | ntest_5    | 1/3/1          | 5/0/0          |
+| gzero_50_4 | ntest_7    | 1/4/0          | 0/5/0          |
+| gzero_50_4 | ntest_5    | 1/3/1          | 1/4/1          |
+| gzero_50_4 | ntest_3    | 4/0/1          | 4/0/1          |
+| gzero_50_2 | ntest_5    | 0/5/0          | 0/4/1          |
+| gzero_50_2 | ntest_4    | 4/1/0          | 2/2/1          |
+| gzero_50_2 | ntest_3    | 4/1/0          | 3/2/0          |
+| gzero_50_2 | ntest_2    | 2/3/0          | 2/3/0          |
+| gzero_50_1 | ntest_3    | 1/4/0          | 3/2/0          |
+| gzero_50_1 | ntest_2    | 2/3/0          | 1/3/1          |
+| gzero_50_1 | ntest_1    | 5/0/0          | 4/1/0          |
 | gzero_36_8 | ntest_7    | 0/4/0          | 0/4/0          |
 | gzero_36_8 | ntest_5    | 3/1/0          | 1/3/0          |
 | gzero_36_8 | ntest_4    | 1/3/0          | 1/3/0          |
