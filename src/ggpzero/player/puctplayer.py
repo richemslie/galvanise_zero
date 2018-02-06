@@ -234,6 +234,7 @@ class PUCTEvaluator(object):
                 prev_states.append(cur.state)
                 cur = cur.parent
 
+            # XXXX prev_states??? XXX
             predictions = self.nn.predict_1(node.state)
 
             node.final_score = predictions.scores[:]
