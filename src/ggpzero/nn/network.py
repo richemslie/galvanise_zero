@@ -173,7 +173,7 @@ class TrainingController(keras_callbacks.Callback):
             self.best_val_policy_acc = val_policy_acc
             self.epoch_last_set_at = epoch
 
-        store_retraining_weights = ((policy_acc + 0.015) < val_policy_acc and
+        store_retraining_weights = ((policy_acc + 0.01) < val_policy_acc and
                                     val_policy_acc > self.retrain_best_val_policy_acc)
 
         if store_retraining_weights:
@@ -187,7 +187,7 @@ class TrainingController(keras_callbacks.Callback):
             (self.retraining and epoch >= 3)):
 
             # if we are overfitting
-            if policy_acc - 0.03 > val_policy_acc:
+            if policy_acc - 0.02 > val_policy_acc:
                 log.info("Early stopping... since policy accuracy overfitting")
                 self.stop_training = True
 
