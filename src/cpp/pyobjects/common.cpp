@@ -75,10 +75,10 @@ static PuctConfig* createPuctConfig(PyObject* dict) {
     config->random_scale = asFloat("random_scale");
 
     config->temperature = asFloat("temperature");
-    config->depth_temperature_start = asInt("depth_temperature_start");
+    config->depth_temperature_start = asFloat("depth_temperature_start");
     config->depth_temperature_increment = asFloat("depth_temperature_increment");
     config->depth_temperature_stop = asInt("depth_temperature_stop");
-    config->depth_temperature_max = asInt("depth_temperature_max");
+    config->depth_temperature_max = asFloat("depth_temperature_max");
 
     std::string choose_method = asString("choose");
     if (choose_method == "choose_top_visits") {
