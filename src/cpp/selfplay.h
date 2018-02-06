@@ -17,9 +17,7 @@ namespace GGPZero {
     class SelfPlayManager;
 
     struct SelfPlayConfig {
-        // -1 is off, and defaults to alpha-zero style
         int max_number_of_samples;
-
 
         PuctConfig* select_puct_config;
         int select_iterations;
@@ -61,7 +59,7 @@ namespace GGPZero {
         SelfPlayManager* manager;
         const SelfPlayConfig* conf;
 
-        // only one evaluator -  allow to swap in/out config
+        // only one evaluator - allow to swap in/out config
         PuctEvaluator* pe;
 
         const GGPLib::BaseState* initial_state;
