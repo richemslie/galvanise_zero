@@ -328,7 +328,7 @@ class ServerBroker(Broker):
         log.verbose("send_request_to_train_nn() @ step %s" % next_step)
 
         train_conf = self.conf.base_training_config
-        train_conf.use_previous = next_step % 5 != 0
+        train_conf.use_previous = True
         assert train_conf.game == self.conf.game
         assert train_conf.generation_prefix == self.conf.generation_prefix
 
