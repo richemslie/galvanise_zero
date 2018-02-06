@@ -675,7 +675,9 @@ const PuctNodeChild* PuctEvaluator::chooseTopVisits(const PuctNode* node) {
 
     auto children = PuctNode::sortedChildren(node, this->sm->getRoleCount());
 
-    // check top two comparison
+    // compare top two.  This is a heuristic to cheaply check if the node hasn't yet converged and
+    // chooses the one with the best score.  It isn't very accurate, the only way to get 100%
+    // accuratcy is to keep running for long time until it clealy converges.  This is a best guess for now.
     if (children.size() >= 2) {
         PuctNode* n0 = children[0]->to_node;
         PuctNode* n1 = children[1]->to_node;
@@ -683,7 +685,8 @@ const PuctNodeChild* PuctEvaluator::chooseTopVisits(const PuctNode* node) {
         if (n0 != nullptr && n1 != nullptr) {
             const int role_index = node->lead_role_index;
 
-            if (n1->getCurrentScore(role_index) > n0->getCurrentScore(role_index)) {
+            if (n1->visits > n0->visits * 0.8 &&
+                n1->getCurrentScore(role_index) > n0->getCurrentScore(role_index)) {
                 return children[1];
             } else {
                 return children[0];
