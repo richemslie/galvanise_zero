@@ -2,63 +2,246 @@ from ggpzero.util.attrutil import register_attrs, attribute, attr_factory
 
 
 @register_attrs
-class ControlTerm(object):
-    # pieces
-    base_term = attribute(3)
+class ControlBase(object):
+    ''' a control base is basically a mapping from a gdl base to a value '''
 
-    # list of extra terms - must match absolutely
-    extra_terms = attribute(default=attr_factory(list))
+    # list of argument terms - which must match exactly
+    arg_terms = attribute(attr_factory(list))
 
     # we set the channel to this value
     value = attribute(1)
 
 
 @register_attrs
-class PieceTerm(object):
-    piece_term_idx = attribute(3)
-
-    # allow pieces
-    pieces = ['white', 'black', 'arrow']
+class ControlChannel(object):
+    ''' Creates a single channel.  The control bases need to be mutually exclusive (ie only one set
+        at a time).  If none are set the value of the channel will be zero.  If a channel is set,
+        it is the value defined in the ControlBase '''
+    # a list of control bases.
+    control_bases = attribute(attr_factory(list))
 
 
 @register_attrs
 class BoardTerm(object):
+    ''' For nxn boards, we identify which terms we use and index into the base. '''
+
+    term_idx = attribute(3)
+
+    # terms = ["white", "black", "arrow"]
+    terms = attribute(attr_factory(list))
+
+
+@register_attrs
+class BoardChannels(object):
+    ''' board channels are defined by
+        (a) the base term
+        (b) a cross product of the board terms
+
+    The value set on the channel itself will be if a matching base is set on the x/y cordinates.
+    '''
+
     base_term = attribute("cell")
+
+    # these are index to the term identifying the coordinates
     x_term_idx = attribute(1)
     y_term_idx = attribute(2)
 
-    # list of ExtraTerm (if any - each one will be for index 2,3,4...)
-    # will create a cross product
-    pieces = attribute(default=attr_factory(list))
+    # list of BoardTerm (if any) - will result in taking a cross product if len() > 1
+    board_terms = attribute(attr_factory(list))
 
 
 @register_attrs
 class GameDesc(object):
-    game = "checkers"
-    x_cords = "a b c d e f g h".split()
-    y_cords = "1 2 3 4 5 6 7 8".split()
+    game = attribute("checkers")
 
-    # list of BoardTerm (length kind of needs to be >= 1, or not much using convs)
-    board_terms = attribute(default=attr_factory(list))
+    # x_cords = "a b c d e f g h".split()
+    x_cords = attribute(attr_factory(list))
 
-    # list of list of BoardTerm (length kind of needs to be >= 1, or not much using convs)
-    control_terms = attribute(default=attr_factory(list))
+    # y_cords = "1 2 3 4 5 6 7 8".split()
+    y_cords = attribute(attr_factory(list))
+
+    # list of BoardChannels (length kind of needs to be >= 1, or not much using convs)
+    board_channels = attribute(attr_factory(list))
+
+    # list of list of ControlChannels
+    control_channels = attribute(attr_factory(list))
 
 
-class GameDefines(object):
+###############################################################################
+# helpers, to cut down on verbosity
 
-    def __init__(self):
-        pass
+def simple_control(*terms):
+    return ControlChannel([ControlBase(terms, 1)])
 
-    def breakthrough(self):
-        control_terms = [ControlTerm("control", "black", 0),
-                         ControlTerm("control", "white", 1)]
 
-        board_term = BoardTerm("cellHolds", 1, 2, 3,
-                               PieceTerm(3, ['white', 'black']))
+def binary_control(base_term, a_term, b_term):
+    return ControlChannel([ControlBase([base_term, a_term], 0),
+                           ControlBase([base_term, b_term], 1)])
+
+
+def step_control(base_term, start, end):
+    divisor = float(end - start + 1)
+    step_control = ControlChannel([ControlBase([base_term, str(ii)], ii / divisor)
+                                   for ii in range(start, end + 1)])
+    return step_control
+
+
+def simple_board_channels(base, pieces):
+    ''' common usage '''
+    return BoardChannels(base, 1, 2, [BoardTerm(3, pieces)])
+
+
+###############################################################################
+
+class Games(object):
+
+    def breakthrough_v1(self):
+        # two control channels
+        controls = [simple_control("control", "black"),
+                    simple_control("control", "white")]
+
+        cell_holds = simple_board_channels("cellHolds", ["white", "black"])
 
         return GameDesc("breakthrough",
                         "1 2 3 4 5 6 7 8".split(),
                         "1 2 3 4 5 6 7 8".split(),
-                        [board_term],
-                        [control_terms])
+                        [cell_holds], controls)
+
+    def breakthrough_v2(self):
+        # one channel, sharing black/white
+        control = binary_control("control", "black", "white")
+        cell_holds = simple_board_channels("cellHolds", ["white", "black"])
+
+        return GameDesc("breakthrough",
+                        "1 2 3 4 5 6 7 8".split(),
+                        "1 2 3 4 5 6 7 8".split(),
+                        [cell_holds], [control])
+
+    def reversi_v1(self):
+        # two control channels
+        controls = [simple_control("control", "black"),
+                    simple_control("control", "white")]
+
+        cell = simple_board_channels("cell", ["black", "red"])
+
+        return GameDesc("reversi",
+                        "1 2 3 4 5 6 7 8".split(),
+                        "1 2 3 4 5 6 7 8".split(),
+                        [cell], controls)
+
+    def reversi_v2(self):
+        # one control channel
+        control = binary_control("control", "black", "red")
+        cell = simple_board_channels("cell", ["black", "red"])
+
+        return GameDesc("reversi",
+                        "1 2 3 4 5 6 7 8".split(),
+                        "1 2 3 4 5 6 7 8".split(),
+                        [cell], [control])
+
+    def breakthrough_small(self):
+        control = binary_control("control", "white", "black")
+        cell = simple_board_channels("cell", ["white", "black"])
+
+        return GameDesc("breakthroughSmall",
+                        "1 2 3 4 5 6".split(),
+                        "1 2 3 4 5 6".split(),
+                        [cell], [control])
+
+    def cittaceot(self):
+        control = binary_control("control", "xplayer", "yplayer")
+
+        # note dropping b - for blank (not needed)
+        cell = simple_board_channels("cell", ["x", "o"])
+
+        return GameDesc("cittaceot",
+                        "1 2 3 4 5".split(),
+                        "1 2 3 4 5".split(),
+                        [cell], [control])
+
+    def checkers(self):
+        control = binary_control("control", "red", "black")
+
+        step = step_control("step", 1, 201)
+
+        # drop b.  Love how it is red and black, then uses bp wp. :)
+        cell = simple_board_channels("cell", "bp bk wk wp".split())
+
+        return GameDesc("checkers",
+                        "a b c d e f g h".split(),
+                        "1 2 3 4 5 6 7 8".split(),
+                        [cell], [control, step])
+
+    def amazons_suicide_10x10(self):
+        # 4 control channels
+        controls = [simple_control("turn", "black", "move"),
+                    simple_control("turn", "black", "fire"),
+                    simple_control("turn", "white", "move"),
+                    simple_control("turn", "white", "fire")]
+
+        just_moved = BoardChannels("justMoved", 1, 2)
+        cell = simple_board_channels("cell", ["white", "black", "arrow"])
+
+        return GameDesc("amazonsSuicide_10x10",
+                        "1 2 3 4 5 6 7 8 9 10".split(),
+                        "1 2 3 4 5 6 7 8 9 10".split(),
+                        [just_moved, cell], controls)
+
+    def atari_go_7x7(self):
+        # one channel, sharing black/white
+        control = binary_control("control", "white", "black")
+
+        cell = simple_board_channels("cell", ["white", "black"])
+
+        return GameDesc("atariGo_7x7",
+                        "1 2 3 4 5 6 7".split(),
+                        "1 2 3 4 5 6 7".split(),
+                        [cell], [control])
+
+    def escort_latch(self):
+        # one channel, sharing black/white
+        control = binary_control("control", "white", "black")
+
+        step = step_control("step", 1, 61)
+
+        cell = simple_board_channels("cell", "bp wp wk bk".split())
+
+        return GameDesc("escortLatch",
+                        "a b c d e f g h".split(),
+                        "1 2 3 4 5 6 7 8".split(),
+                        [cell], [control, step])
+
+    def tron(self):
+        # no controls
+        cell = simple_board_channels("cell", ["v"])
+        position = BoardChannels("position", 2, 3, BoardTerm(1, ["blue", "red"]))
+
+        return GameDesc("tron_10x10",
+                        "1 2 3 4 5 6 7 8 9 10 11".split(),
+                        "1 2 3 4 5 6 7 8 9 10 11".split(),
+                        [cell, position], [])
+
+    def speed_chess(self):
+        control = binary_control("control", "white", "black")
+        step = step_control("step", 1, 101)
+        has_moveds = [simple_control(s) for s in "kingHasMoved hRookHasMoved aRookHasMoved aRookHasMoved".split()]
+
+        # cross product
+        cell = BoardChannels("cell", 1, 2, [BoardTerm(3, "white black".split()),
+                                            BoardTerm(4, "king rook pawn knight queen bishop".split())])
+
+        return GameDesc("speedChess",
+                        "a b c d e f g h".split(),
+                        "1 2 3 4 5 6 7 8".split(),
+                        [cell], [control, step] + has_moveds)
+
+    def hex(self):
+        control = binary_control("control", "red", "blue")
+        cell = simple_board_channels("cell", "red blue".split())
+
+        # bases: owner, connected and step - are optimisation tricks for propnet?
+
+        return GameDesc("hex",
+                        "a b c d e f g h i".split(),
+                        "1 2 3 4 5 6 7 8 9".split(),
+                        [cell], [control])
