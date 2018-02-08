@@ -52,7 +52,6 @@ float clamp(float value, float amount) {
 PuctNode* SelfPlay::selectNode() {
     PuctNode* node = this->pe->establishRoot(this->initial_state, 0);
 
-    // ok simple loop until we start taking samples
     this->pe->updateConf(this->conf->select_puct_config);
     const int iterations = this->conf->select_iterations;
 
