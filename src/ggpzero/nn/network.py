@@ -151,9 +151,10 @@ class TrainingController(keras_callbacks.Callback):
         self.value_loss_diff = val_loss - loss
 
     def on_epoch_begin(self, epoch, logs=None):
-        # if self.retrain_best is None and self.retraining:
-        #    log.info('Reusing old retraining network for *next* retraining network')
-        #    self.retrain_best = self.model.get_weights()
+        if self.retrain_best is None and self.retraining:
+            log.info('Reusing old retraining network for *next* retraining network')
+            self.retrain_best = self.model.get_weights()
+
         self.at_epoch += 1
 
     def on_epoch_end(self, _, logs=None):
