@@ -36,19 +36,17 @@ def create_c_transformer(transformer):
     TransformerClz = ggpzero_interface.GdlBasesTransformer
     c_transformer = TransformerClz(transformer.channel_size,
                                    transformer.raw_channels_per_state,
+                                   transformer.num_of_controls_channels,
                                    transformer.num_previous_states,
                                    transformer.policy_dist_count)
 
     # build it up
-    for b in transformer.base_infos:
-        if b.channel is not None:
-            index = transformer.channel_size * b.channel + b.y_idx * transformer.num_rows + b.x_idx
-        else:
-            index = -1
-        c_transformer.add_base_info(b.channel is not None, index)
+    for b in transformer.board_space:
+        index = transformer.channel_size * b.channel_id + b.y_idx * transformer.num_rows + b.x_idx
+        c_transformer.add_board_base(b.base_indx, index)
 
-    for indx in transformer.control_states:
-        c_transformer.add_control_state(indx)
+    for c in transformer.control_space:
+        c_transformer.add_control_base(c.base_indx, c.channel_id, c.value)
 
     return c_transformer
 

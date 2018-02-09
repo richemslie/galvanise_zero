@@ -12,10 +12,9 @@ using namespace GGPZero;
 
 
 void GdlBasesTransformer::setForState(float* local_buf, const GGPLib::BaseState* bs) const {
-    for (size_t ii=0; ii<this->base_infos.size(); ii++) {
-        const BaseInfo& binfo = this->base_infos[ii];
-        if (binfo.hasChannel() && bs->get(ii)) {
-            binfo.set(local_buf);
+    for (const auto& b : this->board_space) {
+        if (b.check(bs)) {
+            b.set(local_buf);
         }
     }
 }
@@ -29,16 +28,14 @@ void GdlBasesTransformer::toChannels(const GGPLib::BaseState* the_base_state,
     // fast.
 
     // zero out channels for board states
-    const int zero_floats = (this->channels_per_state *
-                             (this->num_prev_states + 1) *
-                             this->channel_size);
-
-    for (int ii=0; ii<zero_floats; ii++) {
+    for (int ii=0; ii<this->totalSize(); ii++) {
         *(buf + ii) = 0.0f;
     }
 
+    // the_base_state
     this->setForState(buf, the_base_state);
 
+    // prev_states
     int count = 1;
     for (const GGPLib::BaseState* b : prev_states) {
         float* local_buf = buf + (this->channels_per_state * this->channel_size * count);
@@ -46,11 +43,10 @@ void GdlBasesTransformer::toChannels(const GGPLib::BaseState* the_base_state,
     }
 
     // set the control states
-    int channel_idx = this->controlStatesStart();
-    for (auto control_state_idx : this->control_states) {
-        float value = the_base_state->get(control_state_idx) ? 1.0f : 0.0f;
-        for (int ii=0; ii<this->channel_size; ii++, channel_idx++) {
-            *(buf + channel_idx) = value;
+    float* control_buf_start = buf + this->controlStatesStart();
+    for (const auto& c : this->control_space) {
+        if (c.check(the_base_state)) {
+            c.floodFill(control_buf_start, this->channel_size);
         }
     }
 }

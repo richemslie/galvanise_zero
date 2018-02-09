@@ -24,24 +24,25 @@ struct PyObject_GdlBasesTransformerWrapper {
     GdlBasesTransformer* impl;
 };
 
-static PyObject* GdlBasesTransformerWrapper_addBaseInfo(PyObject_GdlBasesTransformerWrapper* self, PyObject* args) {
+static PyObject* GdlBasesTransformerWrapper_addBoardBase(PyObject_GdlBasesTransformerWrapper* self, PyObject* args) {
     int arg0, arg1;
     if (! ::PyArg_ParseTuple(args, "ii", &arg0, &arg1)) {
         return nullptr;
     }
 
-    self->impl->addBaseInfo(arg0, arg1);
+    self->impl->addBoardBase(arg0, arg1);
 
     return Py_None;
 }
 
-static PyObject* GdlBasesTransformerWrapper_addControlState(PyObject_GdlBasesTransformerWrapper* self, PyObject* args) {
-    int arg0;
-    if (! ::PyArg_ParseTuple(args, "i", &arg0)) {
+static PyObject* GdlBasesTransformerWrapper_addControlBase(PyObject_GdlBasesTransformerWrapper* self, PyObject* args) {
+    int arg0, arg1;
+    float arg2;
+    if (! ::PyArg_ParseTuple(args, "iif", &arg0, &arg1, &arg2)) {
         return nullptr;
     }
 
-    self->impl->addControlState(arg0);
+    self->impl->addControlBase(arg0, arg1, arg2);
 
     return Py_None;
 }
@@ -56,8 +57,7 @@ static PyObject* GdlBasesTransformerWrapper_test(PyObject_GdlBasesTransformerWra
     }
 
     ssize_t ptr = 0;
-    int prev_states = 0;
-    if (! ::PyArg_ParseTuple(args, "ni", &ptr, &prev_states)) {
+    if (! ::PyArg_ParseTuple(args, "n", &ptr)) {
         return nullptr;
     }
 
@@ -97,8 +97,10 @@ static PyObject* GdlBasesTransformerWrapper_test(PyObject_GdlBasesTransformerWra
             sm->nextState(joint_move, other);
             sm->updateBases(other);
 
+            int prev_states = self->impl->getNumberPrevStates();
             if (prev_states) {
                 std::vector <const GGPLib::BaseState*> prevs;
+                // not excactly valid states, but doesnt matter
                 for (int ii=0; ii<prev_states; ii++) {
                     prevs.push_back(other);
                 }
@@ -122,8 +124,8 @@ static PyObject* GdlBasesTransformerWrapper_test(PyObject_GdlBasesTransformerWra
 }
 
 static struct PyMethodDef GdlBasesTransformerWrapper_methods[] = {
-    {"add_base_info", (PyCFunction) GdlBasesTransformerWrapper_addBaseInfo, METH_VARARGS, "addBaseInfo"},
-    {"add_control_state", (PyCFunction) GdlBasesTransformerWrapper_addControlState, METH_VARARGS, "addControlState"},
+    {"add_board_base", (PyCFunction) GdlBasesTransformerWrapper_addBoardBase, METH_VARARGS, "addBoardBase"},
+    {"add_control_base", (PyCFunction) GdlBasesTransformerWrapper_addControlBase, METH_VARARGS, "addControlBase"},
     {"test", (PyCFunction) GdlBasesTransformerWrapper_test, METH_VARARGS, "test"},
     {nullptr, nullptr}            /* Sentinel */
 };
@@ -182,12 +184,13 @@ static void GdlBasesTransformerWrapper_dealloc(PyObject* ptr) {
 ///////////////////////////////////////////////////////////////////////////////
 
 static PyObject* gi_GdlBasesTransformer(PyObject* self, PyObject* args) {
-    int channel_size, channels_per_state, num_prev_states;
+    int channel_size, channels_per_state, num_control_channels, num_prev_states;
     PyObject* expected_policy_sizes;
 
-    if (! ::PyArg_ParseTuple(args, "iiiO!",
+    if (! ::PyArg_ParseTuple(args, "iiiiO!",
                              &channel_size,
                              &channels_per_state,
+                             &num_control_channels,
                              &num_prev_states,
                              &PyList_Type, &expected_policy_sizes)) {
         return nullptr;
@@ -205,6 +208,7 @@ static PyObject* gi_GdlBasesTransformer(PyObject* self, PyObject* args) {
 
     GdlBasesTransformer* transformer = new GdlBasesTransformer(channel_size,
                                                                channels_per_state,
+                                                               num_control_channels,
                                                                num_prev_states,
                                                                policy_sizes);
 

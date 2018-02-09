@@ -65,7 +65,7 @@ def do_transformer(num_previous_states):
     for ii in range(10):
         print ii
         start = time.time()
-        array = c_transformer.test(cppinterface.sm_to_ptr(sm), num_previous_states)
+        array = c_transformer.test(cppinterface.sm_to_ptr(sm))
         total_s0 += time.time() - start
 
         sz = len(array) / (t.num_channels * t.channel_size)
