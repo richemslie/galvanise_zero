@@ -323,7 +323,7 @@ class TrainManager(object):
         if train_config.drop_dupes_count < self.train_config.drop_dupes_count:
             rebuild_cache = True
 
-        if train_config.starting_step < self.train_config.drop_dupes_count:
+        if train_config.starting_step < self.train_config.starting_step:
             rebuild_cache = True
 
         self.train_config.starting_step = train_config.starting_step
@@ -440,10 +440,6 @@ class TrainManager(object):
         XX_value_weight_min = 0.05
 
         value_weight = 1.0
-
-        # start retraining with reduce weight
-        if self.retraining:
-            value_weight *= XX_value_weight_reduction
 
         self.nn.compile(self.train_config.compile_strategy,
                         self.train_config.learning_rate,
