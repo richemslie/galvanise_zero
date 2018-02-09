@@ -12,14 +12,12 @@ from ggplib.util.symbols import SymbolFactory, Term
 # only importing for checking type (otherwise will go insane)
 from ggplib.db.lookup import GameInfo
 
-from ggpzero.defs import datadesc
+from ggpzero.defs import datadesc, gamedesc
 
 
 class BaseInfo(object):
-    def __init__(self, index, gdl_str, symbols):
+    def __init__(self, index, symbols):
         self.index = index
-        self.gdl_str = gdl_str
-        self.symbols = symbols
 
         # drops true ie (true (control black)) -> (control black)
         self.terms = symbols[1]
@@ -27,53 +25,61 @@ class BaseInfo(object):
         if isinstance(self.terms, Term):
             self.terms = [self.terms]
 
-        # populated in create_base_infos()
-        self.channel = None
+        self.used = False
 
-        # if cord_state, will use these cords
-        self.cord_state = False
-        self.x_idx = None
-        self.y_idx = None
 
-        # if control_state. will set set channel to value
-        self.control_state = None
-        self.control_state_value = None
+class BaseToBoardSpace(object):
+    def __init__(self, base_indx, channel_id, x_cord_idx, y_cord_idx):
+        # which base it is
+        self.base_indx = base_indx
 
-    def terms_to_piece(self, terms_indices):
-        if isinstance(terms_indices, tuple):
-            return tuple([self.terms[idx] for idx in terms_indices])
-        else:
-            return self.terms[terms_indices]
+        # index into the board channel (relative to start channel for state [there can be multiple
+        # of them with prev_states])
+        self.channel_id = channel_id
+
+        # the x/y cords
+        self.x_idx = x_cord_idx
+        self.y_idx = y_cord_idx
+
+    def __repr__(self):
+        return "BaseToBoardSpace(bs=%s, c=%s, x=%s, y=%s)" % (self.base_indx, self.channel_id, self.x_idx, self.y_idx)
+
+
+class BaseToChannelSpace(object):
+    def __init__(self, base_indx, channel_id, value):
+        # which base it is
+        self.base_indx = base_indx
+
+        # which channel it is (relative to end of states)
+        self.channel_id = channel_id
+
+        # the value to set the entire channel (flood fill)
+        self.value = value
+
+    def __repr__(self):
+        return "BaseToChannelSpace(b=%s, c=%s, v=%s)" % (self.base_indx, self.channel_id, self.value)
 
 
 class GdlBasesTransformer(object):
-    game = None
-
-    role_count = 2
-
-    # the following are defined subclass
-    base_term = pieces = piece_term = x_term = y_term = None
-    x_cords = y_cords = []
-
-    control_base_term = None
-    control_base_terms = None
-
-    # these are set in create_base_infos
-    base_infos = None
-    num_unhandled_states = 0
-    ignore_terms = []
-
     # XXX horrible way to say we have multiple_policy_heads
     # XXX not too worry, going to deprecate this soon
     policy_1_index_start = None
 
-    def __init__(self, game_info, generation_descr):
+    def __init__(self, game_info, generation_descr, game_desc=None):
         assert isinstance(game_info, GameInfo)
         assert isinstance(generation_descr, datadesc.GenerationDescription)
         self.game_info = game_info
 
+        # XXX for now
+        self.game_desc = game_desc
+        if self.game_desc is None:
+            self.game_desc = getattr(gamedesc.Games(), self.game)()
+        assert isinstance(self.game_desc, gamedesc.GameDesc)
+
         # for the number of outputs of the network
         sm_model = self.game_info.model
+        self.role_count = len(self.game_info.model.roles)
+
         if generation_descr.multiple_policy_heads:
             self.policy_dist_count = [len(l) for l in sm_model.actions]
         else:
@@ -91,106 +97,200 @@ class GdlBasesTransformer(object):
         self.num_previous_states = generation_descr.num_previous_states
         assert self.num_previous_states >= 0
 
-        self.num_of_base_controls = 0
-
         def get_noop_idx(actions):
             for idx, a in enumerate(actions):
                 if "noop" in a:
                     return idx
-            assert False, "did not find noop"
+
+            log.warning("did not find noop move in game %s" % self.game_info.game)
+            return None
 
         self.noop_legals = map(get_noop_idx, game_info.model.actions)
 
+        self.board_space = []
+        self.control_space = []
         self.create_base_infos()
 
     @property
+    def game(self):
+        return self.game_info.game
+
+    @property
     def num_rows(self):
-        return len(self.x_cords)
+        return len(self.game_desc.x_cords)
 
     @property
     def num_cols(self):
-        return len(self.y_cords)
+        return len(self.game_desc.y_cords)
 
     @property
     def channel_size(self):
         return self.num_cols * self.num_rows
 
     @property
-    def raw_channels_per_state(self):
-        # one for each role to indicate turn, one for each pieces
-        return len(self.pieces)
-
-    @property
     def num_channels(self):
         # one for each role to indicate turn, one for each pieces
         total_states = self.num_previous_states + 1
-        return self.num_of_base_controls + self.raw_channels_per_state * total_states
+        return self.num_of_controls_channels + self.raw_channels_per_state * total_states
+
+    @property
+    def x_cords(self):
+        return self.game_desc.x_cords
+
+    @property
+    def y_cords(self):
+        return self.game_desc.y_cords
 
     def create_base_infos(self):
         # ############ XXX
         # base_infos (this part anyway) should probably be done in the StateMachineModel
         symbol_factory = SymbolFactory()
         sm_model = self.game_info.model
-        self.base_infos = [BaseInfo(idx, s, symbol_factory.symbolize(s)) for idx, s in enumerate(sm_model.bases)]
+        base_infos = [BaseInfo(idx, symbol_factory.symbolize(s)) for idx, s in enumerate(sm_model.bases)]
+        self.base_infos = base_infos
         # ########### XXX
 
         all_cords = []
-        for y_cord in self.x_cords:
-            for x_cord in self.y_cords:
+        for y_cord in self.game_desc.x_cords:
+            for x_cord in self.game_desc.y_cords:
                 all_cords.append((y_cord, x_cord))
 
+        # first do board space
+        channel_mapping = {}
+
         count = Counter()
-        for b_info in self.base_infos:
-            if b_info.terms[0] != self.base_term:
+        for b_info in base_infos:
+            the_bc = None
+            for bc in self.game_desc.board_channels:
+                if b_info.terms[0] == bc.base_term:
+                    the_bc = bc
+                    break
+
+            if not the_bc:
                 continue
 
-            piece = b_info.terms_to_piece(self.piece_term)
+            matched = []
+            for bt in bc.board_terms:
+                if b_info.terms[bt.term_idx] in bt.terms:
+                    matched.append(b_info.terms[bt.term_idx])
+                    continue
 
-            if piece not in self.pieces:
+            if len(matched) != len(bc.board_terms):
+                print "Not matched", b_info.terms
                 continue
 
-            b_info.channel = self.pieces.index(piece)
+            # create a BaseToBoardSpace
+            key = tuple([b_info.terms[0]] + matched)
+            count[key] += 1
 
-            x_cord = b_info.terms[self.x_term]
-            y_cord = b_info.terms[self.y_term]
-            b_info.x_idx = self.x_cords.index(x_cord)
-            b_info.y_idx = self.y_cords.index(y_cord)
+            if count[key] == 1:
+                assert key not in channel_mapping
+                channel_mapping[key] = len(channel_mapping)
 
-            # for debug
-            count[b_info.channel] += 1
+            channel_id = channel_mapping[key]
 
-        for i, piece in enumerate(self.pieces):
-            log.info("found %s states for channel %s" % (count[i], piece))
+            x_cord = b_info.terms[the_bc.x_term_idx]
+            y_cord = b_info.terms[the_bc.y_term_idx]
 
-        if self.control_base_terms is None:
-            self.control_base_terms = []
+            x_idx = self.game_desc.x_cords.index(x_cord)
+            y_idx = self.game_desc.y_cords.index(y_cord)
 
-        if self.control_base_term is not None:
-            self.control_base_terms.append(self.control_base_term)
+            assert not b_info.used
+            self.board_space.append(BaseToBoardSpace(b_info.index, channel_id, x_idx, y_idx))
+            b_info.used = True
 
-        assert self.control_base_terms
+        self.raw_channels_per_state = len(channel_mapping)
 
-        self.num_of_base_controls = 0
-        self.control_states = []
+        # now do channel space
+        for channel_id, cc in enumerate(self.game_desc.control_channels):
+            look_for = set([tuple(cb.arg_terms) for cb in cc.control_bases])
 
-        for b in self.base_infos:
-            if b.terms[0] in self.control_base_terms:
-                self.num_of_base_controls += 1
-                self.control_states.append(b.index)
-                b.control_state = True
+            for b_info in base_infos:
+                the_terms = tuple(b_info.terms)
+                if the_terms in look_for:
 
-        log.info("Number of control states %s" % self.num_of_base_controls)
+                    done = False
+                    for cb in cc.control_bases:
+                        if the_terms == tuple(cb.arg_terms):
+                            assert not b_info.used
+                            self.control_space.append(BaseToChannelSpace(b_info.index, channel_id, cb.value))
+                            b_info.used = True
+                            done = True
+                            break
+
+                    assert done
+
+        self.num_of_controls_channels = len(self.game_desc.control_channels)
 
         # warn about any unhandled states
         self.num_unhandled_states = 0
-        for b_info in self.base_infos:
-            if b_info.channel is None and b_info.control_state is None:
+        for b_info in base_infos:
+            if not b_info.used:
                 self.num_unhandled_states += 1
-
-        self.channel_base_infos = [bi for bi in self.base_infos if bi.channel is not None]
 
         if self.num_unhandled_states:
             log.warning("Number of unhandled states %d" % self.num_unhandled_states)
+
+        # sort by channel
+        self.by_channel = {}
+        for b in self.board_space:
+            self.by_channel.setdefault(b.channel_id, []).append(b)
+
+        for cs in self.control_space:
+            self.by_channel.setdefault(cs.channel_id + self.raw_channels_per_state, []).append(cs)
+
+        for channel_id, all in self.by_channel.items():
+            print
+            print "channel_id", channel_id
+            for x in all:
+                print base_infos[x.base_indx].terms, "->", x
+
+    def state_to_channels(self, state, prev_states=None):
+        assert prev_states is None or len(prev_states) <= self.num_previous_states
+        if prev_states is None:
+            prev_states = []
+
+        # create a bunch of zero channels
+        channels = [np.zeros((self.num_cols, self.num_rows))
+                    for _ in range(self.num_channels)]
+
+        # add the state to channels
+        for b in self.board_space:
+            if state[b.base_indx]:
+                channels[b.channel_id][b.y_idx][b.x_idx] = 1
+
+        # add any previous states to the channels
+        channel_incr = self.raw_channels_per_state
+        for ii in range(self.num_previous_states):
+            try:
+                prev_state = prev_states[ii]
+
+                for b in self.board_space:
+                    if prev_state[b.base_indx]:
+                        channel_idx = b.channel_id + channel_incr
+                        channels[channel_idx][b.y_idx][b.x_idx] = 1
+
+            except IndexError:
+                pass
+
+            channel_incr += self.raw_channels_per_state
+
+        # set a control state by setting entire channel to 1
+        for c in self.control_space:
+            channel_idx = c.channel_id + channel_incr
+
+            if state[c.base_indx]:
+                # the value to set the entire channel (flood fill)
+                channels[channel_idx] += c.value
+
+        channels = np.array(channels, dtype='float32')
+        if self.channel_last:
+            orig = channels
+            channels = np.rollaxis(channels, -1)
+            channels = np.rollaxis(channels, -1)
+            assert channels.shape == (orig.shape[1], orig.shape[2], orig.shape[0])
+
+        return channels
 
     def null_state(self):
         return tuple(0 for _ in range(len(self.base_infos)))
@@ -240,54 +340,6 @@ class GdlBasesTransformer(object):
                 assert 0.99 < total < 1.01
 
         return sample
-
-    def state_to_channels(self, state, prev_states=None):
-        assert prev_states is None or len(prev_states) <= self.num_previous_states
-        if prev_states is None:
-            prev_states = []
-
-        # create a bunch of zero channels
-        channels = [np.zeros((self.num_cols, self.num_rows))
-                    for _ in range(self.num_channels)]
-
-        # add the state to channels
-        for b_info in self.channel_base_infos:
-            if state[b_info.index]:
-                channels[b_info.channel][b_info.y_idx][b_info.x_idx] = 1
-
-        # add any previous states to the channels
-        channel_incr = self.raw_channels_per_state
-        for ii in range(self.num_previous_states):
-            try:
-                prev_state = prev_states[ii]
-
-                for b_info in self.channel_base_infos:
-                    if prev_state[b_info.index]:
-                        channel_idx = b_info.channel + channel_incr
-                        channels[channel_idx][b_info.y_idx][b_info.x_idx] = 1
-
-            except IndexError:
-                pass
-
-            channel_incr += self.raw_channels_per_state
-
-        # set a control state by setting entire channel to 1
-        channel_idx = channel_incr
-        for idx in self.control_states:
-            if state[idx]:
-                channels[channel_idx] += 1
-            channel_idx += 1
-
-        assert len(channels) == self.num_channels
-
-        channels = np.array(channels, dtype='float32')
-        if self.channel_last:
-            orig = channels
-            channels = np.rollaxis(channels, -1)
-            channels = np.rollaxis(channels, -1)
-            assert channels.shape == (orig.shape[1], orig.shape[2], orig.shape[0])
-
-        return channels
 
     def policy_to_array(self, policy, lead_role_index):
         # ZZZ XXX deprecate single policy heads
@@ -355,174 +407,3 @@ class GdlBasesTransformer(object):
     def noop_policy(self, ri):
         assert self.policy_1_index_start is None
         return [(self.noop_legals[ri], 1.0)]
-
-
-###############################################################################
-
-class Breakthrough(GdlBasesTransformer):
-    game = "breakthrough"
-    x_cords = "1 2 3 4 5 6 7 8".split()
-    y_cords = "1 2 3 4 5 6 7 8".split()
-
-    base_term = "cellHolds"
-    x_term = 1
-    y_term = 2
-    piece_term = 3
-
-    pieces = ['white', 'black']
-    control_base_term = 'control'
-
-
-class Reversi(GdlBasesTransformer):
-    game = "reversi"
-    x_cords = "1 2 3 4 5 6 7 8".split()
-    y_cords = "1 2 3 4 5 6 7 8".split()
-
-    base_term = "cell"
-    x_term = 1
-    y_term = 2
-    piece_term = 3
-
-    pieces = ['black', 'red']
-    control_base_term = 'control'
-
-
-class Connect4(GdlBasesTransformer):
-    game = "connectFour"
-    x_cords = "1 2 3 4 5 6 7 8".split()
-    y_cords = "1 2 3 4 5 6".split()
-
-    base_term = "cell"
-    x_term = 1
-    y_term = 2
-    piece_term = 3
-
-    pieces = ['red', 'black']
-    control_base_term = 'control'
-
-
-class Hex(GdlBasesTransformer):
-    game = "hex"
-    x_cords = "a b c d e f g h i".split()
-    y_cords = "1 2 3 4 5 6 7 8 9".split()
-
-    base_term = "cell"
-    x_term = 1
-    y_term = 2
-    piece_term = 3
-
-    pieces = ['red', 'blue']
-    control_base_term = 'control'
-
-
-class BreakthroughSmall(GdlBasesTransformer):
-    game = "breakthroughSmall"
-    x_cords = "1 2 3 4 5 6".split()
-    y_cords = "1 2 3 4 5 6".split()
-
-    base_term = "cell"
-    x_term = 1
-    y_term = 2
-    piece_term = 3
-
-    pieces = ['white', 'black']
-    control_base_term = 'control'
-
-
-class CitTacEot(GdlBasesTransformer):
-    game = "cittaceot"
-    x_cords = "1 2 3 4 5".split()
-    y_cords = "1 2 3 4 5".split()
-
-    base_term = "cell"
-    x_term = 1
-    y_term = 2
-    piece_term = 3
-
-    pieces = ['x', 'o']
-    control_base_term = 'control'
-
-
-class Checkers(GdlBasesTransformer):
-    game = "checkers"
-    x_cords = "a b c d e f g h".split()
-    y_cords = "1 2 3 4 5 6 7 8".split()
-    base_term = "cell"
-    x_term = 1
-    y_term = 2
-    piece_term = 3
-
-    pieces = ['bp', 'bk', 'wk', 'wp']
-    control_base_term = 'control'
-
-
-class EscortLatch(GdlBasesTransformer):
-    game = "escortLatch"
-    x_cords = "a b c d e f g h".split()
-    y_cords = "1 2 3 4 5 6 7 8".split()
-
-    base_term = "cell"
-    x_term = 1
-    y_term = 2
-    piece_term = 3
-    pieces = ['wp', 'wk', 'bp', 'bk']
-
-    control_base_terms = ["blackKingCaptured", "whiteKingCaptured", "control"]
-
-
-class Tron(GdlBasesTransformer):
-    TODOXXX = False
-    game = "tron_10x10"
-    x_cords = "1 2 3 4 5 6 7 8 9 10".split()
-    y_cords = "1 2 3 4 5 6 7 8 9 10".split()
-
-    base_term = "cell"
-    x_term = 1
-    y_term = 2
-    piece_term = 3
-    pieces = ['v']
-
-    control_base_terms = []
-
-
-class AtariGo_7x7(GdlBasesTransformer):
-    TODOXXX = False
-    game = 'atariGo_7x7'
-    x_cords = '1 2 3 4 5 6 7'.split()
-    y_cords = '1 2 3 4 5 6 7'.split()
-
-    base_term = "cell"
-    x_term = 1
-    y_term = 2
-    piece_term = 3
-
-    pieces = ['black', 'white']
-    ignore_terms = ['group']
-    control_base_term = 'control'
-
-
-class SpeedChess(GdlBasesTransformer):
-    game = "speedChess"
-
-    x_cords = "a b c d e f g h".split()
-    y_cords = "1 2 3 4 5 6 7 8".split()
-
-    base_term = "cell"
-    x_term = 1
-    y_term = 2
-
-    piece_term = 3, 4
-    pieces = [(p0, p1) for p1 in ['king', 'rook', 'pawn', 'knight', 'queen', 'bishop']
-              for p0 in ['white', 'black']]
-
-    control_base_terms = ["kingHasMoved", "hRookHasMoved",
-                          "aRookHasMoved", "aRookHasMoved", "control"]
-
-
-###############################################################################
-
-def init():
-    from ggpzero.nn.manager import get_manager
-    for clz in (AtariGo_7x7, BreakthroughSmall, Breakthrough, Reversi, Connect4,
-                Hex, CitTacEot, Checkers, EscortLatch, SpeedChess):
-        get_manager().register_transformer(clz)

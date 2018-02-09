@@ -61,7 +61,6 @@ def test_basic_config():
     for game in games:
         # lookup game in manager
         transformer = man.get_transformer(game)
-        print transformer.x_term
         print transformer.x_cords
 
         # look game from database
@@ -90,7 +89,6 @@ def test_config_channel_last():
 
         # lookup game in manager
         transformer = man.get_transformer(game, generation_descr)
-        print transformer.x_term
         print transformer.x_cords
 
         # look game from database
@@ -119,7 +117,6 @@ def test_config_previous_states():
 
         # lookup game in manager
         transformer = man.get_transformer(game, generation_descr)
-        print transformer.x_term
         print transformer.x_cords
 
         # look game from database

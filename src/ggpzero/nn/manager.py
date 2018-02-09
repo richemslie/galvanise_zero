@@ -27,8 +27,6 @@ class Manager(object):
             data_path = os.path.join(os.environ["GGPZERO_PATH"], "data")
         self.data_path = data_path
 
-        self.transformer_classes = {}
-
         # instantiated transformers, lazy constructed
         self.transformers = {}
 
@@ -61,10 +59,9 @@ class Manager(object):
             p = os.path.join(p, filename)
         return p
 
-    def register_transformer(self, clz):
-        self.transformer_classes[clz.game] = clz
-
     def get_transformer(self, game, generation_descr=None):
+        from ggpzero.nn.bases import GdlBasesTransformer
+
         if generation_descr is None:
             generation_descr = templates.default_generation_desc(game)
 
@@ -76,12 +73,10 @@ class Manager(object):
         transformer = self.transformers.get(key)
 
         if transformer is None:
-            clz = self.transformer_classes.get(game)
-            assert clz is not None, "Did not find bases transformer for game: %s" % game
-
             # looks up the game in the ggplib database
             game_info = lookup.by_name(game)
-            self.transformers[key] = transformer = clz(game_info, generation_descr)
+
+            self.transformers[key] = transformer = GdlBasesTransformer(game_info, generation_descr)
 
         return transformer
 
@@ -184,8 +179,5 @@ def get_manager():
     global the_manager
     if the_manager is None:
         the_manager = Manager()
-
-        from ggpzero.nn.bases import init
-        init()
 
     return the_manager

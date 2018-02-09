@@ -95,7 +95,7 @@ def simple_board_channels(base, pieces):
 
 class Games(object):
 
-    def breakthrough_v1(self):
+    def breakthrough(self):
         # two control channels
         controls = [simple_control("control", "black"),
                     simple_control("control", "white")]
@@ -117,7 +117,7 @@ class Games(object):
                         "1 2 3 4 5 6 7 8".split(),
                         [cell_holds], [control])
 
-    def reversi_v1(self):
+    def reversi(self):
         # two control channels
         controls = [simple_control("control", "black"),
                     simple_control("control", "white")]
@@ -139,7 +139,7 @@ class Games(object):
                         "1 2 3 4 5 6 7 8".split(),
                         [cell], [control])
 
-    def breakthrough_small(self):
+    def breakthroughSmall(self):
         control = binary_control("control", "white", "black")
         cell = simple_board_channels("cell", ["white", "black"])
 
@@ -149,6 +149,7 @@ class Games(object):
                         [cell], [control])
 
     def cittaceot(self):
+        # one channel, sharing roles
         control = binary_control("control", "xplayer", "yplayer")
 
         # note dropping b - for blank (not needed)
@@ -172,7 +173,7 @@ class Games(object):
                         "1 2 3 4 5 6 7 8".split(),
                         [cell], [control, step])
 
-    def amazons_suicide_10x10(self):
+    def amazonsSuicide_10x10(self):
         # 4 control channels
         controls = [simple_control("turn", "black", "move"),
                     simple_control("turn", "black", "fire"),
@@ -187,8 +188,8 @@ class Games(object):
                         "1 2 3 4 5 6 7 8 9 10".split(),
                         [just_moved, cell], controls)
 
-    def atari_go_7x7(self):
-        # one channel, sharing black/white
+    def atariGo_7x7(self):
+        # one channel, sharing roles
         control = binary_control("control", "white", "black")
 
         cell = simple_board_channels("cell", ["white", "black"])
@@ -198,8 +199,8 @@ class Games(object):
                         "1 2 3 4 5 6 7".split(),
                         [cell], [control])
 
-    def escort_latch(self):
-        # one channel, sharing black/white
+    def escortLatch(self):
+        # one channel, sharing roles
         control = binary_control("control", "white", "black")
 
         step = step_control("step", 1, 61)
@@ -211,29 +212,15 @@ class Games(object):
                         "1 2 3 4 5 6 7 8".split(),
                         [cell], [control, step])
 
-    def tron(self):
+    def tron_10x10(self):
         # no controls
         cell = simple_board_channels("cell", ["v"])
-        position = BoardChannels("position", 2, 3, BoardTerm(1, ["blue", "red"]))
+        position = BoardChannels("position", 2, 3, [BoardTerm(1, ["blue", "red"])])
 
         return GameDesc("tron_10x10",
-                        "1 2 3 4 5 6 7 8 9 10 11".split(),
-                        "1 2 3 4 5 6 7 8 9 10 11".split(),
+                        "0 1 2 3 4 5 6 7 8 9 10 11".split(),
+                        "0 1 2 3 4 5 6 7 8 9 10 11".split(),
                         [cell, position], [])
-
-    def speed_chess(self):
-        control = binary_control("control", "white", "black")
-        step = step_control("step", 1, 101)
-        has_moveds = [simple_control(s) for s in "kingHasMoved hRookHasMoved aRookHasMoved aRookHasMoved".split()]
-
-        # cross product
-        cell = BoardChannels("cell", 1, 2, [BoardTerm(3, "white black".split()),
-                                            BoardTerm(4, "king rook pawn knight queen bishop".split())])
-
-        return GameDesc("speedChess",
-                        "a b c d e f g h".split(),
-                        "1 2 3 4 5 6 7 8".split(),
-                        [cell], [control, step] + has_moveds)
 
     def hex(self):
         control = binary_control("control", "red", "blue")
@@ -245,3 +232,43 @@ class Games(object):
                         "a b c d e f g h i".split(),
                         "1 2 3 4 5 6 7 8 9".split(),
                         [cell], [control])
+
+    def connectFour(self):
+        control = binary_control("control", "red", "black")
+        cell = simple_board_channels("cell", ["red", "black"])
+
+        # turned the coord upside down ... well just because it looks pretty!
+        return GameDesc("connectFour",
+                        "1 2 3 4 5 6 7 8".split(),
+                        "6 5 4 3 2 1".split(),
+                        [cell], [control])
+
+
+    def _chess_like(self, game):
+        control = binary_control("control", "white", "black")
+        step = step_control("step", 1, 101)
+        has_moveds = [simple_control(s) for s in "kingHasMoved hRookHasMoved aRookHasMoved aRookHasMoved".split()]
+
+        # cross product
+        cell = BoardChannels("cell", 1, 2, [BoardTerm(3, "white black".split()),
+                                            BoardTerm(4, "king rook pawn knight queen bishop".split())])
+
+        return GameDesc(game,
+                        "a b c d e f g h".split(),
+                        "1 2 3 4 5 6 7 8".split(),
+                        [cell], [control, step] + has_moveds)
+
+    def speedChess(self):
+        return self._chess_like("speedChess")
+
+    def chess_200(self):
+        return self._chess_like("chess_200")
+
+    def skirmishNew(self):
+        return self._chess_like("skirmishNew")
+
+    def skirmishZeroSum(self):
+        return self._chess_like("skirmishZeroSum")
+
+    def skirmishSTK(self):
+        return self._chess_like("skirmishSTK")
