@@ -94,20 +94,7 @@ def simple_board_channels(base, pieces):
 ###############################################################################
 
 class Games(object):
-
     def breakthrough(self):
-        # two control channels
-        controls = [simple_control("control", "black"),
-                    simple_control("control", "white")]
-
-        cell_holds = simple_board_channels("cellHolds", ["white", "black"])
-
-        return GameDesc("breakthrough",
-                        "1 2 3 4 5 6 7 8".split(),
-                        "1 2 3 4 5 6 7 8".split(),
-                        [cell_holds], controls)
-
-    def breakthrough_v2(self):
         # one channel, sharing black/white
         control = binary_control("control", "black", "white")
         cell_holds = simple_board_channels("cellHolds", ["white", "black"])
@@ -118,18 +105,6 @@ class Games(object):
                         [cell_holds], [control])
 
     def reversi(self):
-        # two control channels
-        controls = [simple_control("control", "black"),
-                    simple_control("control", "white")]
-
-        cell = simple_board_channels("cell", ["black", "red"])
-
-        return GameDesc("reversi",
-                        "1 2 3 4 5 6 7 8".split(),
-                        "1 2 3 4 5 6 7 8".split(),
-                        [cell], controls)
-
-    def reversi_v2(self):
         # one control channel
         control = binary_control("control", "black", "red")
         cell = simple_board_channels("cell", ["black", "red"])
