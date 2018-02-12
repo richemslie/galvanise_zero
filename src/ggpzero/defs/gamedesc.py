@@ -94,6 +94,8 @@ def simple_board_channels(base, pieces):
 ###############################################################################
 
 class Games(object):
+    ''' class is only here to create a namespace '''
+
     def breakthrough(self):
         # one channel, sharing black/white
         control = binary_control("control", "black", "white")
@@ -217,7 +219,6 @@ class Games(object):
                         "1 2 3 4 5 6 7 8".split(),
                         "6 5 4 3 2 1".split(),
                         [cell], [control])
-
 
     def _chess_like(self, game):
         control = binary_control("control", "white", "black")
