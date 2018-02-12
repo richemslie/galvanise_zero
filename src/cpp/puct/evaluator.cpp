@@ -187,19 +187,29 @@ bool PuctEvaluator::setDirichletNoise(int depth) {
     return true;
 }
 
-float PuctEvaluator::getPuctConstant(PuctNode* node) const {
+float PuctEvaluator::getPuctConstant(PuctNode* node, int depth) const {
     float constant = this->conf->puct_constant_after;
-    int num_expansions = node == this->root ? this->conf->puct_before_root_expansions : this->conf->puct_before_expansions;
+    int num_expansions = depth == 0 ? this->conf->puct_before_root_expansions : this->conf->puct_before_expansions;
 
-    if (node->num_children_expanded == node->num_children ||
-        node->num_children_expanded < num_expansions) {
-        constant = this->conf->puct_constant_before;
+    // special case where num_children is less than num_expansions required to switch.  In this
+    // case we switch to puct_constant_after as soon as we expanded everything
+    if (node->num_children < num_expansions) {
+        if (node->num_children != num_expansions) {
+            constant = this->conf->puct_constant_before;
+        }
+    } else {
+        if (node->num_children_expanded < num_expansions) {
+            constant = this->conf->puct_constant_before;
+        }
     }
 
     return constant;
 }
 
 void PuctEvaluator::backPropagate(float* new_scores) {
+    // XXX split this method up
+    const bool XXX_do_minimax_during_bp = false;
+
     const int role_count = this->sm->getRoleCount();
     const int start_index = this->path.size() - 1;
 
@@ -253,24 +263,19 @@ void PuctEvaluator::backPropagate(float* new_scores) {
             }
         }
 
-        if (prev != nullptr) {
-        }
-
-
         if (cur.to_node->is_finalised) {
             for (int ii=0; ii<role_count; ii++) {
                 new_scores[ii] = cur.to_node->getCurrentScore(ii);
             }
 
         } else {
-            const int some_min_max_visit_config = 8;
-
-            if (some_min_max_visit_config > 0 &&
-                cur.to_node->visits > some_min_max_visit_config
-                && prev != nullptr) {
+            // we managed to do pretty well via using two different PUCT constants - see getPuctConstant()
+            // but if want to try doing some approximate minimax, try this
+            if (XXX_do_minimax_during_bp && prev != nullptr) {
+                const int some_min_max_visit_config = 8;
 
                 const PuctNodeChild* best = nullptr;
-                {
+                if (cur.to_node->visits > some_min_max_visit_config) {
                     // find the best
                     int best_visits = -1;
 
@@ -333,7 +338,8 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, int depth) {
 
     bool do_dirichlet_noise = this->setDirichletNoise(depth);
 
-    float puct_constant = this->getPuctConstant(node);
+    float puct_constant = this->getPuctConstant(node, depth);
+
     float sqrt_node_visits = ::sqrt(node->visits + 1);
 
     // get best
@@ -540,6 +546,8 @@ PuctNode* PuctEvaluator::fastApplyMove(const PuctNodeChild* next) {
 }
 
 void PuctEvaluator::applyMove(const GGPLib::JointMove* move) {
+    // XXX this is only here for the player.  We should probably have a player class, and not
+    // simplify code greatly.
     for (int ii=0; ii<this->root->num_children; ii++) {
         PuctNodeChild* c = this->root->getNodeChild(this->sm->getRoleCount(), ii);
         if (c->move.equals(move)) {
@@ -675,10 +683,12 @@ const PuctNodeChild* PuctEvaluator::chooseTopVisits(const PuctNode* node) {
 
     auto children = PuctNode::sortedChildren(node, this->sm->getRoleCount());
 
+    const bool XXX_top_visits_best_guess_converge = true;
+
     // compare top two.  This is a heuristic to cheaply check if the node hasn't yet converged and
     // chooses the one with the best score.  It isn't very accurate, the only way to get 100%
-    // accuratcy is to keep running for long time until it clealy converges.  This is a best guess for now.
-    if (children.size() >= 2) {
+    // accuracy is to keep running for long time until it cleanly converges.  This is a best guess for now.
+    if (XXX_top_visits_best_guess_converge && children.size() >= 2) {
         PuctNode* n0 = children[0]->to_node;
         PuctNode* n1 = children[1]->to_node;
 
@@ -743,8 +753,8 @@ Children PuctEvaluator::getProbabilities(PuctNode* node, float temperature, bool
     // since we add 0.1 to each our children (this is so the percentage does don't drop too low)
     float node_visits = node->visits + 0.1 * node->num_children;
 
-    // add some smoothness
-
+    // add some smoothness.  This also works for the case when doing no evaluations (ie
+    // onNextMove(0)), as the node_visits == 0 and be uniform.
     float linger_pct = 0.1f;
 
     float total_probability = 0.0f;

@@ -50,7 +50,7 @@ namespace GGPZero {
 
         // set dirichlet noise on node
         bool setDirichletNoise(int depth);
-        float getPuctConstant(PuctNode* node) const;
+        float getPuctConstant(PuctNode* node, int depth) const;
 
     public:
         void updateNodePolicy(PuctNode* node, float* array);
