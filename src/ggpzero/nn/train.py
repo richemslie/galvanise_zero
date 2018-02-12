@@ -137,7 +137,12 @@ class SamplesBuffer(object):
         assert isinstance(conf, confs.TrainNNConfig)
 
         step = conf.next_step - 1
-        while step >= conf.starting_step:
+
+        starting_step = conf.starting_step
+        if starting_step < 0:
+            starting_step = min(step - starting_step, 0)
+
+        while step >= starting_step:
             store_path = man.samples_path(conf.game, conf.generation_prefix)
             fn = os.path.join(store_path, "gendata_%s_%s.json.gz" % (conf.game, step))
             if fn not in self.sample_data_cache:
