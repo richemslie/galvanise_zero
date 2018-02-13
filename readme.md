@@ -10,9 +10,6 @@ sanitize at this point.
 
 roadmap
 -------
- * fix bases transformer to use a game description, and not harded coded classes.  add enough
-   support to transform chess & skirmish & tron.
-
  * docs.  update install instructions.  finish refactoring & quick polish up.  write a little about
    how it works.
 
@@ -20,12 +17,16 @@ roadmap
    since method of learning is similar to MCTS, can it learn to play?  Without guidance MCTS will
    score 50/50.)
 
- * train a non-zero sum game (skirmish), and try chess!
+ * test a simultaneous game (tron) (this needs new PUCT+ evaluator)
 
- * and a simultaneous game (tron) (this needs new PUCT+ evaluator)
+ * create PUCT+ evaluator, shared tree between self plays and try a new self play idea.
 
- * create PUCT+ evaluator, bunch of the galvanise ideas carried over to PUCT MCTS.  And test a new
-   self play idea.
+ * chess and chess variant games give ggpzero a very hard time.  I currently run out of memory
+   after 200k samples (very large policies) and saving the data as json can cause pauses of up to 5
+   minutes.  chess itself looks like as if it will be extremely challenging to get any traction, I
+   think it will need 2-3 million samples with a random network to save going into local minima of
+   worse than random self play (which will end up as draw).  Need performance fixes for the above
+   before retrying.
 
  * flesh out "zero battleground", visualisation and pretty elo graphs
 

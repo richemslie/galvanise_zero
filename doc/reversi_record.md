@@ -214,4 +214,14 @@ Increase number of samples, more resign, some resampling.
 * num_samples_to_train = 30000
 * resign1_false_positive_retry_percentage = 0.75
 
+gen 35 changes
+--------------
+Up network size.
+
+* base_network_model.cnn_filter_size = 128
+* base_network_model.value_hidden_size = 192
+
+* resign0_false_positive_retry_percentage = 0.5
+* resign1_false_positive_retry_percentage = 0.25
+
 
