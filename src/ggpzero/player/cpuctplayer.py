@@ -6,7 +6,7 @@ import attr
 from ggplib.util import log
 from ggplib.player.base import MatchPlayer
 
-from ggpzero.defs import confs, templates
+from ggpzero.defs import confs
 
 from ggpzero.util.cppinterface import joint_move_to_ptr, basestate_to_ptr, PlayPoller
 
@@ -101,10 +101,10 @@ compete = confs.PUCTPlayerConfig(name="cpp_cl",
                                  depth_temperature_max=6.0,
                                  depth_temperature_start=0,
                                  depth_temperature_increment=1.0,
-                                 depth_temperature_stop=20,
+                                 depth_temperature_stop=4,
                                  random_scale=0.9,
 
-                                 max_dump_depth=3)
+                                 max_dump_depth=2)
 
 
 def main():
@@ -115,20 +115,23 @@ def main():
     port = int(sys.argv[1])
     generation = sys.argv[2]
 
-    config_name = "default"
+    # config_name = "default"
 
-    if len(sys.argv) > 3:
-        config_name = sys.argv[3]
+    # if len(sys.argv) > 3:
+    #     config_name = sys.argv[3]
 
     # conf = templates.puct_config_template(generation, config_name)
     conf = compete
     conf.generation = generation
 
-    player = CppPUCTPlayer(conf=conf)
+    if len(sys.argv) > 3:
+        playouts_multiplier = int(sys.argv[3])
+        if playouts_multiplier == 0:
+            conf.playouts_per_iteration = 1
+        else:
+            conf.playouts_per_iteration *= playouts_multiplier
 
-    if len(sys.argv) > 4:
-        playouts_multiplier = int(sys.argv[4])
-        conf.playouts_per_iteration *= playouts_multiplier
+    player = CppPUCTPlayer(conf=conf)
 
     from ggplib.play import play_runner
     play_runner(player, port)
