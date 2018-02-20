@@ -5,7 +5,7 @@ results
 -------
 * gzero_x_y - where x is generation, y is number of model predictions per move * 100.
 * gzero_t_x_y - gzero tiered.  This a variation of gzero that applies a tiered multiplier to the
-  number of evaluation as the game approaches the end (times 2 at level 38, times 4 at level 45).
+  number of evaluation as the game approaches the end (*2 at move 38, *4 at move 45).
 
 * ntest_x - where x is nboard depth/level
 * results - win/loss/draw
@@ -99,7 +99,7 @@ notes
 
 4. As of gen 81, the number of samples in the epoch is close to 3 million.  And getting pretty
    close to running out of RAM.  Will need to use train_on_batch() from keras and read the data
-   from disk.  Although I also thining about switching to pytorch for extra control, and using
+   from disk.  Although I also thinking about switching to pytorch for extra control, and using
    caffe2 for evaluations in c++ (or at least have the option to do so - the model library is
    already quite well abstracted out).
 
