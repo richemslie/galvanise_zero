@@ -22,11 +22,12 @@ def fmt_result(w, l, d):
 
 
 def format_table(json_table):
-    headers = "player opponent black_result white_result".split()
+    headers = "player opponent overall black white".split()
 
     table = []
     for p, o, w, b in reversed(json_table):
-        table.append((to_player_name(*p), to_player_name(*o), fmt_result(*w), fmt_result(*b)))
+        overall = fmt_result(*[int(x) + int(y) for x, y in zip(w, b)])
+        table.append((to_player_name(*p), to_player_name(*o), overall, fmt_result(*w), fmt_result(*b)))
 
     print tabulate.tabulate(table, headers, tablefmt="pipe")
 
