@@ -24,6 +24,9 @@ namespace GGPZero {
         int starting_sample_depth;
         std::vector <float> resultant_puct_score;
         int resultant_puct_visits;
+
+        // keep the node around - just until we add the sample
+        int lead_role_index;
     };
 
 }

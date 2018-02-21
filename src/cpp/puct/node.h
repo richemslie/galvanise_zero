@@ -137,8 +137,7 @@ namespace GGPZero {
             return this->num_children == 0;
         }
 
-        static PuctNode* create(PuctNode* parent,
-                                const GGPLib::BaseState* base_state,
+        static PuctNode* create(const GGPLib::BaseState* base_state,
                                 GGPLib::StateMachineInterface* sm);
 
         static std::string moveString(const GGPLib::JointMove& move,

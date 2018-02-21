@@ -79,44 +79,23 @@ void PuctEvaluator::lookAheadTerminals(PuctNode* node) {
     ASSERT(!node->checked_for_finals);
     node->checked_for_finals = true;
 
-    if (node->is_finalised) {
-        return;
-    }
-
     const int role_count = this->sm->getRoleCount();
 
     for (int ii=0; ii<node->num_children; ii++) {
         PuctNodeChild* c = node->getNodeChild(role_count, ii);
 
-        this->sm->updateBases(node->getBaseState());
-
         if (c->to_node != nullptr) {
-            return;
+            continue;
         }
+
+        this->sm->updateBases(node->getBaseState());
 
         // apply move
         this->sm->nextState(&c->move, this->basestate_expand_node);
         this->sm->updateBases(this->basestate_expand_node);
 
         if (this->sm->isTerminal()) {
-            PuctNode* terminal_node = this->createNode(node, this->basestate_expand_node);
-            terminal_node->game_depth = node->game_depth + 1;
-
-            ASSERT(terminal_node->is_finalised);
-
-            c->to_node = terminal_node;
-
-            // XXX what to do if lead_role_index is indeterminate?
-            float score = terminal_node->getFinalScore(node->lead_role_index);
-            if (score > 0.99) {
-                for (int jj=0; jj<role_count; jj++) {
-                    node->setFinalScore(jj, terminal_node->getFinalScore(jj));
-                    node->setCurrentScore(jj, terminal_node->getCurrentScore(jj));
-                }
-
-                node->is_finalised = true;
-                return;
-            }
+            c->to_node = this->createNode(node, this->basestate_expand_node);
         }
     }
 }
@@ -127,14 +106,17 @@ void PuctEvaluator::expandChild(PuctNode* parent, PuctNodeChild* child) {
     this->sm->nextState(&child->move, this->basestate_expand_node);
 
     // create node
-    PuctNode* new_node = this->createNode(parent, this->basestate_expand_node);
-    child->to_node = new_node;
-    parent->num_children_expanded++;
-    new_node->game_depth = parent->game_depth + 1;
+    child->to_node = this->createNode(parent, this->basestate_expand_node);
 }
 
 PuctNode* PuctEvaluator::createNode(PuctNode* parent, const GGPLib::BaseState* state) {
-    PuctNode* new_node = PuctNode::create(parent, state, this->sm);
+    PuctNode* new_node = PuctNode::create(state, this->sm);
+    if (parent != nullptr) {
+        new_node->parent = parent;
+        new_node->game_depth = parent->game_depth + 1;
+        parent->num_children_expanded++;
+    }
+
     this->addNode(new_node);
 
     if (!new_node->is_finalised) {
@@ -207,119 +189,17 @@ float PuctEvaluator::getPuctConstant(PuctNode* node, int depth) const {
 }
 
 void PuctEvaluator::backPropagate(float* new_scores) {
-    // XXX split this method up
-    const bool XXX_do_minimax_during_bp = false;
-
-    const int role_count = this->sm->getRoleCount();
     const int start_index = this->path.size() - 1;
-
-    bool only_once = true;
-
-    // back propagation:
-    const PathElement* prev = nullptr;
 
     for (int index=start_index; index >= 0; index--) {
         const PathElement& cur = this->path[index];
 
-        if (only_once && !cur.to_node->is_finalised && cur.to_node->lead_role_index >= 0) {
-            only_once = false;
-
-            const PuctNodeChild* best = nullptr;
-            {
-                float best_score = -1;
-                bool more_to_explore = false;
-                for (int ii=0; ii<cur.to_node->num_children; ii++) {
-                    const PuctNodeChild* c = cur.to_node->getNodeChild(role_count, ii);
-
-                    if (c->to_node != nullptr && c->to_node->is_finalised) {
-                        float score = c->to_node->getCurrentScore(cur.to_node->lead_role_index);
-                        if (score > best_score) {
-                            best_score = score;
-                            best = c;
-                        }
-
-                    } else {
-                        // not finalised, so more to explore
-                        more_to_explore = true;
-                    }
-                }
-
-                // special opportunist case...
-                if (best_score > 0.99) {
-                    more_to_explore = false;
-                }
-
-                if (more_to_explore) {
-                    best = nullptr;
-                }
-            }
-
-            if (best != nullptr) {
-                for (int ii=0; ii<role_count; ii++) {
-                    cur.to_node->setCurrentScore(ii, best->to_node->getCurrentScore(ii));
-                }
-
-                cur.to_node->is_finalised = true;
-            }
-        }
-
-        if (cur.to_node->is_finalised) {
-            for (int ii=0; ii<role_count; ii++) {
-                new_scores[ii] = cur.to_node->getCurrentScore(ii);
-            }
-
-        } else {
-            // we managed to do pretty well via using two different PUCT constants - see getPuctConstant()
-            // but if want to try doing some approximate minimax, try this
-            if (XXX_do_minimax_during_bp && prev != nullptr) {
-                const int some_min_max_visit_config = 8;
-
-                const PuctNodeChild* best = nullptr;
-                if (cur.to_node->visits > some_min_max_visit_config) {
-                    // find the best
-                    int best_visits = -1;
-
-                    for (int ii=0; ii<cur.to_node->num_children; ii++) {
-                        const PuctNodeChild* c = cur.to_node->getNodeChild(role_count, ii);
-                        if (c->to_node != nullptr && c->to_node->visits > best_visits) {
-                            best = c;
-                            best_visits = c->to_node->visits;
-                        }
-                    }
-                }
-
-                ASSERT(best != nullptr && best->to_node != nullptr);
-
-                if (prev->child != best && prev->to_node->visits != best->to_node->visits) {
-
-                    const int role_index = cur.to_node->lead_role_index;
-
-                    if (role_index != -1) {
-                        float best_score = best->to_node->getCurrentScore(role_index);
-                        bool improving = new_scores[role_index] > best_score;
-
-                        // if it looks like it improving, then let it go
-                        // i mean, I am all for exploration - but does it have to mess up the tree
-                        // in the process? ...
-                        if (!improving) {
-                            for (int ii=0; ii<this->sm->getRoleCount(); ii++) {
-
-                                new_scores[ii] = (0.6 * best->to_node->getCurrentScore(ii) +
-                                                  0.4 * new_scores[ii]);
-                            }
-                        }
-                    }
-                }
-            }
-
-            for (int ii=0; ii<this->sm->getRoleCount(); ii++) {
-                float score = (cur.to_node->visits * cur.to_node->getCurrentScore(ii) + new_scores[ii]) / (cur.to_node->visits + 1.0);
-                cur.to_node->setCurrentScore(ii, score);
-            }
+        for (int ii=0; ii<this->sm->getRoleCount(); ii++) {
+            float score = (cur.to_node->visits * cur.to_node->getCurrentScore(ii) + new_scores[ii]) / (cur.to_node->visits + 1.0);
+            cur.to_node->setCurrentScore(ii, score);
         }
 
         cur.to_node->visits++;
-        prev = &cur;
     }
 }
 
@@ -378,7 +258,7 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, int depth) {
 
             // ensure terminals are enforced more than other nodes (network can return 1.0f for
             // basically dumb moves, if it thinks it will win regardless)
-            if (cn->is_finalised) {
+            if (cn->isTerminal()) {
 
                 // return straight away at lower levels, for depth zero we still want a
                 // probability distribution
@@ -496,7 +376,7 @@ void PuctEvaluator::playoutLoop(int max_evaluations, double end_time) {
 
     if (this->conf->verbose) {
         if (iterations) {
-            K273::l_info("Time taken for %d/%d evaluations/iterations %.3f",
+            K273::l_info("Time taken for %d/%d evaluations/iterations in %.3f seconds",
                          this->evaluations, iterations, K273::get_time() - start_time);
 
             K273::l_debug("The average depth explored: %.2f, max depth: %d",

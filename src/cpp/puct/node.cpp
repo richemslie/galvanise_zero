@@ -127,8 +127,7 @@ static int initialiseChildHelper(PuctNode* node, int role_index, int child_index
 
 
 // This is a static method.
-PuctNode* PuctNode::create(PuctNode* parent,
-                           const BaseState* base_state,
+PuctNode* PuctNode::create(const BaseState* base_state,
                            StateMachineInterface* sm) {
 
     const int role_count = sm->getRoleCount();
@@ -179,9 +178,6 @@ PuctNode* PuctNode::create(PuctNode* parent,
                                   lead_role_index,
                                   total_children,
                                   role_count);
-
-    // XXX best place to do this?  or pass it in to ::createNode()...
-    node->parent = parent;
 
     if (!node->is_finalised) {
         char buf[JointMove::mallocSize(role_count)];

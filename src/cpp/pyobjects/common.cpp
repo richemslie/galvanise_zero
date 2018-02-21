@@ -150,8 +150,7 @@ static PyObject* doPoll(T* parent_caller, PyObject* args) {
 
     int predict_count;
     PyObject* predictions = nullptr;
-    if (!PyArg_ParseTuple(args, "iO!", &predict_count,
-                          &PyList_Type, &predictions)) {
+    if (!PyArg_ParseTuple(args, "iO!", &predict_count, &PyList_Type, &predictions)) {
         return nullptr;
     }
 
@@ -181,7 +180,7 @@ static PyObject* doPoll(T* parent_caller, PyObject* args) {
         const ReadyEvent* event = parent_caller->poll(predict_count, data);
 
         if (event->pred_count) {
-            // create a numpy array using our internal array
+            // create a 1D numpy array using our internal array.  It will be resized approriately in python.
             npy_intp dims[1]{event->pred_count};
             return PyArray_SimpleNewFromData(1, dims, NPY_FLOAT, event->channel_buf);
         }
