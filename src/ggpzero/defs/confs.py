@@ -197,6 +197,9 @@ class WorkerConfig(object):
     # run system commands to get the neural network isn't in data
     run_cmds_if_no_nn = attribute(default=attr_factory(list))
 
+    # will exit if there is an update to the config
+    exit_on_update_config = attribute(False)
+
 
 @register_attrs
 class ServerConfig(object):

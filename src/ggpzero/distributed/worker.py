@@ -137,6 +137,10 @@ class Worker(Broker):
             self.supervisor.start_self_play(self.self_play_conf, self.conf.num_workers)
 
         else:
+            # force exit of the worker if there was an update to the config
+            if self.conf.exit_on_update_config:
+                os._exit(0)
+
             self.supervisor.update_nn(self.nn)
             self.supervisor.clear_unique_states()
 
