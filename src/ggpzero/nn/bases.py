@@ -176,8 +176,7 @@ class GdlBasesTransformer(object):
                     continue
 
             if len(matched) != len(bc.board_terms):
-                print "Not matched", b_info.terms
-                continue
+               continue
 
             # create a BaseToBoardSpace
             key = tuple([b_info.terms[0]] + matched)
@@ -239,11 +238,11 @@ class GdlBasesTransformer(object):
         for cs in self.control_space:
             self.by_channel.setdefault(cs.channel_id + self.raw_channels_per_state, []).append(cs)
 
-        for channel_id, all in self.by_channel.items():
-            print
-            print "channel_id", channel_id
-            for x in all:
-                print base_infos[x.base_indx].terms, "->", x
+        # for channel_id, all in self.by_channel.items():
+        #    print
+        #    print "channel_id", channel_id
+        #    for x in all:
+        #        print base_infos[x.base_indx].terms, "->", x
 
     def state_to_channels(self, state, prev_states=None):
         assert prev_states is None or len(prev_states) <= self.num_previous_states
