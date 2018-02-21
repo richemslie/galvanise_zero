@@ -92,29 +92,6 @@ def ResidualBlock(*args, **kwds):
     return block
 
 
-def residual_one_by_one(last_filter_size, reqd, dropout=-1):
-    ''' I am not entirely sure why AGZ decided upon 1 and 2 filters for 1x1 before flattening.  for
-    its go architecture.  My best guess is that they want more than the next layer, and to keep the
-    weights low.
-
-    With that in mind, since we dont know what the next layer is - we calculate it instead of
-    specifying it.
-
-    XXX We use the size of layers being propagated through the resnet.  (this would get 1 and 2 as
-    per AGZ - but I am guessing here if this is a sane thing to do).  '''
-
-    if dropout > 0:
-        reqd *= (1 + dropout)
-
-    if reqd < last_filter_size:
-        return 1
-
-    if reqd % last_filter_size == 0:
-        return reqd / last_filter_size
-
-    return min(3, reqd / last_filter_size + 1)
-
-
 def get_network_model(conf):
     assert isinstance(conf, confs.NNModelConfig)
 
@@ -137,7 +114,7 @@ def get_network_model(conf):
                                             conf.input_channels),
                                      name="inputs_board")
 
-    # initial conv2d /Resnet on cords
+    # initial conv2d/Resnet on cords
     layer = Conv2DBlock(conf.cnn_filter_size, conf.cnn_kernel_size,
                         padding='same',
                         activation=activation,
@@ -159,8 +136,7 @@ def get_network_model(conf):
     policy_heads = []
     for idx, count in enumerate(conf.policy_dist_count):
         # residual net -> flattened for policy head
-        filters = residual_one_by_one(conf.cnn_filter_size, count)
-        to_flatten = Conv2DBlock(filters, 1,
+        to_flatten = Conv2DBlock(2, 1,
                                  name='to_flatten_policy_head_%s' % idx,
                                  padding='valid',
                                  activation=activation,
@@ -180,8 +156,7 @@ def get_network_model(conf):
         policy_heads.append(head)
 
     # residual net -> flattened for value head
-    filters = residual_one_by_one(conf.cnn_filter_size, conf.value_hidden_size)
-    to_flatten = Conv2DBlock(filters, 1,
+    to_flatten = Conv2DBlock(1, 1,
                              name='to_flatten_value_head',
                              padding='valid',
                              activation=activation,
