@@ -168,7 +168,9 @@ class TrainingController(keras_callbacks.Callback):
         log.debug("combined policy accuracy %.4f/%.4f" % (policy_acc, val_policy_acc))
 
         # store best weights as best val_policy_acc
+        set_best = False
         if val_policy_acc > self.best_val_policy_acc:
+            set_best = True
             log.debug("Setting best to last val_policy_acc %.4f" % val_policy_acc)
             self.best = self.model.get_weights()
             self.best_val_policy_acc = val_policy_acc
@@ -184,11 +186,12 @@ class TrainingController(keras_callbacks.Callback):
 
         # seems the first time around we should it give it chance (for breakthrough we didnt need
         # to, with reversi it takes at 10 epochs to stablize in the training).
-        if ((not self.retraining and epoch >= 10) or
+        if (not set_best and
+            (not self.retraining and epoch >= 6) or
             (self.retraining and epoch >= 3)):
 
             # if we are overfitting
-            if policy_acc - 0.02 > val_policy_acc:
+            if policy_acc - 0.03 > val_policy_acc:
                 log.info("Early stopping... since policy accuracy overfitting")
                 self.stop_training = True
 
@@ -259,7 +262,7 @@ class NeuralNetwork(object):
             if learning_rate:
                 optimizer = SGD(lr=learning_rate, momentum=0.9)
             else:
-                optimizer = SGD(momentum=0.9)
+                optimizer = SGD(lr=1e-2, momentum=0.9)
 
         elif compile_strategy == "adam":
             policy_objective = 'categorical_crossentropy'
@@ -282,12 +285,12 @@ class NeuralNetwork(object):
 
         loss = [policy_objective] * num_policies
         loss.append(value_objective)
-
         loss_weights = [1.0] * num_policies
         loss_weights.append(value_weight)
 
         if learning_rate is not None:
-            log.warning("Compiling with %s (learning_rate=%.4f, value_weight=%.3f)" % (optimizer, learning_rate, value_weight))
+            msg = "Compiling with %s (learning_rate=%.4f, value_weight=%.3f)"
+            log.warning(msg % (optimizer, learning_rate, value_weight))
         else:
             log.warning("Compiling with %s (value_weight=%.3f)" % (optimizer, value_weight))
 

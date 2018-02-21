@@ -29,18 +29,18 @@ class Configs:
         conf.generation_prefix = gen_prefix
         conf.batch_size = 1024
         conf.compile_strategy = "adam"
-        conf.drop_dupes_count = -1
-        conf.epochs = 20
+        conf.drop_dupes_count = 5
+        conf.epochs = 4
         conf.learning_rate = None
         conf.max_sample_count = 1000000
-        conf.next_step = 46
+        conf.next_step = 57
 
-        conf.overwrite_existing = True
+        conf.overwrite_existing = False
         conf.starting_step = 10
         conf.use_previous = False
         conf.validation_split = 0.90000
 
-        conf.resample_buckets = [[5, 1.0], [15, 0.8], [25, 0.6], [35, 0.4], [45, 0.2], [0, 0.1]]
+        conf.resample_buckets =  [[5, 1.0], [20, 0.5], [0, 0.25]]
 
         return conf
 
@@ -104,9 +104,9 @@ def get_nn_model(game, transformer, size="small"):
 
     config.cnn_filter_size = 128
     config.cnn_kernel_size = 3
-    config.dropout_rate_policy = -1
+    config.dropout_rate_policy = 0.25
     config.dropout_rate_value = 0.5
-    config.input_channels = 10
+    config.input_channels = 13
     config.input_columns = 8
     config.input_rows = 8
     config.l2_regularisation = False
@@ -118,7 +118,7 @@ def get_nn_model(game, transformer, size="small"):
     config.residual_layers = 8
     config.role_count = 2
     config.value_hidden_size = 192
-    config.leaky_relu = True
+    config.leaky_relu = False
 
     return config
 
@@ -133,7 +133,7 @@ def retrain(args):
 
     generation_descr = templates.default_generation_desc(train_config.game,
                                                          multiple_policy_heads=True,
-                                                         num_previous_states=3)
+                                                         num_previous_states=5)
 
     # create a transformer
     man = get_manager()

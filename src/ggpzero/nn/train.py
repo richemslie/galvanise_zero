@@ -140,7 +140,7 @@ class SamplesBuffer(object):
 
         starting_step = conf.starting_step
         if starting_step < 0:
-            starting_step = min(step - starting_step, 0)
+            starting_step = max(step + starting_step, 0)
 
         while step >= starting_step:
             store_path = man.samples_path(conf.game, conf.generation_prefix)
@@ -193,12 +193,10 @@ class LevelData(object):
         self.outputs = [o[perms] for o in self.outputs]
 
     def validation_split(self, validation_split):
-        ' shuffle input/outputs and split '
+        ' split input/outputs, DONT shuffle'
 
         self.inputs = reshape(self.inputs)
         self.outputs = [reshape(o) for o in self.outputs]
-
-        self.shuffle()
 
         train_count = int(len(self.inputs) * validation_split)
 
@@ -211,11 +209,6 @@ class LevelData(object):
             validation_outputs.append(o[train_count:])
         self.outputs = outputs
         self.validation_outputs = validation_outputs
-
-    def get(self, percent):
-        self.shuffle()
-        count = int(len(self.inputs) * percent)
-        return self.inputs[:count], self.outputs[:count]
 
     def get_number_outputs(self):
         return len(self.outputs)
@@ -461,17 +454,17 @@ class TrainManager(object):
             # resample the samples!
             inputs, outputs = resample_data(leveled_data, self.buckets)
 
-            if len(inputs) > conf.max_sample_count:
-                log.warning("stripping samples before training: %s > %s" % (len(inputs),
-                                                                            conf.max_sample_count))
-                inputs = inputs[:conf.max_sample_count]
-                outputs = [o[:conf.max_sample_count] for o in outputs]
+            #if len(inputs) > conf.max_sample_count:
+            #    log.warning("stripping samples before training: %s > %s" % (len(inputs),
+            #                                                                conf.max_sample_count))
+            #    inputs = inputs[:conf.max_sample_count]
+            #    outputs = [o[:conf.max_sample_count] for o in outputs]
 
             if i > 0:
                 log.info("controller.value_loss_diff %.3f" % controller.value_loss_diff)
 
                 orig_weight = value_weight
-                if orig_weight > 0.2 and controller.value_loss_diff > 0.001:
+                if orig_weight > 0.4 and controller.value_loss_diff > 0.001:
                     value_weight *= XX_value_weight_reduction
                 elif controller.value_loss_diff > 0.01:
                     value_weight *= XX_value_weight_reduction

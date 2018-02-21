@@ -175,6 +175,7 @@ class ServerBroker(Broker):
         self.workers[worker].cleanup()
         if self.workers[worker] == self.the_nn_trainer:
             self.the_nn_trainer = None
+            self.training_in_progress = False
 
         del self.workers[worker]
 
@@ -328,7 +329,6 @@ class ServerBroker(Broker):
         log.verbose("send_request_to_train_nn() @ step %s" % next_step)
 
         train_conf = self.conf.base_training_config
-        train_conf.use_previous = True
         assert train_conf.game == self.conf.game
         assert train_conf.generation_prefix == self.conf.generation_prefix
 
@@ -337,6 +337,12 @@ class ServerBroker(Broker):
         m = msgs.RequestNetworkTrain()
         m.game = self.conf.game
         m.train_conf = train_conf
+        # new network every 5 steps...  (XXX back again)
+        if next_step % 5 == 0:
+            m.train_conf.use_previous = False
+        else:
+            m.train_conf.use_previous = True
+
         m.network_model = self.conf.base_network_model
         m.generation_description = self.conf.base_generation_description
 

@@ -14,6 +14,7 @@ from ggpzero.nn.manager import get_manager
 
 
 class CppPUCTPlayer(MatchPlayer):
+    tiered = False
     def __init__(self, conf):
         self.conf = conf
         self.identifier = "cpp_%s_%s_%s" % (self.conf.name,
@@ -23,6 +24,7 @@ class CppPUCTPlayer(MatchPlayer):
         self.sm = None
 
     def on_meta_gaming(self, finish_time):
+        self.game_depth = 0
         if self.conf.verbose:
             log.info("CppPUCTPlayer, match id: %s" % self.match.match_id)
 
@@ -50,6 +52,7 @@ class CppPUCTPlayer(MatchPlayer):
         self.poller.player_reset()
 
     def on_apply_move(self, joint_move):
+        self.game_depth += 1
         self.poller.player_apply_move(joint_move_to_ptr(joint_move))
         self.poller.poll_loop()
 
@@ -72,6 +75,12 @@ class CppPUCTPlayer(MatchPlayer):
             max_iterations = self.conf.playouts_per_iteration_noop
 
         current_state = self.match.get_current_state()
+
+        if self.tiered:
+            if self.game_depth > 45:
+                max_iterations *= 4
+            elif self.game_depth > 35:
+                max_iterations *= 2
 
         self.poller.player_move(basestate_to_ptr(current_state), max_iterations, finish_time)
         self.poller.poll_loop()
