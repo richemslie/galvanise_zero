@@ -210,5 +210,5 @@ void NetworkScheduler::poll(const PredictDoneEvent* predict_done_event, ReadyEve
 
     // populate ready_event
     ready_event->channel_buf = this->channel_buf;
-    ready_event->pred_count = this->channel_buf_indx;
+    ready_event->buf_count = this->channel_buf_indx;
 }

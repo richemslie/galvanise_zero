@@ -11,7 +11,8 @@ namespace GGPZero {
     };
 
     struct ReadyEvent {
-        int pred_count;
+        // how much of the buffer is used (must be an exact multiple of channels*channel_size)
+        int buf_count;
         float* channel_buf;
     };
 }

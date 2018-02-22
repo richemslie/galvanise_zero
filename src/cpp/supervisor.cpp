@@ -203,12 +203,12 @@ void SelfPlayWorker::doWork() {
             this->enter_first_time = false;
 
             this->man0->startSelfPlayers(this->config);
-            this->man0->getReadyEvent()->pred_count = 0;
+            this->man0->getReadyEvent()->buf_count = 0;
             this->man0->poll();
             this->outbound_queue.push(this->man0);
 
             this->man1->startSelfPlayers(this->config);
-            this->man1->getReadyEvent()->pred_count = 0;
+            this->man1->getReadyEvent()->buf_count = 0;
             this->man1->poll();
             this->outbound_queue.push(this->man1);
         }

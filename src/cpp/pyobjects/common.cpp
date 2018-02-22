@@ -179,9 +179,10 @@ static PyObject* doPoll(T* parent_caller, PyObject* args) {
     try {
         const ReadyEvent* event = parent_caller->poll(predict_count, data);
 
-        if (event->pred_count) {
+        if (event->buf_count) {
             // create a 1D numpy array using our internal array.  It will be resized approriately in python.
-            npy_intp dims[1]{event->pred_count};
+            // will check it is of right dimensions/size in python
+            npy_intp dims[1]{event->buf_count};
             return PyArray_SimpleNewFromData(1, dims, NPY_FLOAT, event->channel_buf);
         }
 
