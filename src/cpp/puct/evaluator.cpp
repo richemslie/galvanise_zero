@@ -1,3 +1,9 @@
+/* 1.  add finalised back in
+ * 2.  in select, if finalised, optimize score based on distance (shortest if win, longest in loss)
+ * 3.  for 2, need to have av_distance on node
+ * 4.  for 3, need to back prop distance there
+ */
+
 
 #include "puct/evaluator.h"
 #include "puct/node.h"
@@ -268,7 +274,7 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, int depth) {
                     return c;
                 }
 
-                node_score *= 1.02f;
+                node_score *= 1.0f + puct_constant;
             }
         }
 
@@ -313,6 +319,11 @@ int PuctEvaluator::treePlayout() {
         ASSERT(current != nullptr);
         this->path.emplace_back(child, current);
 
+        // KKK if current is finalised
+        // minimize distance to end if winnning,
+        // maximize distance to end if losing
+        // and for draws dont run?
+
         // End of the road
         if (current->isTerminal()) {
             break;
@@ -336,6 +347,7 @@ int PuctEvaluator::treePlayout() {
     for (int ii=0; ii<this->sm->getRoleCount(); ii++) {
         scores[ii] = current->getCurrentScore(ii);
     }
+
 
     this->backPropagate(scores);
     return tree_playout_depth;
@@ -689,6 +701,18 @@ void PuctEvaluator::logDebug(const PuctNodeChild* choice_root) {
 
         bool sort_by_next_probability = (cur == this->root &&
                                          this->conf->choose == ChooseFn::choose_temperature);
+
+
+
+        // for side effects of displaying probabilities
+        Children dist;
+        if (cur->num_children > 0 && cur->visits > 0) {
+            if (cur->visits < cur->num_children) {
+                dist = this->getProbabilities(cur, 1.2, true);
+            } else {
+                dist = this->getProbabilities(cur, 1.2, false);
+            }
+        }
 
         PuctNode::dumpNode(cur, next_choice, indent, sort_by_next_probability, this->sm);
 

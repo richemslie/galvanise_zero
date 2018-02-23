@@ -75,6 +75,7 @@ PuctNode* SelfPlay::selectNode() {
         game_depth++;
     }
 
+
     ASSERT(node->game_depth == game_depth);
 
     for (int ii=0; ii<10; ii++) {
@@ -85,6 +86,20 @@ PuctNode* SelfPlay::selectNode() {
         if (game_depth - this->conf->max_number_of_samples > 0) {
             sample_start_depth = this->rng.getWithMax(game_depth -
                                                       this->conf->max_number_of_samples);
+
+            // because the games a shorter for these, dont run them so often
+            while (sample_start_depth > 0.8 * (game_depth - this->conf->max_number_of_samples)) {
+                if (this->rng.get() > 0.5) {
+                    sample_start_depth -= 5;
+                    if (sample_start_depth < 0) {
+                        sample_start_depth = 0;
+                        break;
+                    }
+
+                } else {
+                    break;
+                }
+            }
         }
 
         ASSERT(sample_start_depth >= 0);
@@ -192,7 +207,9 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
 
             // create a sample (call getProbabilities() to ensure probabilities are right for policy)
             // ZZZ should try changing this %
-            this->pe->getProbabilities(node, 1.0f, true);
+            // XXX this is balzy
+            this->pe->getProbabilities(node, 1.15f, true);
+
         } catch (NetworkReloaded&) {
             //this->pe->resetRoot();
             continue;
