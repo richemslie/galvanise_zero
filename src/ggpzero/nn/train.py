@@ -428,7 +428,9 @@ class TrainManager(object):
         # first get validation data, then we can forget about it as it doesn't need reshuffled
         validation_inputs, validation_outputs = validation_data(leveled_data, self.buckets)
 
-        training_logger = network.TrainingLoggerCb(conf.epochs)
+        num_epochs = conf.epochs if self.retraining else conf.epochs * 2
+
+        training_logger = network.TrainingLoggerCb(num_epochs)
         controller = network.TrainingController(self.retraining,
                                                 len(self.transformer.policy_dist_count))
 
@@ -445,7 +447,7 @@ class TrainManager(object):
 
         # num_samples = len(train_data.inputs)
 
-        for i in range(conf.epochs):
+        for i in range(num_epochs):
 
             if controller.stop_training:
                 log.warning("Stop training early via controller")
@@ -454,23 +456,21 @@ class TrainManager(object):
             # resample the samples!
             inputs, outputs = resample_data(leveled_data, self.buckets)
 
-            #if len(inputs) > conf.max_sample_count:
-            #    log.warning("stripping samples before training: %s > %s" % (len(inputs),
-            #                                                                conf.max_sample_count))
-            #    inputs = inputs[:conf.max_sample_count]
-            #    outputs = [o[:conf.max_sample_count] for o in outputs]
-
             if i > 0:
                 log.info("controller.value_loss_diff %.3f" % controller.value_loss_diff)
 
                 orig_weight = value_weight
-                if orig_weight > 0.4 and controller.value_loss_diff > 0.001:
+                if controller.value_loss_diff > 0.01:
                     value_weight *= XX_value_weight_reduction
-                elif controller.value_loss_diff > 0.01:
-                    value_weight *= XX_value_weight_reduction
+                elif orig_weight > 0.5 and controller.value_loss_diff > 0.001:
+                    value_weight *= (XX_value_weight_reduction * 2)
                 else:
-                    # increase it again...
-                    value_weight /= XX_value_weight_reduction
+                    # increase it again???
+                    if controller.value_loss_diff < 0:
+                        value_weight /= XX_value_weight_reduction
+
+                    elif orig_weight < 0.5 and controller.value_loss_diff < 0.002:
+                        value_weight /= (XX_value_weight_reduction * 2)
 
                 value_weight = min(max(XX_value_weight_min, value_weight), 1.0)
                 if abs(value_weight - orig_weight) > 0.0001:

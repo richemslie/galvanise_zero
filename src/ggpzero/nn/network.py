@@ -167,10 +167,12 @@ class TrainingController(keras_callbacks.Callback):
 
         log.debug("combined policy accuracy %.4f/%.4f" % (policy_acc, val_policy_acc))
 
+        # are we overitting?
+        overfitting = policy_acc - 0.02 > val_policy_acc
+
         # store best weights as best val_policy_acc
-        set_best = False
-        if val_policy_acc > self.best_val_policy_acc:
-            set_best = True
+        if (self.epoch_last_set_at is None or
+            (val_policy_acc > self.best_val_policy_acc and not overfitting)):
             log.debug("Setting best to last val_policy_acc %.4f" % val_policy_acc)
             self.best = self.model.get_weights()
             self.best_val_policy_acc = val_policy_acc
@@ -184,14 +186,10 @@ class TrainingController(keras_callbacks.Callback):
             self.retrain_best = self.model.get_weights()
             self.retrain_best_val_policy_acc = val_policy_acc
 
-        # seems the first time around we should it give it chance (for breakthrough we didnt need
-        # to, with reversi it takes at 10 epochs to stablize in the training).
-        if (not set_best and
-            (not self.retraining and epoch >= 6) or
-            (self.retraining and epoch >= 3)):
-
-            # if we are overfitting
-            if policy_acc - 0.03 > val_policy_acc:
+        # stop training:
+        if (not self.retraining and epoch >= 4 or
+            self.retraining and epoch >= 2):
+            if overfitting:
                 log.info("Early stopping... since policy accuracy overfitting")
                 self.stop_training = True
 
@@ -199,9 +197,6 @@ class TrainingController(keras_callbacks.Callback):
             if self.epoch_last_set_at is not None and epoch > self.epoch_last_set_at + 3:
                 log.info("Early stopping... since not improving")
                 self.stop_training = True
-
-        # always stop the model from continuing, so can gain control
-        self.model.stop_training = True
 
     def on_train_end(self, logs=None):
         if self.best:
