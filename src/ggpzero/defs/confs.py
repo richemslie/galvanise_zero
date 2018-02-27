@@ -153,9 +153,6 @@ class TrainNNConfig(object):
     batch_size = attribute(32)
     epochs = attribute(10)
 
-    # if the total number of samples is met, will trim the oldest samples
-    max_sample_count = attribute(250000)
-
     # this is applied even if max_sample_count can't be reached
     starting_step = attribute(0)
 
