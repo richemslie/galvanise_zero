@@ -312,7 +312,7 @@ class TrainManager(object):
 
         # simply update these
         for attr_name in ("use_previous next_step overwrite_existing "
-                          "validation_split batch_size epochs max_sample_count "
+                          "validation_split batch_size epochs "
                           "compile_strategy learning_rate".split()):
             value = getattr(train_config, attr_name)
             setattr(self.train_config, attr_name, value)
@@ -460,9 +460,9 @@ class TrainManager(object):
                 log.info("controller.value_loss_diff %.3f" % controller.value_loss_diff)
 
                 orig_weight = value_weight
-                if controller.value_loss_diff > 0.01:
+                if controller.value_loss_diff > 0.004:
                     value_weight *= XX_value_weight_reduction
-                elif orig_weight > 0.5 and controller.value_loss_diff > 0.001:
+                elif controller.value_loss_diff > 0.001:
                     value_weight *= (XX_value_weight_reduction * 2)
                 else:
                     # increase it again???
