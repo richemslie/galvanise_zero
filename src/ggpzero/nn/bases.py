@@ -61,10 +61,6 @@ class BaseToChannelSpace(object):
 
 
 class GdlBasesTransformer(object):
-    # XXX horrible way to say we have multiple_policy_heads
-    # XXX not too worry, going to deprecate this soon
-    policy_1_index_start = None
-
     def __init__(self, game_info, generation_descr, game_desc=None):
         assert isinstance(game_info, GameInfo)
         assert isinstance(generation_descr, datadesc.GenerationDescription)
@@ -80,15 +76,8 @@ class GdlBasesTransformer(object):
         sm_model = self.game_info.model
         self.role_count = len(self.game_info.model.roles)
 
-        if generation_descr.multiple_policy_heads:
-            self.policy_dist_count = [len(l) for l in sm_model.actions]
-        else:
-            assert self.role_count == 2
-            self.policy_dist_count = [sum(len(l) for l in sm_model.actions)]
-
-            # used for when we have a single policy_distribution being shared
-            self.policy_1_index_start = len(sm_model.actions[0])
-
+        assert generation_descr.multiple_policy_heads
+        self.policy_dist_count = [len(l) for l in sm_model.actions]
         self.final_score_count = len(sm_model.roles)
 
         # this is the 'image' data ordering for tensorflow/keras
@@ -317,42 +306,21 @@ class GdlBasesTransformer(object):
         assert len(sample.state) == len(self.base_infos)
         assert len(sample.final_score) == self.final_score_count
 
-        if isinstance(sample, datadesc.SampleOld):
-
+        assert isinstance(sample, datadesc.Sample)
+        for policy in sample.policies:
             total = 0.0
-            for legal, p in sample.policy:
+            for legal, p in policy:
                 assert -0.01 < p < 1.01
                 total += p
 
             assert 0.99 < total < 1.01
 
-            assert 0 <= sample.lead_role_index <= self.role_count
-
-        else:
-            assert isinstance(sample, datadesc.Sample)
-            for policy in sample.policies:
-                total = 0.0
-                for legal, p in policy:
-                    assert -0.01 < p < 1.01
-                    total += p
-
-                assert 0.99 < total < 1.01
-
         return sample
 
     def policy_to_array(self, policy, lead_role_index):
-        # ZZZ XXX deprecate single policy heads
-        if self.policy_1_index_start is not None:
-            index_start = 0 if lead_role_index == 0 else self.policy_1_index_start
-            array = np.zeros(self.policy_dist_count[0], dtype='float32')
-
-            for idx, prob in policy:
-                array[index_start + idx] = prob
-
-        else:
-            array = np.zeros(self.policy_dist_count[lead_role_index], dtype='float32')
-            for idx, prob in policy:
-                array[idx] = prob
+        array = np.zeros(self.policy_dist_count[lead_role_index], dtype='float32')
+        for idx, prob in policy:
+            array[idx] = prob
 
         return array
 
@@ -364,45 +332,15 @@ class GdlBasesTransformer(object):
 
         output = []
         # output - policies
-        if self.policy_1_index_start is not None:
-            if isinstance(sample, datadesc.SampleOld):
-                output.append(self.policy_to_array(sample.policy,
-                                                   sample.lead_role_index))
-            else:
-                assert False, "multiple policies are to be deprecated"
-
-        else:
-            if isinstance(sample, datadesc.SampleOld):
-                assert self.role_count == 2
-                assert len(self.policy_dist_count) == 2
-                # ZZZ XXX deprecate single policy heads
-                # XXX HACKSHACKSHACKSHACKS
-
-                if sample.lead_role_index == 0:
-                    array = self.policy_to_array(sample.policy, 0)
-                else:
-                    array = self.policy_to_array(self.noop_policy(0), 0)
-
-                output.append(array)
-
-                if sample.lead_role_index == 1:
-                    array = self.policy_to_array(sample.policy, 1)
-                else:
-                    array = self.policy_to_array(self.noop_policy(1), 1)
-
-                output.append(array)
-
-            else:
-                assert self.role_count == 2
-                assert len(self.policy_dist_count) == 2
-                for i in range(self.role_count):
-                    array = self.policy_to_array(sample.policies[i], i)
-                    output.append(array)
+        assert self.role_count == 2
+        assert len(self.policy_dist_count) == 2
+        for i in range(self.role_count):
+            array = self.policy_to_array(sample.policies[i], i)
+            output.append(array)
 
         # output - best/final scores
         output.append(np.array(sample.final_score, dtype='float32'))
         outputs.append(output)
 
     def noop_policy(self, ri):
-        assert self.policy_1_index_start is None
         return [(self.noop_legals[ri], 1.0)]

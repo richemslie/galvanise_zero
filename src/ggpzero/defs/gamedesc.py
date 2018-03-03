@@ -116,6 +116,16 @@ class Games(object):
                         "1 2 3 4 5 6 7 8".split(),
                         [cell], [control])
 
+    def reversi_10x10(self):
+        # one control channel
+        control = binary_control("control", "black", "white")
+        cell = simple_board_channels("cell", ["black", "white"])
+
+        return GameDesc("reversi",
+                        "1 2 3 4 5 6 7 8 9 10".split(),
+                        "1 2 3 4 5 6 7 8 9 10".split(),
+                        [cell], [control])
+
     def breakthroughSmall(self):
         control = binary_control("control", "white", "black")
         cell = simple_board_channels("cell", ["white", "black"])
@@ -165,6 +175,21 @@ class Games(object):
                         "1 2 3 4 5 6 7 8 9 10".split(),
                         [just_moved, cell], controls)
 
+    def amazons_10x10(self):
+        # 4 control channels
+        controls = [simple_control("turn", "black", "move"),
+                    simple_control("turn", "black", "fire"),
+                    simple_control("turn", "white", "move"),
+                    simple_control("turn", "white", "fire")]
+
+        just_moved = BoardChannels("justMoved", 1, 2)
+        cell = simple_board_channels("cell", ["white", "black", "arrow"])
+
+        return GameDesc("amazons_10x10",
+                        "1 2 3 4 5 6 7 8 9 10".split(),
+                        "1 2 3 4 5 6 7 8 9 10".split(),
+                        [just_moved, cell], controls)
+
     def atariGo_7x7(self):
         # one channel, sharing roles
         control = binary_control("control", "white", "black")
@@ -208,6 +233,28 @@ class Games(object):
         return GameDesc("hex",
                         "a b c d e f g h i".split(),
                         "1 2 3 4 5 6 7 8 9".split(),
+                        [cell], [control])
+
+    def hex_11x11(self):
+        control = binary_control("control", "red", "blue")
+        cell = simple_board_channels("cell", "red blue".split())
+
+        # bases: owner, connected and step - are optimisation tricks for propnet?
+
+        return GameDesc("hex",
+                        "a b c d e f g h i j k".split(),
+                        "1 2 3 4 5 6 7 8 9 10 11".split(),
+                        [cell], [control])
+
+    def hex_13x13(self):
+        control = binary_control("control", "red", "blue")
+        cell = simple_board_channels("cell", "red blue".split())
+
+        # bases: owner, connected and step - are optimisation tricks for propnet?
+
+        return GameDesc("hex",
+                        "a b c d e f g h i j k l m".split(),
+                        "1 2 3 4 5 6 7 8 9 10 11 12 13".split(),
                         [cell], [control])
 
     def connectFour(self):

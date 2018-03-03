@@ -15,6 +15,7 @@ from ggpzero.nn.manager import get_manager
 
 class CppPUCTPlayer(MatchPlayer):
     tiered = False
+
     def __init__(self, conf):
         self.conf = conf
         self.identifier = "cpp_%s_%s_%s" % (self.conf.name,
@@ -89,9 +90,8 @@ class CppPUCTPlayer(MatchPlayer):
 
 
 ###############################################################################
-# 6/2/2
 
-compete = confs.PUCTPlayerConfig(name="cpp_cl",
+compete = confs.PUCTPlayerConfig(name="clx",
                                  verbose=True,
 
                                  playouts_per_iteration=100,
@@ -101,19 +101,44 @@ compete = confs.PUCTPlayerConfig(name="cpp_cl",
 
                                  root_expansions_preset_visits=-1,
                                  puct_before_expansions=3,
-                                 puct_before_root_expansions=5,
-                                 puct_constant_before=5.0,
-                                 puct_constant_after=1.0,
+                                 puct_before_root_expansions=4,
+                                 puct_constant_before=3.0,
+                                 puct_constant_after=0.75,
 
                                  choose="choose_temperature",
                                  temperature=1.0,
-                                 depth_temperature_max=6.0,
-                                 depth_temperature_start=0,
-                                 depth_temperature_increment=1.0,
-                                 depth_temperature_stop=4,
-                                 random_scale=0.9,
+                                 depth_temperature_max=2.0,
+                                 depth_temperature_start=4,
+                                 depth_temperature_increment=0.25,
+                                 depth_temperature_stop=8,
+                                 random_scale=0.75,
 
                                  max_dump_depth=2)
+
+
+compete = confs.PUCTPlayerConfig(name="cl",
+                                  verbose=True,
+
+                                  playouts_per_iteration=100,
+                                  playouts_per_iteration_noop=0,
+
+                                  dirichlet_noise_alpha=-1,
+
+                                  root_expansions_preset_visits=-1,
+                                  puct_before_expansions=3,
+                                  puct_before_root_expansions=5,
+                                  puct_constant_before=5.0,
+                                  puct_constant_after=1.0,
+
+                                  choose="choose_temperature",
+                                  temperature=1.0,
+                                  depth_temperature_max=6.0,
+                                  depth_temperature_start=4,
+                                  depth_temperature_increment=1.0,
+                                  depth_temperature_stop=4,
+                                  random_scale=0.9,
+
+                                  max_dump_depth=2)
 
 
 def main():

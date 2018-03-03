@@ -12,10 +12,10 @@ import py.test
 
 ITERATIONS = 1
 
-current_gen = "v5_90"
+current_gen = "x6_111"
 
 # first in the run, completely random weights
-random_gen = "v5_0"
+random_gen = "x5_0"
 
 default_puct_config = confs.PUCTPlayerConfig(generation=current_gen,
                                              playouts_per_iteration=42,

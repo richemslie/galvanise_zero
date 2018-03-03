@@ -23,13 +23,6 @@ def objective_function_for_policy(y_true, y_pred):
 class HeadResult(object):
     def __init__(self, transformer, policies, values):
         assert len(transformer.policy_dist_count) == len(policies)
-
-        # ZZZ XXX deprecate single policy heads
-        if len(transformer.policy_dist_count) == 1 and transformer.role_count == 2:
-            assert transformer.policy_1_index_start is not None
-            policies = [policies[0][:transformer.policy_1_index_start],
-                        policies[0][transformer.policy_1_index_start:]]
-
         self.policies = policies
         self.scores = values
 

@@ -36,49 +36,6 @@ class Sample(object):
 
 
 @register_attrs
-class SampleOld(object):
-    # state policy trained on.  This is a tuple of 0/1s.  Effectively a bit array.
-    state = attr.ib([0, 0, 0, 1])
-
-    # list of previous state (first element is immediate parent of 'state')
-    prev_states = attr.ib([1, 0, 0, 1])
-
-    # hacked policy distribution.  Combines multiple policies into one.  Should sum to 1.
-    policy = attr.ib([0, 0, 0.5, 0.5])
-
-    # list of final scores for value head of network - list has same number as number of roles
-    final_score = attr.ib([0, 1])
-
-    # game depth at which point sample is taken
-    depth = attr.ib(42)
-
-    # total length of game
-    game_length = attr.ib(42)
-
-    # conceptually who's turn it is.  It is the role index (into sm.roles) if game has concept of
-    # 'turn'.  If not -1.  This is not a GGP concept.  Each player makes a move each turn (it
-    # may be a noop).  This has been removed entirely.  Keeping this around have a ton of data.
-    lead_role_index = attr.ib(-1)
-
-    # these are for debug.  The match_identifier can be used to extract contigous samples from the
-    # same match.
-    match_identifier = attr.ib("agame_421")
-    has_resigned = attr.ib(False)
-    resign_false_positive = attr.ib(False)
-    starting_sample_depth = attr.ib(42)
-
-    # the results after running the puct iterations
-    resultant_puct_score = attr.ib(attr.Factory(list))
-    resultant_puct_visits = attr.ib(800)
-
-    # XXX wtf?
-    initial_prediction_policy_probility = attr.ib('XXX remove')
-    initial_prediction_score = attr.ib('XXX remove')
-    resultant_puct_scores = attr.ib(attr.Factory(list))
-    initial_prediction_policy_index = attr.ib(attr.Factory(list))
-
-
-@register_attrs
 class GenerationSamples(object):
     game = attr.ib("game")
     date_created = attr.ib('2018-01-24 22:28')
@@ -89,7 +46,7 @@ class GenerationSamples(object):
     # number of samples in this generation
     num_samples = attr.ib(1024)
 
-    # the samples (list of either Sample/SampleOld)
+    # the samples (of type Sample)
     samples = attr.ib(attr.Factory(list))
 
 

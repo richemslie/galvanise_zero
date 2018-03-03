@@ -103,10 +103,3 @@ notes
    caffe2 for evaluations in c++ (or at least have the option to do so - the model library is
    already quite well abstracted out).
 
-
-previous runs
--------------
-The names are arbitrary.
-
-* [x2](https://github.com/ggplib/ggp-zero/blob/dev/doc/reversi_record_x2.md).
-* [v9](https://github.com/ggplib/ggp-zero/blob/dev/doc/reversi_record_v9.md).
