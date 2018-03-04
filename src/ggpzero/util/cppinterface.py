@@ -31,8 +31,6 @@ def basestate_to_ptr(basestate):
 
 
 def create_c_transformer(transformer):
-    print transformer.num_previous_states
-    assert transformer.policy_1_index_start is None
     TransformerClz = ggpzero_interface.GdlBasesTransformer
     c_transformer = TransformerClz(transformer.channel_size,
                                    transformer.raw_channels_per_state,
