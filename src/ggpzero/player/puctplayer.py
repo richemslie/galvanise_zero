@@ -13,21 +13,22 @@ from ggpzero.util.cppinterface import joint_move_to_ptr, basestate_to_ptr, PlayP
 from ggpzero.nn.manager import get_manager
 
 
-class CppPUCTPlayer(MatchPlayer):
+class PUCTPlayer(MatchPlayer):
     tiered = False
+    last_probability = -1
 
     def __init__(self, conf):
         self.conf = conf
-        self.identifier = "cpp_%s_%s_%s" % (self.conf.name,
-                                            self.conf.playouts_per_iteration,
-                                            conf.generation)
+        self.identifier = "%s_%s_%s" % (self.conf.name,
+                                        self.conf.playouts_per_iteration,
+                                        conf.generation)
         super().__init__(self.identifier)
         self.sm = None
 
     def on_meta_gaming(self, finish_time):
         self.game_depth = 0
         if self.conf.verbose:
-            log.info("CppPUCTPlayer, match id: %s" % self.match.match_id)
+            log.info("PUCTPlayer, match id: %s" % self.match.match_id)
 
         if self.sm is None or "*" in self.conf.generation:
             if "*" in self.conf.generation:
@@ -86,7 +87,9 @@ class CppPUCTPlayer(MatchPlayer):
         self.poller.player_move(basestate_to_ptr(current_state), max_iterations, finish_time)
         self.poller.poll_loop()
 
-        return self.poller.player_get_move(self.match.our_role_index)
+        move, prob = self.poller.player_get_move(self.match.our_role_index)
+        self.last_probability = prob
+        return move
 
 
 ###############################################################################
@@ -116,7 +119,7 @@ compete = confs.PUCTPlayerConfig(name="clx",
                                  max_dump_depth=2)
 
 
-compete = confs.PUCTPlayerConfig(name="cl",
+Xcompete = confs.PUCTPlayerConfig(name="cl",
                                   verbose=True,
 
                                   playouts_per_iteration=100,
@@ -165,7 +168,7 @@ def main():
         else:
             conf.playouts_per_iteration *= playouts_multiplier
 
-    player = CppPUCTPlayer(conf=conf)
+    player = PUCTPlayer(conf=conf)
 
     from ggplib.play import play_runner
     play_runner(player, port)
