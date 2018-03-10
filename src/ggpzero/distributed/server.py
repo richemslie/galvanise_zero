@@ -179,6 +179,10 @@ class ServerBroker(Broker):
 
         del self.workers[worker]
 
+    def do_ping(self, worker_info):
+        worker_info.worker.send_msg(msgs.Ping())
+        worker_info.ping_time_sent = time.time()
+
     def on_pong(self, worker, msg):
         info = self.workers[worker]
         log.info("worker %s, ping/pong time %.3f msecs" % (worker,
@@ -428,8 +432,12 @@ class ServerBroker(Broker):
                 else:
                     log.warning("capacity full! %d" % len(self.accumulated_samples))
                     new_free_players.append(worker_info)
+                    if time.time() > worker_info.ping_time_sent:
+                        self.do_ping(worker_info)
 
         self.free_players = new_free_players
+        if self.free_players:
+            reactor.callLater(10.0, self.schedule_players)
 
         if self.the_nn_trainer is None:
             log.warning("There is no nn trainer - please start")
