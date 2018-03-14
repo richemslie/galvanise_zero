@@ -284,6 +284,9 @@ class Games(object):
     def speedChess(self):
         return self._chess_like("speedChess")
 
+    def chess_150(self):
+        return self._chess_like("chess_150")
+
     def chess_200(self):
         return self._chess_like("chess_200")
 

@@ -251,7 +251,7 @@ def default_generation_desc(game, name="default", **kwds):
     desc.date_created = datetime.now().strftime("%Y/%m/%d %H:%M")
 
     desc.channel_last = False
-    desc.multiple_policy_heads = False
+    desc.multiple_policy_heads = True
     desc.num_previous_states = 0
     for k, v in kwds.items():
         setattr(desc, k, v)
