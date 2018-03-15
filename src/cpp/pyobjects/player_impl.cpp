@@ -6,7 +6,12 @@ struct PyObject_Player {
 };
 
 static PyObject* Player_player_reset(PyObject_Player* self, PyObject* args) {
-    self->impl->puctPlayerReset();
+    int game_depth = 0;
+    if (! ::PyArg_ParseTuple(args, "i", &game_depth)) {
+        return nullptr;
+    }
+
+    self->impl->puctPlayerReset(game_depth);
     Py_RETURN_NONE;
 }
 
@@ -41,8 +46,8 @@ static PyObject* Player_player_get_move(PyObject_Player* self, PyObject* args) {
         return nullptr;
     }
 
-    int res = self->impl->puctPlayerGetMove(lead_role_index);
-    return ::Py_BuildValue("i", res);
+    std::pair<int, float> res = self->impl->puctPlayerGetMove(lead_role_index);
+    return ::Py_BuildValue("if", res.first, res.second);
     Py_RETURN_NONE;
 }
 
@@ -51,7 +56,7 @@ static PyObject* Player_poll(PyObject_Player* self, PyObject* args) {
 }
 
 static struct PyMethodDef Player_methods[] = {
-    {"player_reset", (PyCFunction) Player_player_reset, METH_NOARGS, "player_reset"},
+    {"player_reset", (PyCFunction) Player_player_reset, METH_VARARGS, "player_reset"},
     {"player_apply_move", (PyCFunction) Player_player_apply_move, METH_VARARGS, "player_apply_move"},
     {"player_move", (PyCFunction) Player_player_move, METH_VARARGS, "player_move"},
     {"player_get_move", (PyCFunction) Player_player_get_move, METH_VARARGS, "player_get_move"},

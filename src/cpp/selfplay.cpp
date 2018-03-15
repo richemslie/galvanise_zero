@@ -53,7 +53,9 @@ float clamp(float value, float amount) {
 }
 
 PuctNode* SelfPlay::selectNode() {
-    PuctNode* node = this->pe->establishRoot(this->initial_state, 0);
+    // reset the puct evaluator and establish root
+    this->pe->reset(0);
+    PuctNode* node = this->pe->establishRoot(this->initial_state);
 
     this->pe->updateConf(this->conf->select_puct_config);
     const int iterations = this->conf->select_iterations;
@@ -129,7 +131,8 @@ PuctNode* SelfPlay::selectNode() {
         }
     }
 
-    return nullptr;
+    return node;
+    //return nullptr;
 }
 
 bool SelfPlay::resign(const PuctNode* node) {
@@ -181,9 +184,9 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
             this->manager->incrDupes();
 
             // break out here, no point playing randomly when samples have been taken
-            if (sample_count > 0) {
-                break;
-            }
+            //if (sample_count > 0) {
+            //    break;
+            //}
 
             // move to next state via selector
             {
@@ -301,9 +304,6 @@ void SelfPlay::playOnce() {
 
     this->resign0_false_positive_check_scores.clear();
     this->resign1_false_positive_check_scores.clear();
-
-    // reset the puct evaluator
-    this->pe->reset();
 
     // first select a starting point
     PuctNode* node = this->selectNode();

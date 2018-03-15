@@ -48,7 +48,7 @@ PuctEvaluator::PuctEvaluator(GGPLib::StateMachineInterface* sm,
 PuctEvaluator::~PuctEvaluator() {
     free(this->basestate_expand_node);
 
-    this->reset();
+    this->reset(0);
     delete this->conf;
 }
 
@@ -84,6 +84,7 @@ void PuctEvaluator::removeNode(PuctNode* node) {
 void PuctEvaluator::lookAheadTerminals(PuctNode* node) {
     ASSERT(!node->checked_for_finals);
     node->checked_for_finals = true;
+    return;
 
     const int role_count = this->sm->getRoleCount();
 
@@ -274,7 +275,9 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, int depth) {
                     return c;
                 }
 
-                node_score *= 1.0f + puct_constant;
+                if (node_score > 0.99) {
+                    node_score *= 1.0f + puct_constant;
+                }
             }
         }
 
@@ -460,7 +463,7 @@ void PuctEvaluator::applyMove(const GGPLib::JointMove* move) {
     }
 }
 
-void PuctEvaluator::reset() {
+void PuctEvaluator::reset(int game_depth) {
     // really free all
     if (this->initial_root != nullptr) {
         this->removeNode(this->initial_root);
@@ -476,17 +479,15 @@ void PuctEvaluator::reset() {
         K273::l_warning("Leaked memory %ld", this->node_allocated_memory);
     }
 
-    this->game_depth = 0;
-
     // these dont own the memory, so can just clear
     this->moves.clear();
     this->all_chained_nodes.clear();
+
+    // this is the only place we set game_depth
+    this->game_depth = game_depth;
 }
 
-PuctNode* PuctEvaluator::establishRoot(const GGPLib::BaseState* current_state, int game_depth) {
-    // needed for temperature
-    this->game_depth = game_depth;
-
+PuctNode* PuctEvaluator::establishRoot(const GGPLib::BaseState* current_state) {
     ASSERT(this->root == nullptr && this->initial_root == nullptr);
 
     if (current_state == nullptr) {

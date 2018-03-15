@@ -62,9 +62,9 @@ namespace GGPZero {
         int treePlayout();
         void playoutLoop(int max_evaluations, double end_time);
 
-        void reset();
+        void reset(int game_depth);
         PuctNode* fastApplyMove(const PuctNodeChild* next);
-        PuctNode* establishRoot(const GGPLib::BaseState* current_state, int game_depth);
+        PuctNode* establishRoot(const GGPLib::BaseState* current_state);
 
         const PuctNodeChild* onNextMove(int max_evaluations, double end_time=-1);
         void applyMove(const GGPLib::JointMove* move);

@@ -18,7 +18,8 @@ Player::Player(GGPLib::StateMachineInterface* sm,
     transformer(transformer),
     evaluator(nullptr),
     scheduler(nullptr),
-    first_play(false) {
+    first_play(false),
+    on_next_move_choice(nullptr) {
 
     // first create a scheduler
     const int batch_size = 1;
@@ -35,9 +36,9 @@ Player::~Player() {
     delete this->scheduler;
 }
 
-void Player::puctPlayerReset() {
+void Player::puctPlayerReset(int game_depth) {
     K273::l_verbose("Player::puctPlayerReset()");
-    this->evaluator->reset();
+    this->evaluator->reset(game_depth);
     this->first_play = true;
 }
 
@@ -47,7 +48,7 @@ void Player::puctApplyMove(const GGPLib::JointMove* move) {
     if (this->first_play) {
         this->first_play = false;
         auto f = [this, move]() {
-            this->evaluator->establishRoot(nullptr, 0);
+            this->evaluator->establishRoot(nullptr);
             this->evaluator->applyMove(move);
         };
 
@@ -63,6 +64,7 @@ void Player::puctApplyMove(const GGPLib::JointMove* move) {
 }
 
 void Player::puctPlayerMove(const GGPLib::BaseState* state, int iterations, double end_time) {
+    this->on_next_move_choice = nullptr;
     this->scheduler->createMainLoop();
 
     K273::l_verbose("Player::puctPlayerMove() - %d", iterations);
@@ -71,28 +73,34 @@ void Player::puctPlayerMove(const GGPLib::BaseState* state, int iterations, doub
     if (this->first_play) {
         this->first_play = false;
         auto f = [this, state, iterations, end_time]() {
-            this->evaluator->establishRoot(state, 0);
-            this->evaluator->onNextMove(iterations, end_time);
+            this->evaluator->establishRoot(state);
+            this->on_next_move_choice = this->evaluator->onNextMove(iterations, end_time);
         };
 
         this->scheduler->addRunnable(f);
 
     } else {
         auto f = [this, iterations, end_time]() {
-            this->evaluator->onNextMove(iterations, end_time);
+            this->on_next_move_choice = this->evaluator->onNextMove(iterations, end_time);
         };
 
         this->scheduler->addRunnable(f);
     }
 }
 
-int Player::puctPlayerGetMove(int lead_role_index) {
-    const PuctNodeChild* child = this->evaluator->choose();
-    if (child == nullptr) {
-        return -1;
+std::pair<int, float> Player::puctPlayerGetMove(int lead_role_index) {
+    if (this->on_next_move_choice == nullptr) {
+        return std::pair<int, float>(-1, -1);
     }
 
-    return child->move.get(lead_role_index);
+    float probability = -1;
+    const PuctNode* node = this->on_next_move_choice->to_node;
+    if (node != nullptr) {
+        probability = node->getCurrentScore(lead_role_index);
+    }
+
+    return std::pair<int, float>(this->on_next_move_choice->move.get(lead_role_index),
+                                 probability);
 }
 
 const ReadyEvent* Player::poll(int predict_count, std::vector <float*>& data) {

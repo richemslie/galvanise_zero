@@ -13,6 +13,7 @@ namespace GGPZero {
     // forwards
     class PuctConfig;
     class PuctEvaluator;
+    class PuctNodeChild;
     class NetworkScheduler;
     class GdlBasesTransformer;
 
@@ -26,10 +27,10 @@ namespace GGPZero {
 
     public:
         // python side
-        void puctPlayerReset();
+        void puctPlayerReset(int game_depth);
         void puctApplyMove(const GGPLib::JointMove* move);
         void puctPlayerMove(const GGPLib::BaseState* state, int iterations, double end_time);
-        int puctPlayerGetMove(int lead_role_index);
+        std::pair<int, float> puctPlayerGetMove(int lead_role_index);
 
         const ReadyEvent* poll(int predict_count, std::vector <float*>& data);
 
@@ -39,6 +40,9 @@ namespace GGPZero {
         NetworkScheduler* scheduler;
 
         bool first_play;
+
+        // store the choice of onNextMove()...
+        const PuctNodeChild* on_next_move_choice;
 
         // Events
         ReadyEvent ready_event;
