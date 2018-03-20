@@ -58,6 +58,7 @@ namespace GGPZero {
 
         PuctNodeChild* selectChild(PuctNode* node, int depth);
 
+        void backUpMiniMax(float* new_node, const PathElement* prev, const PathElement& cur);
         void backPropagate(float* new_scores);
         int treePlayout();
         void playoutLoop(int max_evaluations, double end_time);
