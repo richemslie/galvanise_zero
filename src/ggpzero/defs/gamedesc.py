@@ -214,6 +214,19 @@ class Games(object):
                         "1 2 3 4 5 6 7 8".split(),
                         [cell], [control, step])
 
+    def escortLatch2(self):
+        # one channel, sharing roles
+        control = binary_control("control", "white", "black")
+
+        step = step_control("step", 1, 61)
+
+        cell = simple_board_channels("cell", "bp wp wk bk".split())
+
+        return GameDesc("escortLatch2",
+                        "a b c d e f g h".split(),
+                        "1 2 3 4 5 6 7 8".split(),
+                        [cell], [control, step])
+
     def tron_10x10(self):
         # no controls
         cell = simple_board_channels("cell", ["v"])
