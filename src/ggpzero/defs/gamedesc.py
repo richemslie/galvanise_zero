@@ -218,7 +218,7 @@ class Games(object):
         # one channel, sharing roles
         control = binary_control("control", "white", "black")
 
-        step = step_control("step", 1, 61)
+        step = step_control("step", 1, 101)
 
         cell = simple_board_channels("cell", "bp wp wk bk".split())
 
