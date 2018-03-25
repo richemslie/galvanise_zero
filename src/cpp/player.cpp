@@ -63,25 +63,25 @@ void Player::puctApplyMove(const GGPLib::JointMove* move) {
     }
 }
 
-void Player::puctPlayerMove(const GGPLib::BaseState* state, int iterations, double end_time) {
+void Player::puctPlayerMove(const GGPLib::BaseState* state, int evaluations, double end_time) {
     this->on_next_move_choice = nullptr;
     this->scheduler->createMainLoop();
 
-    K273::l_verbose("Player::puctPlayerMove() - %d", iterations);
+    K273::l_verbose("Player::puctPlayerMove() - %d", evaluations);
 
     // this should only happen as first move in the game
     if (this->first_play) {
         this->first_play = false;
-        auto f = [this, state, iterations, end_time]() {
+        auto f = [this, state, evaluations, end_time]() {
             this->evaluator->establishRoot(state);
-            this->on_next_move_choice = this->evaluator->onNextMove(iterations, end_time);
+            this->on_next_move_choice = this->evaluator->onNextMove(evaluations, end_time);
         };
 
         this->scheduler->addRunnable(f);
 
     } else {
-        auto f = [this, iterations, end_time]() {
-            this->on_next_move_choice = this->evaluator->onNextMove(iterations, end_time);
+        auto f = [this, evaluations, end_time]() {
+            this->on_next_move_choice = this->evaluator->onNextMove(evaluations, end_time);
         };
 
         this->scheduler->addRunnable(f);
