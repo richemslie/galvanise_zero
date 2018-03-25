@@ -1,18 +1,13 @@
-INCLUDE_PATHS =-I$(GGPLIB_PATH)/src/cpp -I$(GGPZERO_PATH)/src/cpp
-LIB_PATHS = -L$(GGPLIB_PATH)/src/cpp
+include $(K273_PATH)/src/cpp/Makefile.in
 
-AR = ar
-RM = rm -f
-CPP = g++
+LIBS = -L $(K273_PATH)/src/cpp/k273 -lk273 -L$(GGPLIB_PATH)/src/cpp -lggplib_cpp -lpython2.7
+INCLUDE_PATHS += -I $(GGPLIB_PATH)/src/cpp -I.
 
-CFLAGS = -MMD -MP -g -Wall -Werror -Woverloaded-virtual -Wnon-virtual-dtor -fno-strict-aliasing -O3 -fPIC -std=c++11
+# since dll
+CFLAGS += -fPIC
 
-CFLAGS += $(shell python2-config --includes)
-
-LDFLAGS = -g -MMD -MP -Wall -Werror -Woverloaded-virtual -Wnon-virtual-dtor -fno-strict-aliasing -O3 -std=c++11
-
-#LDFLAGS += $(shell python2-config --ldflags)
-
+# python specific compile flags
+CFLAGS += -Wno-register -Wno-strict-aliasing $(shell python2-config --includes)
 
 SRCS = puct/node.cpp puct/evaluator.cpp
 SRCS += gdltransformer.cpp scheduler.cpp selfplay.cpp selfplaymanager.cpp
@@ -26,11 +21,11 @@ DEPS=$(SRCS:.cpp=.d)
 # Top level
 all: $(OBJS) ggpzero_interface.so
 
-fresh : clean all
-
 # Compiles
+#	$(CPP) -shared $(OBJS) $(LDFLAGS) $(LIB_PATHS) -pthread -lrt -lpython2.7 -lggplib_cpp -o ggpzero_interface.so
+
 ggpzero_interface.so: $(OBJS)
-	$(CPP) -shared $(OBJS) $(LDFLAGS) $(LIB_PATHS) -pthread -lrt -lpython2.7 -lggplib_cpp -o ggpzero_interface.so
+	$(CPP) -shared $(LDFLAGS) $(OBJS) $(LIBS) -o $@
 
 greenlet/greenlet-asm.o: greenlet/greenlet-asm.S
 	gcc -fPIC -c -o $@ $<
@@ -42,9 +37,7 @@ greenlet/greenlet-asm.o: greenlet/greenlet-asm.S
 clean :
 	$(RM) $(OBJS) $(DEPS)
 
-realclean : clean
-	$(RM) *.so *.log core*
 
 -include $(DEPS)
-.PHONY: all fresh clean realclean
+.PHONY: all clean
 
