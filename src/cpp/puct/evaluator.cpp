@@ -31,7 +31,7 @@ constexpr float XXX_minimax_backup_ratio = -1;
 constexpr int XXX_some_min_max_visit_config = 16;
 
 // scaling backprop (idea from galvanise)
-constexpr int XXX_scaled_visits_at = 10;
+constexpr int XXX_scaled_visits_at = -1;
 constexpr double XXX_scaled_visits_reduce = 10.0;
 constexpr double XXX_scaled_visits_finalised_reduce = 100.0;
 
@@ -43,6 +43,8 @@ constexpr bool XXX_backprop_finalised = true;
 
 // < 0, off
 constexpr float XXX_top_visits_best_guess_converge_ratio = 0.8;
+
+constexpr float XXX_cpuct_after_root_multiplier = 1.0;
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -212,6 +214,10 @@ bool PuctEvaluator::setDirichletNoise(int depth) {
 
 float PuctEvaluator::getPuctConstant(PuctNode* node, int depth) const {
     float constant = this->conf->puct_constant_after;
+    if (depth == 0) {
+        constant *= XXX_cpuct_after_root_multiplier;
+    }
+
     int num_expansions = depth == 0 ? this->conf->puct_before_root_expansions : this->conf->puct_before_expansions;
 
     // special case where num_children is less than num_expansions required to switch.  In this
