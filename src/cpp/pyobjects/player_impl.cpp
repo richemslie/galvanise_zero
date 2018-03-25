@@ -29,14 +29,14 @@ static PyObject* Player_player_apply_move(PyObject_Player* self, PyObject* args)
 
 static PyObject* Player_player_move(PyObject_Player* self, PyObject* args) {
     ssize_t ptr = 0;
-    int iterations = 0;
+    int evaluations = 0;
     double end_time = 0.0;
-    if (! ::PyArg_ParseTuple(args, "nid", &ptr, &iterations, &end_time)) {
+    if (! ::PyArg_ParseTuple(args, "nid", &ptr, &evaluations, &end_time)) {
         return nullptr;
     }
 
     GGPLib::BaseState* basestate = reinterpret_cast<GGPLib::BaseState*> (ptr);
-    self->impl->puctPlayerMove(basestate, iterations, end_time);
+    self->impl->puctPlayerMove(basestate, evaluations, end_time);
     Py_RETURN_NONE;
 }
 
