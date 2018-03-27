@@ -248,26 +248,15 @@ class Games(object):
                         "1 2 3 4 5 6 7 8 9".split(),
                         [cell], [control])
 
-    def hex_11x11(self):
-        control = binary_control("control", "red", "blue")
-        cell = simple_board_channels("cell", "red blue".split())
+    def hexLG11(self):
+        control = binary_control("control", "black", "white")
+        cell = simple_board_channels("cell", "black white".split())
 
         # bases: owner, connected and step - are optimisation tricks for propnet?
 
         return GameDesc("hex",
                         "a b c d e f g h i j k".split(),
                         "1 2 3 4 5 6 7 8 9 10 11".split(),
-                        [cell], [control])
-
-    def hex_13x13(self):
-        control = binary_control("control", "red", "blue")
-        cell = simple_board_channels("cell", "red blue".split())
-
-        # bases: owner, connected and step - are optimisation tricks for propnet?
-
-        return GameDesc("hex",
-                        "a b c d e f g h i j k l m".split(),
-                        "1 2 3 4 5 6 7 8 9 10 11 12 13".split(),
                         [cell], [control])
 
     def connectFour(self):
