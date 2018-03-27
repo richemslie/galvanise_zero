@@ -19,4 +19,4 @@ bin/install
 # spurious stuff in my repo XXX
 src/scripts
 data
-src/ggpzero/distributed/confs
+confs/
