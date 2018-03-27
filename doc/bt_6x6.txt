@@ -1,0 +1,33 @@
+After getting gen 93, starting showing a 77% chance of white winning first move.  And playing
+gen 88 v 93, they were 90% wins for white.
+
+Put in up against Gurgeh (fast vanilla MCTS, with transpositions & MCTS prover).
+Gurgeh expands to ~20 million MCTS nodes each turn (including opponent).
+
+
+Gurgeh V gzero
+--------------
+gzero won in 23 moves.
+
+gzero probabilities:
+move 1 - 0.33
+move 3 - 0.35
+move 5 - 0.82
+move 7 - 0.97
+
+Gurgeh see forces loss @ move 12 (was 50/50 up to that point).
+
+
+gzero v Gurgeh
+--------------
+gzero won in 36 moves.
+
+gzero probabilities:
+move 0 - 0.73
+move 2 - 0.78
+move 4 - 0.84
+move 6 - 0.97
+move 8 - 1.00
+
+Gurgeh see forces loss @ move 15 (was 50/50 up to that point).
+
