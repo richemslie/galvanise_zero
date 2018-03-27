@@ -269,7 +269,6 @@ def train_config_template(game, gen_prefix):
     conf.validation_split = 0.9
     conf.batch_size = 128
     conf.epochs = 20
-    conf.max_sample_count = 300000
     conf.starting_step = 0
     conf.drop_dupes_count = 3
     conf.overwrite_existing = False
