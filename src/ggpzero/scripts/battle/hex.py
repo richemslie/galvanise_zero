@@ -52,21 +52,24 @@ def config(gen):
 
                                   max_dump_depth=2)
 
+def swapaxis(s):
+    mapping_x = {x1 : x0 for x0, x1 in zip('abcdefghi', '123456789')}
+    mapping_y = {x0 : x1 for x0, x1 in zip('abcdefghi', '123456789')}
+    for x0, x1 in zip(('j', 'k', 'l', 'm'), ('10', '11', '12', '13')):
+        mapping_x[x1] = x0
+        mapping_y[x0] = x1
 
-def play_game(gen0, gen1, move_time=10.0):
+    return "%s%s" % (mapping_x[s[1]], mapping_y[s[0]])
+
+def play_game(gen0, gen1, game_size=11, move_time=10.0):
     # add players
-    gm = GameMaster(get_gdl_for_game("hexLG11"))
+    gm = GameMaster(get_gdl_for_game("hexLG%s" % game_size))
     gm.add_player(PUCTPlayer(config(gen0)), "black")
     gm.add_player(PUCTPlayer(config(gen1)), "white")
 
     # play move via gamemaster:
     gm.reset()
     gm.start(meta_time=15, move_time=move_time)
-
-    def swapaxis(s):
-        mapping_x = {x1 : x0 for x0, x1 in zip('abcdefghi', '123456789')}
-        mapping_y = {x0 : x1 for x0, x1 in zip('abcdefghi', '123456789')}
-        return mapping_x[s[1]], mapping_y[s[0]]
 
     def remove_gdl(m):
         return m.replace("(place ", "").replace(")", "").strip().replace(' ', '')
@@ -84,14 +87,15 @@ def play_game(gen0, gen1, move_time=10.0):
         sgf_moves.append((ri, str_move))
 
         if str_move == "swap":
-            sgf_moves[0][1] = swapaxis(sgf_moves[0][1])
+            sgf_moves[0] = (0, swapaxis(sgf_moves[0][1]))
 
     for ri, m in sgf_moves:
         print ri, m
 
     x = hashlib.md5(hashlib.sha1("%.5f" % time.time()).hexdigest()).hexdigest()[:6]
     with open("game_%s_%s_%s.sgf" % (gen0, gen1, x), "w") as f:
-        f.write("(;FF[4]EV[null]PB[%s]PW[%s]SZ[11]GC[game#%s];" % (gen1, gen0, x))
+        f.write("(;FF[4]EV[null]PB[%s]PW[%s]SZ[%s]GC[game#%s];" % (gen1, gen0, game_size, x))
+        # piece colours are swapped for hexgui from LG
         for ri, m in sgf_moves:
             f.write("%s[%s];" % ("W" if ri == 0 else "B", m))
         f.write(")\n")
@@ -101,12 +105,15 @@ if __name__ == "__main__":
 
     try:
         setup()
-        gens = "x1_19", "x1_23"
-        game_time = 5.0
+        game_size = 13
+        gens = "x1_5", "x1_9"
+        move_time = 10.0
+
         number_of_games = 1
 
-        for i in range(4):
-            play_game(gens[0], gens[1], game_time)
+        for i in range(number_of_games):
+            play_game(gens[0], gens[1],
+                      game_size=game_size, move_time=move_time)
             #gens = gens[1], gens[0]
 
     except Exception as exc:
