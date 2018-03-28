@@ -14,7 +14,6 @@ from ggpzero.nn.manager import get_manager
 
 
 class PUCTPlayer(MatchPlayer):
-    tiered = False
     last_probability = -1
 
     def __init__(self, conf):
@@ -26,7 +25,6 @@ class PUCTPlayer(MatchPlayer):
         self.sm = None
 
     def on_meta_gaming(self, finish_time):
-        self.game_depth = 0
         if self.conf.verbose:
             log.info("PUCTPlayer, match id: %s" % self.match.match_id)
 
@@ -51,10 +49,9 @@ class PUCTPlayer(MatchPlayer):
 
             self.role0_noop_legal, self.role1_noop_legal = map(get_noop_idx, game_info.model.actions)
 
-        self.poller.player_reset()
+        self.poller.player_reset(self.match.game_depth)
 
     def on_apply_move(self, joint_move):
-        self.game_depth += 1
         self.poller.player_apply_move(joint_move_to_ptr(joint_move))
         self.poller.poll_loop()
 
@@ -78,12 +75,6 @@ class PUCTPlayer(MatchPlayer):
 
         current_state = self.match.get_current_state()
 
-        if self.tiered:
-            if self.game_depth > 45:
-                max_iterations *= 4
-            elif self.game_depth > 35:
-                max_iterations *= 2
-
         self.poller.player_move(basestate_to_ptr(current_state), max_iterations, finish_time)
         self.poller.poll_loop()
 
@@ -104,17 +95,17 @@ compete = confs.PUCTPlayerConfig(name="clx",
 
                                  root_expansions_preset_visits=-1,
                                  puct_before_expansions=3,
-                                 puct_before_root_expansions=4,
+                                 puct_before_root_expansions=5,
                                  puct_constant_before=3.0,
                                  puct_constant_after=0.75,
 
                                  choose="choose_temperature",
-                                 temperature=1.0,
-                                 depth_temperature_max=2.0,
-                                 depth_temperature_start=4,
-                                 depth_temperature_increment=0.25,
-                                 depth_temperature_stop=8,
-                                 random_scale=0.75,
+                                 temperature=1.5,
+                                 depth_temperature_max=3.0,
+                                 depth_temperature_start=0,
+                                 depth_temperature_increment=0.5,
+                                 depth_temperature_stop=4,
+                                 random_scale=1.00,
 
                                  max_dump_depth=2)
 
@@ -127,7 +118,7 @@ Xcompete = confs.PUCTPlayerConfig(name="cl",
 
                                   dirichlet_noise_alpha=-1,
 
-                                  root_expansions_preset_visits=-1,
+                                  root_expansions_preset_visits=2,
                                   puct_before_expansions=3,
                                   puct_before_root_expansions=5,
                                   puct_constant_before=5.0,
