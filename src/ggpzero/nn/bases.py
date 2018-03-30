@@ -70,17 +70,17 @@ class GdlBasesTransformer(object):
         assert isinstance(generation_descr, datadesc.GenerationDescription)
         self.game_info = game_info
 
-        # XXX for now
-        self.game_desc = game_desc
-        self.verbose = verbose
+        if game_desc is None:
+           game_desc = getattr(gamedesc.Games(), self.game)()
 
-        if self.game_desc is None:
-            self.game_desc = getattr(gamedesc.Games(), self.game)()
-        assert isinstance(self.game_desc, gamedesc.GameDesc)
+        assert isinstance(game_desc, gamedesc.GameDesc)
+        self.game_desc = game_desc
+
+        self.verbose = verbose
 
         # for the number of outputs of the network
         sm_model = self.game_info.model
-        self.role_count = len(self.game_info.model.roles)
+        self.role_count = len(sm_model.roles)
 
         assert generation_descr.multiple_policy_heads
         self.policy_dist_count = [len(l) for l in sm_model.actions]
@@ -88,19 +88,9 @@ class GdlBasesTransformer(object):
 
         # this is the 'image' data ordering for tensorflow/keras
         self.channel_last = generation_descr.channel_last
-
         self.num_previous_states = generation_descr.num_previous_states
+
         assert self.num_previous_states >= 0
-
-        def get_noop_idx(actions):
-            for idx, a in enumerate(actions):
-                if "noop" in a:
-                    return idx
-
-            log.warning("did not find noop move in game %s" % self.game_info.game)
-            return None
-
-        self.noop_legals = map(get_noop_idx, game_info.model.actions)
         self.init_spaces()
 
     @property
@@ -292,28 +282,6 @@ class GdlBasesTransformer(object):
 
         return channels
 
-    def null_state(self):
-        return tuple(0 for _ in range(self.num_bases))
-
-    def identifier(self, state, prev_states=None):
-        if self.num_previous_states > 0:
-            if prev_states is None:
-                prev_states = [self.null_state() for _ in range(self.num_previous_states)]
-            else:
-                assert len(prev_states) <= self.num_previous_states
-                while len(prev_states) < self.num_previous_states:
-                    prev_states.append(self.null_state())
-        else:
-            assert not prev_states
-            prev_states = []
-
-        identifier = state[:]
-        for l in prev_states:
-            identifier += l
-
-        assert len(identifier) == self.num_bases * (1 + self.num_previous_states)
-        return tuple(identifier)
-
     def check_sample(self, sample):
         assert len(sample.state) == self.num_bases
         assert len(sample.final_score) == self.final_score_count
@@ -343,6 +311,7 @@ class GdlBasesTransformer(object):
         inputs.append(self.state_to_channels(sample.state, sample.prev_states))
 
         output = []
+
         # output - policies
         assert self.role_count == 2
         assert len(self.policy_dist_count) == 2
@@ -353,7 +322,4 @@ class GdlBasesTransformer(object):
         # output - best/final scores
         output.append(np.array(sample.final_score, dtype='float32'))
         outputs.append(output)
-
-    def noop_policy(self, ri):
-        return [(self.noop_legals[ri], 1.0)]
 
