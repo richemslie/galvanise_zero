@@ -80,6 +80,8 @@ static PuctConfig* createPuctConfig(PyObject* dict) {
     config->depth_temperature_stop = asInt("depth_temperature_stop");
     config->depth_temperature_max = asFloat("depth_temperature_max");
 
+    config->fpu_prior_discount = asFloat("fpu_prior_discount");
+
     std::string choose_method = asString("choose");
     if (choose_method == "choose_top_visits") {
         config->choose = ChooseFn::choose_top_visits;

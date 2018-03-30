@@ -29,13 +29,12 @@ namespace GGPZero {
         float random_scale;
 
         float temperature;
-
         int depth_temperature_start;
-
         float depth_temperature_increment;
+        int depth_temperature_stop;
         float depth_temperature_max;
 
-        int depth_temperature_stop;
+        float fpu_prior_discount;
 
         static PuctConfig* defaultConfig();
 

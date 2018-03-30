@@ -25,6 +25,8 @@ using namespace GGPZero;
 
 // XXX yet even more attributes to add:
 
+constexpr bool XXX_playmode = false;
+
 // do a minimax during backprop - not had much success with this.
 // < 0 off
 constexpr float XXX_minimax_backup_ratio = -1;
@@ -214,7 +216,8 @@ bool PuctEvaluator::setDirichletNoise(int depth) {
 
 float PuctEvaluator::getPuctConstant(PuctNode* node, int depth) const {
     float constant = this->conf->puct_constant_after;
-    if (depth == 0) {
+
+    if (XXX_cpuct_after_root_multiplier > 1.0 && depth == 0) {
         constant *= XXX_cpuct_after_root_multiplier;
     }
 
@@ -222,14 +225,10 @@ float PuctEvaluator::getPuctConstant(PuctNode* node, int depth) const {
 
     // special case where num_children is less than num_expansions required to switch.  In this
     // case we switch to puct_constant_after as soon as we expanded everything
-    if (node->num_children < num_expansions) {
-        if (node->num_children != num_expansions) {
-            constant = this->conf->puct_constant_before;
-        }
-    } else {
-        if (node->num_children_expanded < num_expansions) {
-            constant = this->conf->puct_constant_before;
-        }
+    num_expansions = std::min((int)node->num_children, num_expansions);
+
+    if (node->num_children_expanded < num_expansions) {
+        constant = this->conf->puct_constant_before;
     }
 
     return constant;
@@ -396,7 +395,7 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, int depth) {
 
     float puct_constant = this->getPuctConstant(node, depth);
 
-    float sqrt_node_visits = ::sqrt(node->visits + 1);
+    float sqrt_node_visits = std::sqrt(node->visits + 1);
 
     // get best
     PuctNodeChild* best_child = nullptr;
@@ -411,13 +410,32 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, int depth) {
       * maximize distance to end if losing
 */
 
+    // prior... (alpha go zero said 0 but there score ranges from [-1,1]
+    float prior_score = 0.0;
+    if (!do_dirichlet_noise && this->conf->fpu_prior_discount > 0) {
+        // original value from network / or terminal value
+        prior_score = node->getFinalScore(node->lead_role_index);
+
+        float total_policy_visited = 0.0;
+        for (int ii=0; ii<node->num_children; ii++) {
+            PuctNodeChild* c = node->getNodeChild(this->sm->getRoleCount(), ii);
+            if (c->to_node != nullptr) {
+                if (c->to_node->visits > 0) {
+                    total_policy_visited += c->policy_prob;
+                }
+            }
+        }
+
+        float fpu_reduction = this->conf->fpu_prior_discount * std::sqrt(total_policy_visited);
+        prior_score = prior_score - fpu_reduction;
+    }
+
     for (int ii=0; ii<node->num_children; ii++) {
         PuctNodeChild* c = node->getNodeChild(this->sm->getRoleCount(), ii);
 
         float child_visits = 0.0f;
 
-        // prior... (alpha go zero said 0 but there score ranges from [-1,1]
-        float node_score = 0.0f;
+        float node_score = prior_score;
 
         float child_pct = c->policy_prob;
 
@@ -430,6 +448,10 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, int depth) {
             // basically dumb moves, if it thinks it will win regardless)
             if (cn->is_finalised) {
                 if (node_score > 0.99) {
+                    if (XXX_playmode) {
+                        return c;
+                    }
+
                     node_score *= 1.0f + puct_constant;
 
                 } else {
@@ -479,6 +501,10 @@ int PuctEvaluator::treePlayout() {
         this->path.emplace_back(child, current);
 
         // End of the road
+        if (XXX_playmode && current->is_finalised) {
+            break;
+        }
+
         if (current->isTerminal()) {
             break;
         }
@@ -515,16 +541,22 @@ void PuctEvaluator::playoutLoop(int max_evaluations, double end_time) {
     int max_iterations = max_evaluations * 42;
 
     if (max_evaluations < 0) {
-        max_iterations = max_evaluations = INT_MAX;
+        max_iterations = INT_MAX;
     }
 
     int iterations = 0;
     this->evaluations = 0;
     double start_time = K273::get_time();
 
+    double next_report_time = -1;
+
+    if (XXX_playmode) {
+        next_report_time = K273::get_time() + 2.5;
+    }
+
     while (iterations < max_iterations) {
 
-        if (this->evaluations > max_evaluations) {
+        if (max_evaluations > 0 && this->evaluations > max_evaluations) {
             break;
         }
 
@@ -537,6 +569,18 @@ void PuctEvaluator::playoutLoop(int max_evaluations, double end_time) {
         total_depth += depth;
 
         iterations++;
+
+        if (next_report_time > 0 && K273::get_time() > next_report_time) {
+            next_report_time = K273::get_time() + 2.5;
+
+            auto children = PuctNode::sortedChildren(this->root,
+                                                     this->sm->getRoleCount());
+
+            K273::l_info("Evals %d/%d, depth %.2f/%d, best: %.4f",
+                         this->evaluations, iterations,
+                         total_depth / float(iterations), max_depth,
+                         children[0]->to_node->getCurrentScore(this->root->lead_role_index));
+        }
     }
 
     if (this->conf->verbose) {
@@ -675,7 +719,9 @@ const PuctNodeChild* PuctEvaluator::onNextMove(int max_evaluations, double end_t
 
     const PuctNodeChild* choice = this->choose();
 
-    if (max_evaluations > 0 && this->conf->verbose) {
+    // this is a hack to only show tree when it is our 'turn'.  Be better to use skip opponent turn
+    // flag than abuse this value (XXX).
+    if (max_evaluations != 0 && this->conf->verbose) {
         this->logDebug(choice);
     }
 
