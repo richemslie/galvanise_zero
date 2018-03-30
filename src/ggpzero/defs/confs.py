@@ -38,6 +38,11 @@ class PUCTEvaluatorConfig(object):
     depth_temperature_stop = attribute(10)
     depth_temperature_max = attribute(5.0)
 
+    # popular leela-zero feature: First Play Urgency.  When the policy space is large - this might
+    # be neccessary.  If > 0, applies the prior of the parent, minus a discount to unvisited nodes
+    # < 0 is off.
+    fpu_prior_discount = attribute(-1)
+
 
 @register_attrs
 class PUCTPlayerConfig(object):
@@ -48,7 +53,6 @@ class PUCTPlayerConfig(object):
 
     # XXX player only attributes
     generation = attribute("latest")
-    resign_score_value = attribute(-1)
     playouts_per_iteration = attribute(800)
     playouts_per_iteration_noop = attribute(1)
     playouts_per_iteration_resign = attribute(1)
