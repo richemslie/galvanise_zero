@@ -27,7 +27,7 @@ def setup():
 
 
 def config(gen):
-    return confs.PUCTPlayerConfig(name="hex_config",
+    return confs.PUCTPlayerConfig(name=gen,
                                   generation=gen,
                                   verbose=True,
 
@@ -35,6 +35,7 @@ def config(gen):
                                   playouts_per_iteration_noop=0,
 
                                   dirichlet_noise_alpha=-1,
+
 
                                   root_expansions_preset_visits=1,
                                   puct_before_expansions=3,
@@ -50,7 +51,10 @@ def config(gen):
                                   depth_temperature_stop=6,
                                   random_scale=1.00,
 
+                                  fpu_score_with_discount=-1,
+
                                   max_dump_depth=2)
+
 
 def swapaxis(s):
     mapping_x = {x1 : x0 for x0, x1 in zip('abcdefghi', '123456789')}
@@ -61,11 +65,12 @@ def swapaxis(s):
 
     return "%s%s" % (mapping_x[s[1]], mapping_y[s[0]])
 
-def play_game(gen0, gen1, game_size=11, move_time=10.0):
+
+def play_game(config_0, config_1, game_size=11, move_time=10.0):
     # add players
     gm = GameMaster(get_gdl_for_game("hexLG%s" % game_size))
-    gm.add_player(PUCTPlayer(config(gen0)), "black")
-    gm.add_player(PUCTPlayer(config(gen1)), "white")
+    gm.add_player(PUCTPlayer(config_0), "black")
+    gm.add_player(PUCTPlayer(config_1), "white")
 
     # play move via gamemaster:
     gm.reset()
@@ -93,8 +98,8 @@ def play_game(gen0, gen1, game_size=11, move_time=10.0):
         print ri, m
 
     x = hashlib.md5(hashlib.sha1("%.5f" % time.time()).hexdigest()).hexdigest()[:6]
-    with open("game_%s_%s_%s.sgf" % (gen0, gen1, x), "w") as f:
-        f.write("(;FF[4]EV[null]PB[%s]PW[%s]SZ[%s]GC[game#%s];" % (gen1, gen0, game_size, x))
+    with open("game_%s_%s_%s.sgf" % (config_0.name, config_1.name, x), "w") as f:
+        f.write("(;FF[4]EV[null]PB[%s]PW[%s]SZ[%s]GC[game#%s];" % (config_1.name, config_0.name, game_size, x))
         # piece colours are swapped for hexgui from LG
         for ri, m in sgf_moves:
             f.write("%s[%s];" % ("W" if ri == 0 else "B", m))
@@ -106,15 +111,21 @@ if __name__ == "__main__":
     try:
         setup()
         game_size = 13
-        gens = "x1_5", "x1_9"
+
+        config_0 = config("x1_15")
+        config_1 = config("x1_15")
+
+        config_0.name += "_fpu"
+        config_0.fpu_score_with_discount = 0.85
+
         move_time = 10.0
 
-        number_of_games = 1
+        number_of_games = 2
 
         for i in range(number_of_games):
-            play_game(gens[0], gens[1],
+            play_game(config_0, config_1,
                       game_size=game_size, move_time=move_time)
-            #gens = gens[1], gens[0]
+            config_0, config_1 = config_1, config_0
 
     except Exception as exc:
         print exc

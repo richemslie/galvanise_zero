@@ -85,7 +85,7 @@ class PUCTPlayer(MatchPlayer):
 
 ###############################################################################
 
-compete = confs.PUCTPlayerConfig(name="clx",
+compete = confs.PUCTPlayerConfig(name="puct",
                                  verbose=True,
 
                                  playouts_per_iteration=100,
@@ -100,39 +100,16 @@ compete = confs.PUCTPlayerConfig(name="clx",
                                  puct_constant_after=0.75,
 
                                  choose="choose_temperature",
-                                 temperature=1.5,
-                                 depth_temperature_max=3.0,
+                                 temperature=1.0,
+                                 depth_temperature_max=5.0,
                                  depth_temperature_start=0,
                                  depth_temperature_increment=0.5,
-                                 depth_temperature_stop=4,
+                                 depth_temperature_stop=10,
                                  random_scale=1.00,
 
+                                 fpu_prior_discount=-1,
+
                                  max_dump_depth=2)
-
-
-Xcompete = confs.PUCTPlayerConfig(name="cl",
-                                  verbose=True,
-
-                                  playouts_per_iteration=100,
-                                  playouts_per_iteration_noop=0,
-
-                                  dirichlet_noise_alpha=-1,
-
-                                  root_expansions_preset_visits=2,
-                                  puct_before_expansions=3,
-                                  puct_before_root_expansions=5,
-                                  puct_constant_before=5.0,
-                                  puct_constant_after=1.0,
-
-                                  choose="choose_temperature",
-                                  temperature=1.0,
-                                  depth_temperature_max=6.0,
-                                  depth_temperature_start=4,
-                                  depth_temperature_increment=1.0,
-                                  depth_temperature_stop=4,
-                                  random_scale=0.9,
-
-                                  max_dump_depth=2)
 
 
 def main():
@@ -140,20 +117,24 @@ def main():
 
     init()
 
-    port = int(sys.argv[1])
-    generation = sys.argv[2]
+    args = sys.argv[1:]
+    port = int(args[0])
 
-    # config_name = "default"
-
-    # if len(sys.argv) > 3:
-    #     config_name = sys.argv[3]
-
-    # conf = templates.puct_config_template(generation, config_name)
     conf = compete
+    if args[1] == "-fpu":
+        conf.name += "_fpu"
+        conf.fpu_prior_discount = 0.25
+        args = args[1:]
+
+    generation = args[1]
+
     conf.generation = generation
 
-    if len(sys.argv) > 3:
-        playouts_multiplier = int(sys.argv[3])
+    # conf = templates.puct_config_template(generation, config_name)
+
+
+    if len(args) >= 2:
+        playouts_multiplier = int(args[2])
         if playouts_multiplier == 0:
             conf.playouts_per_iteration = 1
         else:
