@@ -286,7 +286,7 @@ class ServerBroker(Broker):
 
         log.info("writing json (gzipped): %s" % self.sample_data_filename)
         with gzip.open(self.sample_data_filename, 'w') as f:
-            f.write(attrutil.attr_to_json(gen_samples, indent=4))
+            f.write(attrutil.attr_to_json(gen_samples, pretty=False))
 
         return gen_samples
 
