@@ -1,6 +1,5 @@
 import os
 import gzip
-
 from collections import Counter
 
 import numpy as np
@@ -67,7 +66,6 @@ class SamplesData(object):
 
         self.samples = []
 
-        self.state_identifiers = []
         self.inputs = []
         self.outputs = []
         self.transformed = False
@@ -79,7 +77,6 @@ class SamplesData(object):
         # create a basestate
         basestate = sm.new_base_state()
 
-        from collections import Counter
         counters = [Counter(), Counter()]
         max_values = [{}, {}]
         min_values = [{}, {}]
@@ -101,17 +98,9 @@ class SamplesData(object):
                             break
                     assert found
                     counters[ri][legal] += 1
-        for ri in range(2):
-            print sm.legal_to_move(ri, 57)
-            print "count", counters[ri][57]
-            print "min/max", min_values[ri][57], max_values[ri][57]
 
     def transform_all(self, transformer):
         for sample in self.samples:
-            # ask the transformer to come up with a unique identifier for sample
-            self.state_identifiers.append(transformer.identifier(sample.state,
-                                                                 sample.prev_states))
-
             sample = transformer.check_sample(sample)
             transformer.sample_to_nn(sample, self.inputs, self.outputs)
 
@@ -122,8 +111,8 @@ class SamplesData(object):
 
     def __iter__(self):
         assert self.transformed
-        for s, ins, outs in zip(self.state_identifiers, self.inputs, self.outputs):
-            yield s, ins, outs
+        for ins, outs in zip(self.inputs, self.outputs):
+            yield ins, outs
 
 
 class SamplesBuffer(object):
@@ -150,6 +139,14 @@ class SamplesBuffer(object):
                 data = SamplesData(raw_data.game,
                                    raw_data.with_generation,
                                    raw_data.num_samples)
+
+                total_draws = 0
+                for s in raw_data.samples:
+                    if abs(s.final_score[0] - 0.5) < 0.01:
+                        total_draws += 1
+
+                draws_ratio = total_draws / float(len(raw_data.samples))
+                log.info("Draws ratio %.2f" % draws_ratio)
 
                 for s in raw_data.samples:
                     data.add_sample(s)
@@ -381,7 +378,6 @@ class TrainManager(object):
             self.buckets = Buckets(conf.resample_buckets)
 
         total_samples = 0
-        count = Counter()
         leveled_data = []
         for fn, sample_data in self.samples_buffer.files_to_sample_data(conf):
             assert sample_data.game == conf.game
@@ -397,26 +393,15 @@ class TrainManager(object):
 
             level_data = LevelData(len(leveled_data))
 
-            # XXX is this deduping a good idea?  Once we start using prev_states, then there will
-            # be a lot less deduping?  I guess it is likely not too different.
             for state, ins, outs in sample_data:
-                # keep the top n only?
-                if conf.drop_dupes_count > 0 and count[state] == conf.drop_dupes_count:
-                    continue
-
-                count[state] += 1
                 level_data.add(ins, outs)
-
-            num_samples = len(level_data)
-            log.verbose("DROPPED DUPES %s" % (sample_data.num_samples - num_samples))
-            log.verbose("Left over samples %d" % num_samples)
 
             log.verbose("Validation split")
             level_data.validation_split(conf.validation_split)
 
             leveled_data.append(level_data)
 
-            total_samples += num_samples
+            total_samples += len(level_data)
 
         log.info("total samples: %s" % total_samples)
 
@@ -442,8 +427,7 @@ class TrainManager(object):
         value_weight = 1.0
 
         self.nn.compile(self.train_config.compile_strategy,
-                        self.train_config.learning_rate,
-                        value_weight=value_weight)
+                        self.train_config.learning_rate)
 
         # num_samples = len(train_data.inputs)
 
@@ -485,6 +469,28 @@ class TrainManager(object):
                         conf.batch_size,
                         shuffle=False,
                         callbacks=[training_logger, controller])
+
+            #         print "New value_weight %s (was %s)" % (value_weight, orig_weight)
+
+            # sample_weights = [np.ones(outputs[0].shape[0], dtype='float32') * 0.5,
+            #                   np.ones(outputs[0].shape[0], dtype='float32') * 0.5,
+            #                   np.ones(outputs[0].shape[0], dtype='float32') * value_weight]
+
+            # sample_weights2 = [np.ones(validation_outputs[0].shape[0], dtype='float32') * 0.5,
+            #                    np.ones(validation_outputs[0].shape[0], dtype='float32') * 0.5,
+            #                    np.ones(validation_outputs[0].shape[0], dtype='float32') * value_weight]
+
+            # self.nn.keras_model.fit(inputs,
+            #                         outputs,
+            #                         verbose=0,
+            #                         batch_size=conf.batch_size,
+            #                         epochs=1,
+            #                         validation_data=[validation_inputs,
+            #                                          validation_outputs,
+            #                                          sample_weights2],
+            #                         shuffle=False,
+            #                         sample_weight=sample_weights,
+            #                         callbacks=[training_logger, controller])
 
         self.controller = controller
 
