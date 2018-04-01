@@ -315,14 +315,10 @@ class TrainManager(object):
             setattr(self.train_config, attr_name, value)
 
         rebuild_cache = False
-        if train_config.drop_dupes_count < self.train_config.drop_dupes_count:
-            rebuild_cache = True
-
         if train_config.starting_step < self.train_config.starting_step:
             rebuild_cache = True
 
         self.train_config.starting_step = train_config.starting_step
-        self.train_config.drop_dupes_count = train_config.drop_dupes_count
         if rebuild_cache:
             self.buckets = None
             self.samples_buffer = None
