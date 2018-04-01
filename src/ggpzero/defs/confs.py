@@ -164,9 +164,6 @@ class TrainNNConfig(object):
     # this is applied even if max_sample_count can't be reached
     starting_step = attribute(0)
 
-    # if we see duplicate states of mre than > n, drop them, keeping the most recent.  < 0 is off.
-    drop_dupes_count = attribute(-1)
-
     # one of adam / amsgrad/ SGD
     compile_strategy = attribute("adam")
     learning_rate = attribute(None)

@@ -270,7 +270,6 @@ def train_config_template(game, gen_prefix):
     conf.batch_size = 128
     conf.epochs = 20
     conf.starting_step = 0
-    conf.drop_dupes_count = 3
     conf.overwrite_existing = False
 
     return conf
