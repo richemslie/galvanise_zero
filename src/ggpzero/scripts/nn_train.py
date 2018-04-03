@@ -19,7 +19,6 @@ class Configs:
         conf.batch_size = 512
         conf.epochs = 6
         conf.starting_step = 20
-        conf.drop_dupes_count = -1
 
         return conf
 
@@ -28,7 +27,6 @@ class Configs:
         conf.generation_prefix = gen_prefix
         conf.batch_size = 512
         conf.compile_strategy = "adam"
-        conf.drop_dupes_count = -1
         conf.epochs = 6
         conf.learning_rate = None
         conf.next_step = 20
@@ -54,7 +52,6 @@ class Configs:
         conf.batch_size = 4096
         conf.epochs = 1
         conf.starting_step = 25
-        conf.drop_dupes_count = 3
         conf.overwrite_existing = True
 
         return conf
@@ -72,7 +69,6 @@ class Configs:
         conf.epochs = 20
         conf.max_sample_count = 300000
         conf.starting_step = 3
-        conf.drop_dupes_count = 3
         conf.overwrite_existing = True
 
         return conf
@@ -90,7 +86,6 @@ class Configs:
         conf.epochs = 20
         conf.max_sample_count = 300000
         conf.starting_step = 3
-        conf.drop_dupes_count = 3
         conf.overwrite_existing = True
 
         return conf

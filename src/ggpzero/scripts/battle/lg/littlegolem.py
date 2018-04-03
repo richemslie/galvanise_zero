@@ -95,8 +95,9 @@ class GameMasterByGame(object):
                                       playouts_per_iteration_noop=0,
 
                                       dirichlet_noise_alpha=-1,
-
                                       root_expansions_preset_visits=-1,
+                                      fpu_prior_discount=0.25,
+
                                       puct_before_expansions=3,
                                       puct_before_root_expansions=4,
                                       puct_constant_before=3.0,
@@ -321,14 +322,6 @@ class LittleGolemConnection(object):
     #     return move, prob, finished
 
     def handle_breakthrough(self, match_id, depth, sgf, text):
-        # XXX bots are treated different
-        bots = ["wanderer_bot", "luffy_bot", "arr28"]
-        opponent_is_bot = False
-        for bot in bots:
-            if bot in sgf:
-                opponent_is_bot = True
-                break
-
         cords = []
         for s in re.findall(r"alt='\w*'", text):
             color = re.search(r"alt='(\w*)'", s).group(1)
@@ -369,10 +362,7 @@ class LittleGolemConnection(object):
                                                               role))
 
         # actually play the move
-        if opponent_is_bot:
-            move, prob, finished = self.play_move("breakthrough2", " ".join(trues), depth, our_lead_role_index)
-        else:
-            move, prob, finished = self.play_move("breakthrough", " ".join(trues), depth, our_lead_role_index)
+        move, prob, finished = self.play_move("breakthrough", " ".join(trues), depth, our_lead_role_index)
 
         print "move", move, prob, "finished" if finished else ""
 

@@ -410,15 +410,16 @@ compete = confs.PUCTPlayerConfig(name="gzero",
                                  depth_temperature_max=10.0,
                                  depth_temperature_start=1,
                                  depth_temperature_increment=0.5,
-                                 depth_temperature_stop=4,
+                                 depth_temperature_stop=8,
                                  random_scale=1.0,
 
                                  playouts_per_iteration=100,
                                  playouts_per_iteration_noop=0,
 
                                  root_expansions_preset_visits=-1,
-                                 dirichlet_noise_alpha=0.3,
-                                 dirichlet_noise_pct=0.25,
+                                 dirichlet_noise_alpha=-1,
+                                 dirichlet_noise_pct=0.5,
+                                 fpu_prior_discount = 0.25,
 
                                  verbose=True,
                                  max_dump_depth=2)

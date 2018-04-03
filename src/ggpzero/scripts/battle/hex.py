@@ -51,7 +51,7 @@ def config(gen):
                                   depth_temperature_stop=6,
                                   random_scale=1.00,
 
-                                  fpu_score_with_discount=-1,
+                                  fpu_prior_discount=-1,
 
                                   max_dump_depth=2)
 
@@ -112,11 +112,11 @@ if __name__ == "__main__":
         setup()
         game_size = 13
 
-        config_0 = config("x1_15")
-        config_1 = config("x1_15")
+        config_0 = config("x2_15")
+        config_1 = config("x1_10")
 
         config_0.name += "_fpu"
-        config_0.fpu_score_with_discount = 0.85
+        config_0.fpu_prior_discount = 0.25
 
         move_time = 10.0
 
