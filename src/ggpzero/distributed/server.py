@@ -3,7 +3,6 @@ import sys
 import gzip
 import time
 import shutil
-
 import json
 
 from twisted.internet import reactor
@@ -13,6 +12,7 @@ from ggplib.db import lookup
 
 from ggpzero.util import attrutil
 from ggpzero.util.broker import Broker, ServerFactory
+from ggpzero.util.state import encode_state
 
 from ggpzero.defs import msgs, confs, datadesc, templates
 
@@ -233,7 +233,7 @@ class ServerBroker(Broker):
     def add_new_samples(self, samples):
         dupe_count = 0
         for sample in samples:
-            state = tuple(sample.state)
+            state = sample.state
 
             # need to check it isn't a duplicate and drop it
             if state in self.unique_states_set:

@@ -9,6 +9,7 @@ from ggplib.util import log
 # only importing for checking type (otherwise will go insane)
 from ggplib.db.lookup import GameInfo
 
+from ggpzero.util.state import decode_state
 from ggpzero.defs import datadesc, gamedesc
 
 
@@ -283,7 +284,8 @@ class GdlBasesTransformer(object):
         return channels
 
     def check_sample(self, sample):
-        assert len(sample.state) == self.num_bases
+        # XXX this should be ==.  But since our encode/decode can end up padding
+        assert len(decode_state(sample.state)) >= self.num_bases
         assert len(sample.final_score) == self.final_score_count
 
         assert isinstance(sample, datadesc.Sample)
@@ -308,7 +310,8 @@ class GdlBasesTransformer(object):
         # transform samples -> numpy arrays as inputs/outputs to nn
 
         # input - planes
-        inputs.append(self.state_to_channels(sample.state, sample.prev_states))
+        inputs.append(self.state_to_channels(decode_state(sample.state),
+                                             [decode_state(s) for s in sample.prev_states]))
 
         output = []
 

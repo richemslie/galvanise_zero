@@ -59,7 +59,11 @@ class TrainingLoggerCb(keras_callbacks.Callback):
         self.at_epoch += 1
         log.info('Epoch %d/%d' % (self.at_epoch, self.num_epochs))
 
-        self.target = self.params['samples']
+        # oh man, keras consistency... XXX
+        try:
+            self.target = self.params['samples']
+        except KeyError:
+            self.target = self.params['steps'] * 512
 
         self.progbar = Progbar(target=self.target)
         self.seen = 0

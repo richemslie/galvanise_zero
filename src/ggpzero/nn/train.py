@@ -8,6 +8,7 @@ from ggplib.util import log
 from ggplib.db import lookup
 
 from ggpzero.util import attrutil
+from ggpzero.util.state import decode_state
 
 from ggpzero.defs import confs
 
@@ -81,7 +82,7 @@ class SamplesData(object):
         max_values = [{}, {}]
         min_values = [{}, {}]
         for s in self.samples:
-            basestate.from_list(s.state)
+            basestate.from_list(decode_state(s.state))
             sm.update_bases(basestate)
 
             # get legals...
@@ -389,7 +390,7 @@ class TrainManager(object):
 
             level_data = LevelData(len(leveled_data))
 
-            for state, ins, outs in sample_data:
+            for ins, outs in sample_data:
                 level_data.add(ins, outs)
 
             log.verbose("Validation split")

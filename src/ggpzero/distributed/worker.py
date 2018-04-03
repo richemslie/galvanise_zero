@@ -17,6 +17,7 @@ from ggpzero.defs import msgs, confs
 
 from ggpzero.util.broker import Broker, BrokerClientFactory
 from ggpzero.util import cppinterface
+from ggpzero.util.state import encode_state, decode_state
 
 from ggpzero.nn.manager import get_manager
 
@@ -145,7 +146,12 @@ class Worker(Broker):
             self.supervisor.clear_unique_states()
 
     def cb_from_superviser(self):
-        self.samples += self.supervisor.fetch_samples()
+        samples = self.supervisor.fetch_samples()
+        for sample in samples:
+            sample.state = encode_state(sample.state)
+            sample.prev_states = [encode_state(s) for s in sample.prev_states]
+
+        self.samples += samples
 
         # keeps the tcp connection active for remote workers
         if time.time() > self.on_request_samples_time + self.conf.server_poll_time:
@@ -164,7 +170,7 @@ class Worker(Broker):
 
         # update duplicates
         for s in msg.new_states:
-            self.supervisor.add_unique_state(s)
+            self.supervisor.add_unique_state(decode_state(s))
 
         start_time = time.time()
         self.supervisor.poll_loop(do_stats=True, cb=self.cb_from_superviser)
