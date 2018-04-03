@@ -18,7 +18,6 @@ def config():
     conf.next_step = 20
     conf.validation_split = 1.0
     conf.starting_step = 10
-    conf.drop_dupes_count = 0
     return conf
 
 

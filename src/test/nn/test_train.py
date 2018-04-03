@@ -43,7 +43,6 @@ def get_conf():
                                max_sample_count=1000000,
                                max_epoch_samples_count=100000,
                                starting_step=0,
-                               drop_dupes_count=2,
                                compile_strategy="adam",
                                learning_rate=None)
     return conf
@@ -60,7 +59,6 @@ def get_conf_reversi():
                                max_sample_count=200000,
                                max_epoch_samples_count=100000,
                                starting_step=10,
-                               drop_dupes_count=1,
                                compile_strategy="adam",
                                learning_rate=None)
     return conf
