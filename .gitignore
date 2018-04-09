@@ -9,7 +9,8 @@
 # python
 *.pyc
 *__pycache__/
-*.cache
+*.cache/
+*.pytest_cache/
 
 # log files
 *.log
