@@ -2,7 +2,7 @@ There are no instructions - left this way since project is in fluid state.
 
 But here is quick sense of what to do.
 
-1.  First install ggpzero (which also means installing k273).
+1.  First install ggplib (which also means installing k273).
 2.  init the environments (. bin/setup.sh)
 3.  cd src/cpp && make
 4.  create a virtual python environment
@@ -10,8 +10,9 @@ But here is quick sense of what to do.
 
 pypy versus cpython
 -------------------
-ggplib it is recommended to use pypy - as provides fastest access to statemachine (but this really
-matters for simplest of games, like c4/ttt).  For ggp-zero we use python2.7.  Some games will take
+With ggplib it is recommended to use pypy - as provides fastest access to statemachine (but this
+only really
+matters for the simplest of games, like c4/ttt).  For ggpzero we use python2.7.  Some games will take
 ages to optimise the propnet in python2.7, but once created will be cached and then there is no speed
 difference.  I'd recommend creating/caching the propnet of games you are interested in with pypy,
 then switch to python2.7.
