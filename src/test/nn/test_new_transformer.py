@@ -38,8 +38,8 @@ def test_game_descriptions():
     game_descs = gamedesc.Games()
     names = [name for name in dir(game_descs) if name[0] != "_"]
 
-    # names = ["breakthroughSmall", "breakthrough"]
-    names = ["skirmishNew", "chess_200"]
+    names = ["breakthroughSmall", "breakthrough", "internationalDraughts"]
+    names = ["internationalDraughts"]
 
     for name in names:
         print
@@ -67,7 +67,13 @@ def test_game_descriptions():
 
         from test_model import advance_state
 
-        for i in range(5):
+        for i in range(25):
             print "move made", i
+            print sm.basestate_to_str(basestate)
             print transformer.state_to_channels(basestate.to_list())
+
+            sm.update_bases(basestate)
+            if sm.is_terminal():
+                break
+
             basestate = advance_state(sm, basestate)

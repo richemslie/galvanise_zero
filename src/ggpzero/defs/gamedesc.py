@@ -280,9 +280,9 @@ class Games(object):
                         "6 5 4 3 2 1".split(),
                         [cell], [control])
 
-    def _chess_like(self, game):
+    def _chess_like(self, game, steps):
         control = binary_control("control", "white", "black")
-        step = step_control("step", 1, 101)
+        step = step_control("step", 1, steps)
         has_moveds = [simple_control(s) for s in "kingHasMoved hRookHasMoved aRookHasMoved aRookHasMoved".split()]
 
         # cross product
@@ -295,19 +295,39 @@ class Games(object):
                         [cell], [control, step] + has_moveds)
 
     def speedChess(self):
-        return self._chess_like("speedChess")
+        assert False, "check steps"
+        return self._chess_like("speedChess", 150)
 
     def chess_150(self):
-        return self._chess_like("chess_150")
+        assert False, "check steps"
+        return self._chess_like("chess_150", 150)
 
     def chess_200(self):
-        return self._chess_like("chess_200")
+        assert False, "check steps"
+        return self._chess_like("chess_200", 200)
 
     def skirmishNew(self):
-        return self._chess_like("skirmishNew")
+        assert False, "check steps"
+        return self._chess_like("skirmishNew", 100)
 
     def skirmishZeroSum(self):
-        return self._chess_like("skirmishZeroSum")
+        assert False, "check steps"
+        return self._chess_like("skirmishZeroSum", 100)
 
     def skirmishSTK(self):
-        return self._chess_like("skirmishSTK")
+        assert False, "check steps"
+        return self._chess_like("skirmishSTK", 100)
+
+    def internationalDraughts(self):
+        last_to_move = binary_control("lastToMove", "black", "white")
+        step = step_control("step", 1, 20)
+
+        cell = BoardChannels("cell", 1, 2, [BoardTerm(3, "white black".split()),
+                                            BoardTerm(4, "pawn king".split())])
+        capturing_piece = BoardChannels("capturingPiece", 1, 2)
+
+
+        return GameDesc("internationalDraughts",
+                        "a b c d e f g h i j".split(),
+                        "1 2 3 4 5 6 7 8 9 10".split(),
+                        [cell, capturing_piece], [step, last_to_move])
