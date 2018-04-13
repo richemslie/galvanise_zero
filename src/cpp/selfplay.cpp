@@ -21,9 +21,6 @@
 
 using namespace GGPZero;
 
-class NetworkReloaded {
-};
-
 SelfPlay::SelfPlay(SelfPlayManager* manager, const SelfPlayConfig* conf, PuctEvaluator* pe,
                    const GGPLib::BaseState* initial_state, int role_count, std::string identifier) :
     manager(manager),
@@ -80,6 +77,11 @@ PuctNode* SelfPlay::selectNode() {
 
     ASSERT(node->game_depth == game_depth);
 
+    auto not_in_resign_state = [] (PuctNode* the_node, float prob) {
+        const float lead_score = the_node->getCurrentScore(the_node->lead_role_index);
+        return ! (lead_score < prob || lead_score > (1 - prob));
+    };
+
     for (int ii=0; ii<10; ii++) {
         // ok, we have a complete game.  Choose a starting point and start running samples from there.
 
@@ -111,31 +113,24 @@ PuctNode* SelfPlay::selectNode() {
 
         // don't start as if the game is done
         // note this score isn't that reliable...  since likely we didn't do any iterations yet
-        const float lead_score = node->getCurrentScore(node->lead_role_index);
         if (this->can_resign0) {
-            while (lead_score < this->conf->resign0_score_probability ||
-                   lead_score > (1 - this->conf->resign0_score_probability)) {
-                sample_start_depth--;
-
-                // XXX some configurable amount?
-                if (sample_start_depth < 4) {
+            while (sample_start_depth > 6) {
+                if (not_in_resign_state(node, this->conf->resign0_score_probability)) {
                     break;
                 }
 
+                sample_start_depth--;
                 node = this->pe->jumpRoot(sample_start_depth);
             }
         }
 
         if (this->can_resign1) {
-            while (lead_score < this->conf->resign1_score_probability ||
-                   lead_score > (1 - this->conf->resign1_score_probability)) {
-                sample_start_depth--;
-
-                // XXX some configurable amount?
-                if (sample_start_depth < 4) {
+            while (sample_start_depth > 6) {
+                if (not_in_resign_state(node, this->conf->resign1_score_probability)) {
                     break;
                 }
 
+                sample_start_depth--;
                 node = this->pe->jumpRoot(sample_start_depth);
             }
         }
@@ -196,12 +191,8 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
         if (!this->manager->getUniqueStates()->isUnique(node->getBaseState())) {
             this->manager->incrDupes();
 
-            // break out here, no point playing randomly when samples have been taken
-            //if (sample_count > 0) {
-            //    break;
-            //}
-
             // move to next state via selector
+            // XXX not sure I like this.  Allowing the dupe might be better.
             {
                 this->pe->updateConf(this->conf->select_puct_config);
                 const PuctNodeChild* choice = this->pe->onNextMove(this->conf->select_iterations);
@@ -213,31 +204,22 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
             continue;
         }
 
-        const PuctNodeChild* choice = nullptr;
-        try {
-            // run the simulations
-            choice = this->pe->onNextMove(iterations);
+        // run the simulations
+        const PuctNodeChild* choice = this->pe->onNextMove(iterations);
 
-            // we will create a sample, add to unique states here
-            this->manager->getUniqueStates()->add(node->getBaseState());
+        // we will create a sample, add to unique states here
+        this->manager->getUniqueStates()->add(node->getBaseState());
 
-            // create a sample (call getProbabilities() to ensure probabilities are right for policy)
-            // ZZZ should try changing this %
-            // XXX this is balzy
-            this->pe->getProbabilities(node, 1.15f, true);
-
-        } catch (NetworkReloaded&) {
-            //this->pe->resetRoot();
-            continue;
-            break;
-        }
+        // create a sample (call getProbabilities() to ensure probabilities are right for policy)
+        // ZZZ configure %
+        this->pe->getProbabilities(node, 1.15f, true);
 
         ASSERT (choice != nullptr);
 
         // XXX why we get the manager to do this????  Doesn't make sense(we can grab the statemachine from this->pe)...
         Sample* s = this->manager->createSample(this->pe, node);
 
-        // tmp XXX ZZZ
+        // tmp XXX ZZZ, we should also move the createSample() here
         s->lead_role_index = node->lead_role_index;
 
         // keep a local ref to it for when we score it
@@ -265,16 +247,12 @@ PuctNode* SelfPlay::runToEnd(PuctNode* node) {
 
     // simply run the game to end
     while (true) {
-        if (node->isTerminal()) {
+        if (node->is_finalised) {
             break;
         }
 
-        try {
-            const PuctNodeChild* choice = this->pe->onNextMove(iterations);
-            node = this->pe->fastApplyMove(choice);
-        } catch (NetworkReloaded&) {
-            //this->pe->resetRoot();
-        }
+        const PuctNodeChild* choice = this->pe->onNextMove(iterations);
+        node = this->pe->fastApplyMove(choice);
     }
 
     return node;
@@ -341,13 +319,13 @@ void SelfPlay::playOnce() {
     }
 
     // final stage, scoring:
-    if (!node->isTerminal()) {
+    if (!node->is_finalised) {
         node = this->runToEnd(node);
     }
 
     // *** AFTER SAMPLING
 
-    ASSERT(node->isTerminal());
+    ASSERT(node->is_finalised);
 
     // determine final score / and if a false positive if resigned
     bool is_resign0_false_positive = false;
