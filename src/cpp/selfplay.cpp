@@ -111,10 +111,24 @@ PuctNode* SelfPlay::selectNode() {
 
         // don't start as if the game is done
         // note this score isn't that reliable...  since likely we didn't do any iterations yet
+        const float lead_score = node->getCurrentScore(node->lead_role_index);
         if (this->can_resign0) {
-            float lead_score = node->getCurrentScore(node->lead_role_index);
             while (lead_score < this->conf->resign0_score_probability ||
                    lead_score > (1 - this->conf->resign0_score_probability)) {
+                sample_start_depth--;
+
+                // XXX some configurable amount?
+                if (sample_start_depth < 4) {
+                    break;
+                }
+
+                node = this->pe->jumpRoot(sample_start_depth);
+            }
+        }
+
+        if (this->can_resign1) {
+            while (lead_score < this->conf->resign1_score_probability ||
+                   lead_score > (1 - this->conf->resign1_score_probability)) {
                 sample_start_depth--;
 
                 // XXX some configurable amount?
@@ -132,7 +146,6 @@ PuctNode* SelfPlay::selectNode() {
     }
 
     return node;
-    //return nullptr;
 }
 
 bool SelfPlay::resign(const PuctNode* node) {
