@@ -44,9 +44,8 @@ namespace GGPZero {
         void addNode(PuctNode* new_node);
         void removeNode(PuctNode* n);
 
-        void lookAheadTerminals(PuctNode* node);
-        void expandChild(PuctNode* parent, PuctNodeChild* child);
-        PuctNode* createNode(PuctNode* parent, const GGPLib::BaseState* state);
+        void expandChild(PuctNode* parent, PuctNodeChild* child, bool expansion_time=false);
+        PuctNode* createNode(PuctNode* parent, const GGPLib::BaseState* state, bool expansion_time=false);
 
         // set dirichlet noise on node
         bool setDirichletNoise(int depth);

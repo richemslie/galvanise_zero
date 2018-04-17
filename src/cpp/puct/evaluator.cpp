@@ -37,9 +37,6 @@ constexpr int XXX_scaled_visits_at = -1;
 constexpr double XXX_scaled_visits_reduce = 10.0;
 constexpr double XXX_scaled_visits_finalised_reduce = 100.0;
 
-// look ahead on a node, to see if any terminal states.  Useful for early training... but can be expensive.  XXX Add rest of attributes here.
-constexpr bool XXX_check_lookahead_terminals = false;
-
 // finalised nodes on (only set during backprop, so this turns it on)
 constexpr bool XXX_backprop_finalised = true;
 
@@ -47,6 +44,8 @@ constexpr bool XXX_backprop_finalised = true;
 constexpr float XXX_top_visits_best_guess_converge_ratio = 0.8;
 
 constexpr float XXX_cpuct_after_root_multiplier = 1.0;
+
+constexpr float XXX_bypass_evaluation_single_node = true;
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -103,45 +102,16 @@ void PuctEvaluator::removeNode(PuctNode* node) {
     this->number_of_nodes--;
 }
 
-void PuctEvaluator::lookAheadTerminals(PuctNode* node) {
-    ASSERT(!node->checked_for_finals);
-    node->checked_for_finals = true;
-
-    if (!XXX_check_lookahead_terminals) {
-        return;
-    }
-
-    const int role_count = this->sm->getRoleCount();
-
-    for (int ii=0; ii<node->num_children; ii++) {
-        PuctNodeChild* c = node->getNodeChild(role_count, ii);
-
-        if (c->to_node != nullptr) {
-            continue;
-        }
-
-        this->sm->updateBases(node->getBaseState());
-
-        // apply move
-        this->sm->nextState(&c->move, this->basestate_expand_node);
-        this->sm->updateBases(this->basestate_expand_node);
-
-        if (this->sm->isTerminal()) {
-            c->to_node = this->createNode(node, this->basestate_expand_node);
-        }
-    }
-}
-
-void PuctEvaluator::expandChild(PuctNode* parent, PuctNodeChild* child) {
+void PuctEvaluator::expandChild(PuctNode* parent, PuctNodeChild* child, bool expansion_time) {
     // update the statemachine
     this->sm->updateBases(parent->getBaseState());
     this->sm->nextState(&child->move, this->basestate_expand_node);
 
     // create node
-    child->to_node = this->createNode(parent, this->basestate_expand_node);
+    child->to_node = this->createNode(parent, this->basestate_expand_node, expansion_time);
 }
 
-PuctNode* PuctEvaluator::createNode(PuctNode* parent, const GGPLib::BaseState* state) {
+PuctNode* PuctEvaluator::createNode(PuctNode* parent, const GGPLib::BaseState* state, bool expansion_time) {
     PuctNode* new_node = PuctNode::create(state, this->sm);
     if (parent != nullptr) {
         new_node->parent = parent;
@@ -152,6 +122,10 @@ PuctNode* PuctEvaluator::createNode(PuctNode* parent, const GGPLib::BaseState* s
     this->addNode(new_node);
 
     if (!new_node->is_finalised) {
+        if (expansion_time && new_node->num_children == 1) {
+            return new_node;
+        }
+
         // goodbye kansas
         this->scheduler->evaluateNode(this, new_node);
         this->evaluations++;
@@ -381,14 +355,8 @@ void PuctEvaluator::backPropagate(float* new_scores) {
 PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, int depth) {
     ASSERT(!node->isTerminal());
 
-    const double game_expected_depth = 60;
-    if (!node->checked_for_finals) {
-        // chance can easily become greater than one here
-        double chance = (node->game_depth / game_expected_depth + node->visits / 40.0);
-
-        if (this->rng.get() > (1 - chance)) {
-            this->lookAheadTerminals(node);
-        }
+    if (node->num_children == 1) {
+        return node->getNodeChild(this->sm->getRoleCount(), 0);
     }
 
     bool do_dirichlet_noise = this->setDirichletNoise(depth);
@@ -441,14 +409,14 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, int depth) {
 
         if (c->to_node != nullptr) {
             PuctNode* cn = c->to_node;
-            child_visits = (float) cn->visits;
+            child_visits = cn->visits;
             node_score = cn->getCurrentScore(node->lead_role_index);
 
             // ensure finalised are enforced more than other nodes (network can return 1.0f for
             // basically dumb moves, if it thinks it will win regardless)
             if (cn->is_finalised) {
                 if (node_score > 0.99) {
-                    if (XXX_playmode) {
+                    if (depth > 0) {
                         return c;
                     }
 
@@ -496,17 +464,22 @@ int PuctEvaluator::treePlayout() {
     float scores[this->sm->getRoleCount()];
 
     PuctNodeChild* child = nullptr;
+    const bool bypass_evaluation_single_node = XXX_bypass_evaluation_single_node;
+
     while (true) {
         ASSERT(current != nullptr);
         this->path.emplace_back(child, current);
 
         // End of the road
-        if (XXX_playmode && current->is_finalised) {
-            break;
-        }
+        if (tree_playout_depth > 0) {
+            if (current->is_finalised) {
+                break;
+            }
 
-        if (current->isTerminal()) {
-            break;
+        } else {
+            if (current->isTerminal()) {
+                break;
+            }
         }
 
         // Choose selection
@@ -514,8 +487,15 @@ int PuctEvaluator::treePlayout() {
 
         // if does not exist, then create it (will incur a nn prediction)
         if (child->to_node == nullptr) {
-            this->expandChild(current, child);
+            this->expandChild(current, child, bypass_evaluation_single_node);
             current = child->to_node;
+
+            // special case if number of children is 1, we just bypass it and inherit next value
+            if (!current->is_finalised && current->num_children == 1 && bypass_evaluation_single_node) {
+                K273::l_debug("node expansion bypass since num_children = %d", current->num_children);
+                continue;
+            }
+
             this->path.emplace_back(child, current);
             break;
         }
@@ -719,7 +699,7 @@ const PuctNodeChild* PuctEvaluator::onNextMove(int max_evaluations, double end_t
 
     const PuctNodeChild* choice = this->choose();
 
-    // this is a hack to only show tree when it is our 'turn'.  Be better to use skip opponent turn
+    // this is a hack to only show tree when it is our 'turn'.  Be better to use bypass opponent turn
     // flag than abuse this value (XXX).
     if (max_evaluations != 0 && this->conf->verbose) {
         this->logDebug(choice);
