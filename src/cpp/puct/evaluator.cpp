@@ -20,7 +20,6 @@
 
 using namespace GGPZero;
 
-
 ///////////////////////////////////////////////////////////////////////////////
 
 // XXX yet even more attributes to add:
@@ -464,7 +463,6 @@ int PuctEvaluator::treePlayout() {
     float scores[this->sm->getRoleCount()];
 
     PuctNodeChild* child = nullptr;
-    const bool bypass_evaluation_single_node = XXX_bypass_evaluation_single_node;
 
     while (true) {
         ASSERT(current != nullptr);
@@ -487,12 +485,12 @@ int PuctEvaluator::treePlayout() {
 
         // if does not exist, then create it (will incur a nn prediction)
         if (child->to_node == nullptr) {
-            this->expandChild(current, child, bypass_evaluation_single_node);
+            this->expandChild(current, child, XXX_bypass_evaluation_single_node);
             current = child->to_node;
 
             // special case if number of children is 1, we just bypass it and inherit next value
-            if (!current->is_finalised && current->num_children == 1 && bypass_evaluation_single_node) {
-                K273::l_debug("node expansion bypass since num_children = %d", current->num_children);
+            if (!current->is_finalised && current->num_children == 1 && XXX_bypass_evaluation_single_node) {
+                tree_playout_depth++;
                 continue;
             }
 
