@@ -11,6 +11,8 @@ def encode_state(s):
 
 
 def decode_state(s):
+    if isinstance(s, (tuple, list)):
+        return tuple(s)
     s = base64.decodestring(s)
     aa = np.fromstring(s, dtype=np.uint8)
 
