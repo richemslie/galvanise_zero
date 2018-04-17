@@ -104,10 +104,10 @@ compete = confs.PUCTPlayerConfig(name="puct",
                                  depth_temperature_max=5.0,
                                  depth_temperature_start=0,
                                  depth_temperature_increment=0.5,
-                                 depth_temperature_stop=10,
-                                 random_scale=1.00,
+                                 depth_temperature_stop=6,
+                                 random_scale=0.75,
 
-                                 fpu_prior_discount=-1,
+                                 fpu_prior_discount=0.25,
 
                                  max_dump_depth=2)
 
