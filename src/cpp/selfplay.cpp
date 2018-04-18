@@ -365,7 +365,7 @@ void SelfPlay::playOnce() {
     for (auto sample : this->game_samples) {
 
         if (this->has_resigned && !is_resign0_false_positive && !is_resign1_false_positive) {
-            if (sample->resultant_puct_score[sample->lead_role_index] < 0.01) {
+            if (sample->resultant_puct_score[sample->lead_role_index] < 0.02) {
                 // dont add sample, wins go through though
                 continue;
             }
