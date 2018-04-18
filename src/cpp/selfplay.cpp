@@ -17,8 +17,6 @@
 #include <cmath>
 #include <vector>
 
-// ZZZ XXX revamp the resign logic...
-
 using namespace GGPZero;
 
 SelfPlay::SelfPlay(SelfPlayManager* manager, const SelfPlayConfig* conf, PuctEvaluator* pe,
@@ -74,18 +72,20 @@ PuctNode* SelfPlay::selectNode() {
         game_depth++;
     }
 
-
     ASSERT(node->game_depth == game_depth);
 
     auto not_in_resign_state = [] (PuctNode* the_node, float prob) {
         const float lead_score = the_node->getCurrentScore(the_node->lead_role_index);
+
+        // allow for a bit more than resign score
+        prob += 0.025;
+
         return ! (lead_score < prob || lead_score > (1 - prob));
     };
 
     for (int ii=0; ii<10; ii++) {
         // ok, we have a complete game.  Choose a starting point and start running samples from there.
 
-        // choose a starting point for when to start sampling
         int sample_start_depth = 0;
         if (game_depth - this->conf->max_number_of_samples > 0) {
             sample_start_depth = this->rng.getWithMax(game_depth -
@@ -172,40 +172,36 @@ bool SelfPlay::resign(const PuctNode* node) {
 }
 
 PuctNode* SelfPlay::collectSamples(PuctNode* node) {
+    ASSERT(this->conf->max_number_of_samples > 0);
 
     // sampling:
     this->pe->updateConf(this->conf->sample_puct_config);
     const int iterations = this->conf->sample_iterations;
 
     while (true) {
-        // sample_count < 0, run to the end with samples
         const int sample_count = this->game_samples.size();
-        if (sample_count > 0 && sample_count == this->conf->max_number_of_samples) {
-            break;
+        if (sample_count >= this->conf->max_number_of_samples) {
+            if (this->sample_to_end) {
+                if (node->is_finalised) {
+                    break;
+                }
+            } else {
+                break;
+            }
         }
 
         if (node->isTerminal()) {
             break;
         }
+        // run the simulations
+        const PuctNodeChild* choice = this->pe->onNextMove(iterations);
 
         if (!this->manager->getUniqueStates()->isUnique(node->getBaseState())) {
             this->manager->incrDupes();
 
-            // move to next state via selector
-            // XXX not sure I like this.  Allowing the dupe might be better.
-            {
-                this->pe->updateConf(this->conf->select_puct_config);
-                const PuctNodeChild* choice = this->pe->onNextMove(this->conf->select_iterations);
-                node = this->pe->fastApplyMove(choice);
-
-                this->pe->updateConf(this->conf->sample_puct_config);
-            }
-
+            node = this->pe->fastApplyMove(choice);
             continue;
         }
-
-        // run the simulations
-        const PuctNodeChild* choice = this->pe->onNextMove(iterations);
 
         // we will create a sample, add to unique states here
         this->manager->getUniqueStates()->add(node->getBaseState());
@@ -287,6 +283,14 @@ void SelfPlay::playOnce() {
 
     // reset resignation status
     this->has_resigned = false;
+
+    this->sample_to_end = false;
+    if (this->conf->sample_to_end_pct > 0) {
+        double r = this->rng.get();
+        if (r < this->conf->sample_to_end_pct) {
+            this->sample_to_end = true;
+        }
+    }
 
     // randomly choose if we *can* resign or not
     double r = this->rng.get();

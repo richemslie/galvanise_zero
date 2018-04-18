@@ -132,6 +132,7 @@ static SelfPlayConfig* createSelfPlayConfig(PyObject* dict) {
 
     config->score_puct_config = ::createPuctConfig(asDict("score_puct_config"));
     config->score_iterations = asInt("score_iterations");
+    config->sample_to_end_pct = asFloat("sample_to_end_pct");
 
     return config;
 }

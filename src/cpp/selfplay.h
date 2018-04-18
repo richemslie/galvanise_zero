@@ -32,6 +32,8 @@ namespace GGPZero {
         float resign0_false_positive_retry_percentage;
         float resign1_score_probability;
         float resign1_false_positive_retry_percentage;
+
+        float sample_to_end_pct;
     };
 
     class SelfPlay {
@@ -75,6 +77,7 @@ namespace GGPZero {
         bool has_resigned;
         bool can_resign0;
         bool can_resign1;
+        bool sample_to_end;
 
         std::vector <float> resign0_false_positive_check_scores;
         std::vector <float> resign1_false_positive_check_scores;

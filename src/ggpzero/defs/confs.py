@@ -96,6 +96,10 @@ class SelfPlayConfig(object):
     # -1 is off, and defaults to alpha-zero style
     max_number_of_samples = attribute(4)
 
+    # uses all the same machinery, but instead of scoring, will go play all the way to end
+    # -1 off
+    sample_to_end_pct = attribute(-1)
+
     # select will get to the point where we start sampling
     select_puct_config = attribute(default=attr_factory(PUCTEvaluatorConfig))
     select_iterations = attribute(100)
