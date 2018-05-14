@@ -38,8 +38,8 @@ def test_game_descriptions():
     game_descs = gamedesc.Games()
     names = [name for name in dir(game_descs) if name[0] != "_"]
 
-    names = ["breakthroughSmall", "breakthrough", "internationalDraughts"]
-    names = ["internationalDraughts"]
+    names = ["breakthroughSmall", "breakthrough"]
+    names = ["englishDraughts"]
 
     for name in names:
         print

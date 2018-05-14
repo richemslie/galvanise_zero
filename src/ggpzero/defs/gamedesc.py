@@ -318,7 +318,7 @@ class Games(object):
         assert False, "check steps"
         return self._chess_like("skirmishSTK", 100)
 
-    def internationalDraughts(self):
+    def englishDraughts(self):
         last_to_move = binary_control("lastToMove", "black", "white")
         step = step_control("step", 1, 20)
 
@@ -326,8 +326,7 @@ class Games(object):
                                             BoardTerm(4, "pawn king".split())])
         capturing_piece = BoardChannels("capturingPiece", 1, 2)
 
-
-        return GameDesc("internationalDraughts",
-                        "a b c d e f g h i j".split(),
-                        "1 2 3 4 5 6 7 8 9 10".split(),
+        return GameDesc("englishDraughts",
+                        "a b c d e f g h".split(),
+                        "1 2 3 4 5 6 7 8".split(),
                         [cell, capturing_piece], [step, last_to_move])
