@@ -1,11 +1,7 @@
 '''
-# Origninal from hippolyta - from with license:
-# Copyright Tom Plick 2010, 2014.
-# This file is released under the GPL version 3; see LICENSE.
-
-# TODO
-* use logging instead of prints
-
+Original from hippolyta - from with license:
+Copyright Tom Plick 2010, 2014.
+This file is released under the GPL version 3; see LICENSE.
 '''
 
 import os
@@ -13,19 +9,18 @@ import re
 import sys
 import time
 import pprint
-import random
 import urllib
 import urllib2
 from bs4 import BeautifulSoup
 
 from ggplib.player.gamemaster import GameMaster
 from ggplib.db.helper import get_gdl_for_game
-from ggplib.db import lookup
 from ggplib.util import log
 
 from ggpzero.util import attrutil as at
 from ggpzero.defs import confs
 from ggpzero.player import puctplayer
+
 
 @at.register_attrs
 class GameConfig(object):
@@ -70,13 +65,11 @@ class GameMasterByGame(object):
         self.game_config = game_config
 
         game_name = self.game_config.game_name
-        if game_name == "breakthrough2":
-            game_name = "breakthrough"
+        puct_conf = self.get_puct_config()
 
         self.gm = GameMaster(get_gdl_for_game(game_name))
 
         # add players
-        puct_conf = self.get_puct_config()
         for role in self.gm.sm.get_roles():
             self.gm.add_player(puctplayer.PUCTPlayer(conf=puct_conf), role)
 
@@ -104,27 +97,22 @@ class GameMasterByGame(object):
                                       puct_constant_after=0.75,
 
                                       choose="choose_temperature",
-                                      temperature=1.5,
+                                      temperature=2.0,
                                       depth_temperature_max=self.game_config.depth_temperature_max,
                                       depth_temperature_start=4,
-                                      depth_temperature_increment=0.25,
+                                      depth_temperature_increment=0.75,
                                       depth_temperature_stop=self.game_config.depth_temperature_stop,
-                                      random_scale=0.9,
+                                      random_scale=0.35,
 
-                                      max_dump_depth=2)
+                                      max_dump_depth=4)
 
         return conf
 
-    def wtf(self, str_state):
-        bs = self.gm.convert_to_base_state(str_state)
-        nn = self.gm.get_player(0).nn
-        print nn.predict_1(bs.to_list())
-
     def get_move(self, str_state, depth, lead_role_index):
-        print "GameMasterByGame.get_move", str_state
+        log.info("GameMasterByGame.get_move: %s" % str_state)
 
         self.gm.reset()
-        self.gm.start(meta_time=120, move_time=120,
+        self.gm.start(meta_time=180, move_time=60,
                       initial_basestate=self.gm.convert_to_base_state(str_state),
                       game_depth=depth)
 
@@ -134,7 +122,7 @@ class GameMasterByGame(object):
 
 
 class LittleGolemConnection(object):
-    MIN_WAIT_TIME = 10
+    MIN_WAIT_TIME = 5
     MAX_WAIT_TIME = 60
     WAIT_TIME_FOR_UPDATE = 5
     WAIT_TIME_COUNT = 3
@@ -149,7 +137,6 @@ class LittleGolemConnection(object):
 
         # check store path exists
         if not os.path.exists(self.config.store_path):
-            print "mkdirs %s" % self.config.store_path
             os.makedirs(self.config.store_path)
 
     def get_page(self, url):
@@ -183,17 +170,17 @@ class LittleGolemConnection(object):
                         cols = tr.find_all("td")
                         match_id = re.findall(r'\d+', str(cols[0]))[0]
                         depth = re.findall(r'\d+', str(cols[5]))[0]
+                        opponent = cols[2].string
                         s = "game waiting: '%s', against '%s' @ depth %s (match_id: %s)" % (cols[4].get_text(),
-                                                                                            cols[2].string,
+                                                                                            opponent,
                                                                                             depth,
                                                                                             match_id)
-                        print len(s) * "="
-                        print s
-                        print len(s) * "="
-                        yield int(match_id), int(depth)
+                        log.verbose(len(s) * "=")
+                        log.verbose(s)
+                        log.verbose(len(s) * "=")
+                        yield int(match_id), opponent, int(depth)
 
     def answer_invitation(self):
-        print "checking invites"
         text = self.get_page("jsp/invitation/index.jsp")
         if "Refuse</a>" not in text:
             return False
@@ -202,21 +189,22 @@ class LittleGolemConnection(object):
         text = text[text.find("<td>Your decision</td>") : text.find("Refuse</a>")]
         invite_id = re.search(r'invid=(\d+)">Accept</a>', text).group(1)
 
-        print "INVITATION", invite_id
+        log.info("GOT INVITATION: %s" % invite_id)
 
         if "<td>Breakthrough :: Size 8</td>" in text:
-            print "Accepting invitation to play breakthrough game"
-            response = "accept"
-        elif "<td>Reversi" in text:
-            print "Accepting invitation to play reversi game"
+            log.info("Accepting invitation to play breakthrough game")
             response = "accept"
 
-        #elif "<td>Hex :: Size 11" in text:
-        #    print "Accepting invitation to play hex 11x11 game"
+        elif "<td>Reversi" in text:
+            log.info("Accepting invitation to play reversi game")
+            response = "accept"
+
+        # elif "<td>Hex :: Size 11" in text:
+        #    log.info("Accepting invitation to play hex 11x11 game")
         #    response = "refuse"
 
         else:
-            print "Refusing invitation to play game"
+            log.warning("Refusing invitation to play game")
             print text
             response = "refuse"
 
@@ -329,7 +317,9 @@ class LittleGolemConnection(object):
             cords.append(val)
 
         assert len(cords) == 64
-        print "handle_breakthrough", match_id, depth, cords
+        log.verbose("handle_breakthrough, match_id:%s, depth:%d\n%s" % (match_id,
+                                                                        depth,
+                                                                        cords))
 
         # group into rows
         rows = []
@@ -346,7 +336,7 @@ class LittleGolemConnection(object):
             our_role = "black"
             our_lead_role_index = 1
 
-        print "role to play", our_role
+        log.verbose("role to play %s" % our_role)
 
         # convert to gdl trues string
         trues = []
@@ -364,7 +354,7 @@ class LittleGolemConnection(object):
         # actually play the move
         move, prob, finished = self.play_move("breakthrough", " ".join(trues), depth, our_lead_role_index)
 
-        print "move", move, prob, "finished" if finished else ""
+        log.info("move %s with %s / %s" % (move, prob, "finished" if finished else ""))
 
         # convert to what little golem expects
         move = move.replace("(move", "").replace(")", "")
@@ -502,8 +492,8 @@ class LittleGolemConnection(object):
         b = "abcdefghij"[int(b) - 1]
         return "%s%s" % (a, b), prob, finished
 
-    def handle_game(self, match_id, depth):
-        print "Handling game %s / %s" % (match_id, depth)
+    def handle_game(self, match_id, opponent, depth):
+        log.info("Handling game %s / %s, against '%s'" % (match_id, depth, opponent))
 
         # [note this may be different for different game, will need to fish for it in text XXX]
         orig_sgf = self.get_page("servlet/sgf/%s/game%s.txt" % (match_id, match_id))
@@ -540,7 +530,7 @@ class LittleGolemConnection(object):
         elif "Reversi 10x10-Size 10x10" in text:
             meth = self.handle_reversi_10x10
 
-        #elif "Hex-Size 11" in text:
+        # elif "Hex-Size 11" in text:
         #    meth = self.handle_hex_11x11
 
         else:
@@ -558,11 +548,11 @@ class LittleGolemConnection(object):
         # If the game doesnt advance, abort.  This will stop us from hammering the server with
         # invalid moves, and probably causing a ban.
 
-        print "sending move '%s' for match_id: %s" % (move, match_id)
+        log.info("sending move '%s' for match_id: %s" % (move, match_id))
 
         if prob > -0.005 and prob < 0.015:
             print "Resigning as probability is %.3f" % prob
-            msg = "GG :)  Thanks for the game, I have resigned as my probability of winning is %.3f" % prob
+            msg = "GG :)  Thanks- I resigned as my probability of winning was %.3f" % prob
             self.post_page("jsp/game/game.jsp", dict(sendgame=match_id,
                                                      sendmove="resign",
                                                      message=msg))
@@ -576,7 +566,7 @@ class LittleGolemConnection(object):
                 msg = "Hi there!  My name is gzero, I am a bot.  I hope you a fun game! :)."
 
             elif finished:
-                msg = "Thanks for playing.  GG :)"
+                msg = "Thanks for playing."
 
             if penny_for_thoughts:
                 if msg:
@@ -598,7 +588,7 @@ class LittleGolemConnection(object):
                 if new_sgf != orig_sgf:
                     return
 
-            print "Game didn't advance on sending move.  Aborting."
+            log.error("Game didn't advance on sending move.  Aborting.")
             sys.exit(1)
 
     def loop_forever(self):
@@ -608,16 +598,16 @@ class LittleGolemConnection(object):
         # forever:
         while True:
             if time.time() > last_answer_invites:
-                last_answer_invites += 180
+                last_answer_invites += 30
 
                 while self.answer_invitation():
                     pass
 
             handled = False
-            for match_id, depth in self.games_waiting():
+            for match_id, opponent, depth in self.games_waiting():
                 handled = True
                 sleep_time = self.MIN_WAIT_TIME
-                self.handle_game(match_id, depth)
+                self.handle_game(match_id, opponent, depth)
 
             if not handled:
                 # backoff, lets not hammer LG server
