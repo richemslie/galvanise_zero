@@ -330,3 +330,14 @@ class Games(object):
                         "a b c d e f g h".split(),
                         "1 2 3 4 5 6 7 8".split(),
                         [cell, capturing_piece], [step, last_to_move])
+
+    def gomoku_11x11(self):
+        # one control channel
+        control = binary_control("control", "white", "black")
+        cell = simple_board_channels("cell", ["white", "black"])
+
+        return GameDesc("gomoku_11x11",
+                        "1 2 3 4 5 6 7 8 9 10 11".split(),
+                        "1 2 3 4 5 6 7 8 9 10 11".split(),
+                        [cell], [control])
+
