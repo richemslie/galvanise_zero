@@ -421,10 +421,12 @@ class TrainManager(object):
         XX_value_weight_reduction = 0.333
         XX_value_weight_min = 0.05
 
-        value_weight = 1.0
+        # all games are zero sum that are trained and because 2 values, x2 the error.  XXX
+        value_weight = 0.5
 
         self.nn.compile(self.train_config.compile_strategy,
-                        self.train_config.learning_rate)
+                        self.train_config.learning_rate,
+                        value_weight=value_weight)
 
         # num_samples = len(train_data.inputs)
 
@@ -453,7 +455,7 @@ class TrainManager(object):
                     elif orig_weight < 0.5 and controller.value_loss_diff < 0.002:
                         value_weight /= (XX_value_weight_reduction * 2)
 
-                value_weight = min(max(XX_value_weight_min, value_weight), 1.0)
+                value_weight = min(max(XX_value_weight_min, value_weight), 0.5)
                 if abs(value_weight - orig_weight) > 0.0001:
                     self.nn.compile(self.train_config.compile_strategy,
                                     self.train_config.learning_rate,
@@ -466,8 +468,6 @@ class TrainManager(object):
                         conf.batch_size,
                         shuffle=False,
                         callbacks=[training_logger, controller])
-
-            #         print "New value_weight %s (was %s)" % (value_weight, orig_weight)
 
             # sample_weights = [np.ones(outputs[0].shape[0], dtype='float32') * 0.5,
             #                   np.ones(outputs[0].shape[0], dtype='float32') * 0.5,
