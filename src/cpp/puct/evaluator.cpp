@@ -24,7 +24,7 @@ using namespace GGPZero;
 
 // XXX yet even more attributes to add:
 
-constexpr bool XXX_playmode = false;
+constexpr bool XXX_matchmode = false;
 
 // do a minimax during backprop - not had much success with this.
 // < 0 off
@@ -45,6 +45,8 @@ constexpr float XXX_top_visits_best_guess_converge_ratio = 0.8;
 constexpr float XXX_cpuct_after_root_multiplier = 1.0;
 
 constexpr float XXX_bypass_evaluation_single_node = true;
+
+constexpr double XXX_evaluation_multipler_on_terminal = 2.5;
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -516,7 +518,9 @@ void PuctEvaluator::playoutLoop(int max_evaluations, double end_time) {
 
     // configurable XXX?  Will only run at the very end of the game, and it is really only here so
     // we exit in a small finite amount of time
-    int max_iterations = max_evaluations * 42;
+
+    // XXX normally constrained by evaluations anyways
+    int max_iterations = max_evaluations * 100;
 
     if (max_evaluations < 0) {
         max_iterations = INT_MAX;
@@ -528,12 +532,13 @@ void PuctEvaluator::playoutLoop(int max_evaluations, double end_time) {
 
     double next_report_time = -1;
 
-    if (XXX_playmode) {
+    if (XXX_matchmode) {
         next_report_time = K273::get_time() + 2.5;
     }
 
-    while (iterations < max_iterations) {
+    bool do_once_multiplier = true;
 
+    while (iterations < max_iterations) {
         if (max_evaluations > 0 && this->evaluations > max_evaluations) {
             break;
         }
@@ -547,6 +552,12 @@ void PuctEvaluator::playoutLoop(int max_evaluations, double end_time) {
         total_depth += depth;
 
         iterations++;
+
+        // small pondering like extension, only at end game...
+        if (do_once_multiplier && this->evaluations < iterations) {
+            max_evaluations = max_evaluations * XXX_evaluation_multipler_on_terminal;
+            do_once_multiplier = false;
+        }
 
         if (next_report_time > 0 && K273::get_time() > next_report_time) {
             next_report_time = K273::get_time() + 2.5;
