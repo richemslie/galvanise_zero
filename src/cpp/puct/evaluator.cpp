@@ -48,6 +48,8 @@ constexpr float XXX_bypass_evaluation_single_node = true;
 
 constexpr double XXX_evaluation_multipler_on_terminal = 2.5;
 
+constexpr double XXX_evaluation_multipler_to_convergence = 2;
+
 ///////////////////////////////////////////////////////////////////////////////
 
 PuctEvaluator::PuctEvaluator(GGPLib::StateMachineInterface* sm,
@@ -540,7 +542,15 @@ void PuctEvaluator::playoutLoop(int max_evaluations, double end_time) {
 
     while (iterations < max_iterations) {
         if (max_evaluations > 0 && this->evaluations > max_evaluations) {
-            break;
+
+            if (this->converged(this->root)) {
+                break;
+            } else {
+                int max_convergence_evaluations = max_evaluations * XXX_evaluation_multipler_to_convergence;
+                if (this->evaluations > max_convergence_evaluations) {
+                    break;
+                }
+            }
         }
 
         if (end_time > 0 && K273::get_time() > end_time) {
@@ -748,6 +758,25 @@ const PuctNodeChild* PuctEvaluator::choose(const PuctNode* node) {
     }
 
     return choice;
+}
+
+bool PuctEvaluator::converged(const PuctNode* node) const {
+    if (node == nullptr) {
+        return true;
+    }
+
+    auto children = PuctNode::sortedChildren(node, this->sm->getRoleCount());
+
+    if (children.size() >= 2) {
+        PuctNode* n0 = children[0]->to_node;
+        PuctNode* n1 = children[1]->to_node;
+        if (n0 != nullptr && n1 != nullptr) {
+            const int role_index = node->lead_role_index;
+            return n0->getCurrentScore(role_index) > n1->getCurrentScore(role_index);
+        }
+    }
+
+    return true;
 }
 
 const PuctNodeChild* PuctEvaluator::chooseTopVisits(const PuctNode* node) {

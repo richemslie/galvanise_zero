@@ -72,6 +72,7 @@ namespace GGPZero {
         float getTemperature() const;
 
         const PuctNodeChild* choose(const PuctNode* node=nullptr);
+        bool converged(const PuctNode* node) const;
         const PuctNodeChild* chooseTopVisits(const PuctNode* node);
         const PuctNodeChild* chooseTemperature(const PuctNode* node);
 
