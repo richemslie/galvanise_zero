@@ -162,6 +162,7 @@ def get_network_model(conf):
                                             conf.input_channels),
                                      name="inputs_board")
 
+    # XXX config abuse:
     v2 = conf.residual_layers <= 0
     if v2:
         layer = klayers.Conv2D(conf.cnn_filter_size, 1,
@@ -170,11 +171,16 @@ def get_network_model(conf):
                                name='initial-conv')(inputs_board)
 
         filter_size = prev_filter_size = conf.cnn_filter_size
+
+        # XXX hard coding incr size (to zero)
         incr_size = 0
+
+        # XXX hard coding layers
         for i, c in enumerate([1, 1, 1, 1, 1, 2, 2, 2, 3, 3, 2, 2, 3, 1, 1, 1, 1, 1]):
             if i > 0 and i % 3 == 0:
                 filter_size += incr_size
 
+            # XXX hard coding dropout
             layer = residual_block_v2(filter_size, prev_filter_size,
                                       conf.cnn_kernel_size,
                                       c,
@@ -182,6 +188,14 @@ def get_network_model(conf):
                                       dropout=0.35,
                                       activation=activation)(layer)
             prev_filter_size = filter_size
+
+        # would make sense to add these, but it seems to hurt more than anything.  Straight line
+        # all the way eh?
+        # XXX
+        # layer = klayers.BatchNormalization(axis=get_bn_axis(),
+        #                                    name="final_bn")(layer)
+        # layer = act(layer, activation, "final_act")
+
     else:
         # AG0 way:
 
@@ -196,13 +210,6 @@ def get_network_model(conf):
                                       prefix="ResLayer_%s_" % i,
                                       activation=activation)(layer)
 
-        # would make sense to add these, but it seems to hurt more than anything.  Straight line
-        # all the way eh?
-        # XXX
-        # layer = klayers.BatchNormalization(axis=get_bn_axis(),
-        #                                    name="final_bn")(layer)
-        # layer = act(layer, activation, "final_act")
-
     # policy
     ########
     # similar to AG0, but with multiple policy heads
@@ -213,6 +220,7 @@ def get_network_model(conf):
     policy_heads = []
     for idx, count in enumerate(conf.policy_dist_count):
         # residual net -> flattened for policy head
+        # XXX 2, should be based on size of policy...
         to_flatten = conv2d_block(2, 1,
                                   name='to_flatten_policy_head_%s' % idx,
                                   padding='valid',
@@ -231,6 +239,7 @@ def get_network_model(conf):
 
     # value
     #######
+    # XXX config abuse:
     value_v2 = conf.value_hidden_size < 0
     if value_v2:
         assert conf.input_columns == conf.input_rows
@@ -244,10 +253,11 @@ def get_network_model(conf):
                 output_layer = klayers.AveragePooling2D(2, 2)(output_layer)
                 dims /= 2
 
+        # XXX 16 - hardcoded
         to_flatten = klayers.Conv2D(16, 1,
-                                     name='to_flatten_value_head',
-                                     padding='valid',
-                                     activation=activation)(output_layer)
+                                    name='to_flatten_value_head',
+                                    padding='valid',
+                                    activation=activation)(output_layer)
 
         if conf.dropout_rate_value > 0:
             to_flatten = klayers.Dropout(conf.dropout_rate_value)(to_flatten)
