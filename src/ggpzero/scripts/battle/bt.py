@@ -1,3 +1,29 @@
+"""
+        # moves = "b2-c3 a5-a4 e2-d3 b5-c4 f1-e2 f5-e4 a1-b2 f6-f5 b2-b3 a6-b5 f2-e3 e4-d3 e2-d3
+        # f5-e4 e1-e2 e4-d3 e2-d3 c4-b3 a2-b3 a4-a3 d1-e2 e6-f5 c3-c4 a3-b2 c1-b2 e5-d4".split()
+        # moves += "".split()
+
+        # wanderer - main variation
+        # play(["e2-d3", "e5-d4", "a2-b3", "a5-b4", "f2-f3", "f6-e5", "f1-f2", "f5-f4", "e1-e2",
+        # "c5-c4", "a1-a2"], MOVE_TIME)
+
+        # play(["b2-c3"], MOVE_TIME)
+
+        # gzero - variation
+        # play(["e2-d3", "e5-d4", "a2-b3", "a5-b4", "f2-f3", "f6-e5", "a1-a2", "e5-e4", "f3-e4",
+        # "f5-e4", "f1-e2", "c5-c4", "d3-e4"], MOVE_TIME)
+
+        # game 1 / gen x1_93
+
+        # play(["e2-d3", "c5-d4", "d2-c3", "d4-c3", "b2-c3",
+        #      "b5-c4", "a2-b3", "c4-d3", "c2-d3", "e5-e4",
+        #      "f1-e2", "f5-f4", "c1-d2"], MOVE_TIME)
+
+        # game 2 / gen x1_93
+        # play(["c2-d3", "b5-c4", "d3-c4", "d5-c4", "b2-c3", "e5-e4", "a2-a3",
+        #      "a6-b5", "a1-b2", "a5-a4", "f2-e3"], MOVE_TIME)
+"""
+
 import os
 import pdb
 import sys
@@ -13,6 +39,10 @@ from ggpzero.defs import confs
 from ggpzero.player.puctplayer import PUCTPlayer
 
 
+# BOARD_SIZE = 6
+BOARD_SIZE = 8
+
+
 def setup():
     from ggplib.util.init import setup_once
     setup_once()
@@ -24,31 +54,33 @@ def setup():
     tf.logging.set_verbosity(tf.logging.ERROR)
 
 
-compete = confs.PUCTPlayerConfig(name="bt_config",
-                                 ##generation="x1_109",
-                                 generation="x1_132",
-                                 verbose=True,
+def get_config(generation):
+    return confs.PUCTPlayerConfig(name="bt_config",
+                                  generation=generation,
+                                  verbose=True,
 
-                                 playouts_per_iteration=-1,
-                                 playouts_per_iteration_noop=0,
+                                  playouts_per_iteration=-1,
+                                  playouts_per_iteration_noop=0,
 
-                                 dirichlet_noise_alpha=-1,
+                                  dirichlet_noise_alpha=-1,
 
-                                 root_expansions_preset_visits=-1,
-                                 puct_before_expansions=3,
-                                 puct_before_root_expansions=5,
-                                 puct_constant_before=3.0,
-                                 puct_constant_after=0.75,
+                                  root_expansions_preset_visits=-1,
+                                  puct_before_expansions=3,
+                                  puct_before_root_expansions=5,
+                                  puct_constant_before=3.0,
+                                  puct_constant_after=0.75,
 
-                                 choose="choose_top_visits",
-                                 temperature=1.5,
-                                 depth_temperature_max=3.0,
-                                 depth_temperature_start=0,
-                                 depth_temperature_increment=0.5,
-                                 depth_temperature_stop=4,
-                                 random_scale=1.00,
+                                  fpu_prior_discount=0.25,
 
-                                 max_dump_depth=6)
+                                  choose="choose_top_visits",
+                                  temperature=1.5,
+                                  depth_temperature_max=3.0,
+                                  depth_temperature_start=0,
+                                  depth_temperature_increment=0.5,
+                                  depth_temperature_stop=4,
+                                  random_scale=1.00,
+
+                                  max_dump_depth=2)
 
 
 def pretty_board(sm):
@@ -68,18 +100,20 @@ def pretty_board(sm):
         if s[1][0] == "control":
             control = s[1][1]
         else:
-            assert s[1][0] == "cell"
+            if BOARD_SIZE == 8:
+                assert s[1][0] == "cell"
+            else:
+                assert s[1][0] == "cellHolds"
+
             key = int(s[1][1]), int(s[1][2])
             mapping[key] = s[1][3]
 
-    board_size = 6
-
     lines = []
-    line_len = board_size * 4 + 1
+    line_len = BOARD_SIZE * 4 + 1
     lines.append("    +" + "-" * (line_len - 2) + "+")
-    for i in reversed(range(1, board_size + 1)):
+    for i in reversed(range(1, BOARD_SIZE + 1)):
         ll = [" %s  |" % i]
-        for j in reversed(range(1, board_size + 1)):
+        for j in reversed(range(1, BOARD_SIZE + 1)):
             key = j, i
             if key in mapping:
                 if mapping[key] == "black":
@@ -95,7 +129,10 @@ def pretty_board(sm):
             lines.append("    " + "-" * line_len)
 
     lines.append("    +" + "-" * (line_len - 2) + "+")
-    lines.append("     " + ' '.join(' %s ' % c for c in 'abcdef'))
+    if BOARD_SIZE == 8:
+        lines.append("     " + ' '.join(' %s ' % c for c in 'abcdefgh'))
+    else:
+        lines.append("     " + ' '.join(' %s ' % c for c in 'abcdef'))
 
     print
     print
@@ -103,13 +140,19 @@ def pretty_board(sm):
     print "Control:", control
 
 
-def play(moves, move_time):
+def play(moves, generation, move_time):
     # add players
-    gm = GameMaster(get_gdl_for_game("breakthroughSmall"))
-    for role in gm.sm.get_roles():
-        gm.add_player(PUCTPlayer(conf=compete), role)
+    if BOARD_SIZE == 8:
+        game = "breakthrough"
+    else:
+        game = "breakthroughSmall"
 
-    sm = lookup.by_name("breakthroughSmall").get_sm()
+    gm = GameMaster(get_gdl_for_game(game))
+    conf = get_config(generation)
+    for role in gm.sm.get_roles():
+        gm.add_player(PUCTPlayer(conf), role)
+
+    sm = lookup.by_name(game).get_sm()
     sm.reset()
 
     pretty_board(sm)
@@ -119,7 +162,11 @@ def play(moves, move_time):
     base_state = sm.get_initial_state()
 
     def to_cords(s):
-        mapping_x_cord = {x0 : x1 for x0, x1 in zip('abcdef', '654321')}
+        if BOARD_SIZE == 8:
+            mapping_x_cord = {x0 : x1 for x0, x1 in zip('abcdefgh', '87654321')}
+        else:
+            mapping_x_cord = {x0 : x1 for x0, x1 in zip('abcdef', '654321')}
+
         return mapping_x_cord[s[0]], s[1]
 
     def f(ri, i):
@@ -163,7 +210,11 @@ def play(moves, move_time):
     move = move[lead_role_index]
     move = move.replace("(move", "").replace(")", "")
     a, b, c, d = move.split()
-    mapping_x_cord = {x0 : x1 for x0, x1 in zip('654321', 'abcdef')}
+    if BOARD_SIZE == 8:
+        mapping_x_cord = {x0 : x1 for x0, x1 in zip('87654321', 'abcdefgh')}
+    else:
+        mapping_x_cord = {x0 : x1 for x0, x1 in zip('654321', 'abcdef')}
+
     next_move = "%s%s-%s%s" % (mapping_x_cord[a], b, mapping_x_cord[c], d)
 
     sm.update_bases(gm.sm.get_current_state())
@@ -171,16 +222,15 @@ def play(moves, move_time):
     print "PLAYED", next_move, player.last_probability
     return next_move, player.last_probability
 
+
 if __name__ == "__main__":
 
     try:
         setup()
 
-        moves = "b2-c3 a5-a4 e2-d3 b5-c4 f1-e2 f5-e4 a1-b2 f6-f5 b2-b3 a6-b5 f2-e3 e4-d3 e2-d3 f5-e4 e1-e2 e4-d3 e2-d3 c4-b3 a2-b3 a4-a3 d1-e2 e6-f5 c3-c4 a3-b2 c1-b2 e5-d4".split()
-        # moves += "".split()
-
         MOVE_TIME = 1 * 60
 
+        moves = []
         lines = []
         for i in range(32):
             move, prob = play(moves, MOVE_TIME)
@@ -190,32 +240,8 @@ if __name__ == "__main__":
         for l in lines:
             print l
 
-
-
-
-        # wanderer - main variation
-        #play(["e2-d3", "e5-d4", "a2-b3", "a5-b4", "f2-f3", "f6-e5", "f1-f2", "f5-f4", "e1-e2", "c5-c4", "a1-a2"], MOVE_TIME)
-
-        #play(["b2-c3"], MOVE_TIME)
-
-        # gzero - variation
-        #play(["e2-d3", "e5-d4", "a2-b3", "a5-b4", "f2-f3", "f6-e5", "a1-a2", "e5-e4", "f3-e4", "f5-e4", "f1-e2", "c5-c4", "d3-e4"], MOVE_TIME)
-
-
-        # game 1 / gen x1_93
-
-        #play(["e2-d3", "c5-d4", "d2-c3", "d4-c3", "b2-c3",
-        #      "b5-c4", "a2-b3", "c4-d3", "c2-d3", "e5-e4",
-        #      "f1-e2", "f5-f4", "c1-d2"], MOVE_TIME)
-
-        # game 2 / gen x1_93
-        #play(["c2-d3", "b5-c4", "d3-c4", "d5-c4", "b2-c3", "e5-e4", "a2-a3",
-        #      "a6-b5", "a1-b2", "a5-a4", "f2-e3"], MOVE_TIME)
-
-
     except Exception as exc:
         print exc
         _, _, tb = sys.exc_info()
         traceback.print_exc()
         pdb.post_mortem(tb)
-
