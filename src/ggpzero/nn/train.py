@@ -1,3 +1,29 @@
+"""
+
+phase 0:
+
+* Use generator in keras.
+
+* Have a callback, so we can poll other stuff (say lg)
+
+
+phase 1:
+* as phase 0
+
+* Use bcolz as one time cache.  Every time we start, we create a new cache.  This means no changes
+  to server.py or changes to communication protocol.
+
+* Another advantage is that we have no issues then with removes bad runs (just delete the gendata files).
+
+* It might be easy to maintain a cache overruns - at least it will be easier to do as phase 2nd
+  phase, hard to think about it upfront.
+
+
+
+"""
+
+
+
 import os
 import gzip
 from collections import Counter
@@ -422,7 +448,7 @@ class TrainManager(object):
         XX_value_weight_min = 0.05
 
         # all games are zero sum that are trained and because 2 values, x2 the error.  XXX
-        value_weight = 0.5
+        value_weight = 1.0
 
         self.nn.compile(self.train_config.compile_strategy,
                         self.train_config.learning_rate,
@@ -455,7 +481,7 @@ class TrainManager(object):
                     elif orig_weight < 0.5 and controller.value_loss_diff < 0.002:
                         value_weight /= (XX_value_weight_reduction * 2)
 
-                value_weight = min(max(XX_value_weight_min, value_weight), 0.5)
+                value_weight = min(max(XX_value_weight_min, value_weight), 1.0)
                 if abs(value_weight - orig_weight) > 0.0001:
                     self.nn.compile(self.train_config.compile_strategy,
                                     self.train_config.learning_rate,
