@@ -1,7 +1,10 @@
 '''
+Copyright Richard Emslie 2018..
+
 Original from hippolyta - from with license:
 Copyright Tom Plick 2010, 2014.
-This file is released under the GPL version 3; see LICENSE.
+
+This file is released under the GPL version 3.
 '''
 
 import os
@@ -11,6 +14,8 @@ import time
 import pprint
 import urllib
 import urllib2
+import unicodedata
+
 from bs4 import BeautifulSoup
 
 from ggplib.player.gamemaster import GameMaster
@@ -20,6 +25,8 @@ from ggplib.util import log
 from ggpzero.util import attrutil as at
 from ggpzero.defs import confs
 from ggpzero.player import puctplayer
+
+from ggpzero.scripts.battle.hex import hex_get_state
 
 
 @at.register_attrs
@@ -104,16 +111,19 @@ class GameMasterByGame(object):
                                       depth_temperature_stop=self.game_config.depth_temperature_stop,
                                       random_scale=0.35,
 
-                                      max_dump_depth=4)
+                                      max_dump_depth=1)
 
         return conf
 
-    def get_move(self, str_state, depth, lead_role_index):
-        log.info("GameMasterByGame.get_move: %s" % str_state)
+    def get_move(self, state, depth, lead_role_index):
+        log.info("GameMasterByGame.get_move: %s" % state)
+
+        if isinstance(state, str):
+            state = self.gm.convert_to_base_state(state)
 
         self.gm.reset()
-        self.gm.start(meta_time=180, move_time=60,
-                      initial_basestate=self.gm.convert_to_base_state(str_state),
+        self.gm.start(meta_time=180, move_time=120,
+                      initial_basestate=state,
                       game_depth=depth)
 
         move = self.gm.play_single_move(last_move=None)
@@ -171,6 +181,8 @@ class LittleGolemConnection(object):
                         match_id = re.findall(r'\d+', str(cols[0]))[0]
                         depth = re.findall(r'\d+', str(cols[5]))[0]
                         opponent = cols[2].string
+                        if isinstance(opponent, unicode):
+                            opponent = opponent.encode('ascii','ignore')
                         s = "game waiting: '%s', against '%s' @ depth %s (match_id: %s)" % (cols[4].get_text(),
                                                                                             opponent,
                                                                                             depth,
@@ -199,14 +211,21 @@ class LittleGolemConnection(object):
             log.info("Accepting invitation to play reversi game")
             response = "accept"
 
-        # elif "<td>Hex :: Size 11" in text:
-        #    log.info("Accepting invitation to play hex 11x11 game")
-        #    response = "refuse"
+        elif "<td>Hex :: Size 11" in text:
+            log.info("Accepting invitation to play hex 11x11 game")
+            response = "accept"
+
+        elif "<td>Hex :: Size 13" in text:
+            log.info("Accepting invitation to play hex 13x13 game")
+            response = "accept"
 
         else:
             log.warning("Refusing invitation to play game")
             print text
             response = "refuse"
+
+        if response == "refuse":
+            XXX
 
         self.get_page("ng/a/Invitation.action?%s=&invid=%s" % (response,
                                                                invite_id))
@@ -215,99 +234,20 @@ class LittleGolemConnection(object):
     def play_move(self, game, *args):
         return self.games_by_gamemaster[game].get_move(*args)
 
-    # def handle_hex_11x11(self, match_id, depth, sgf, text):
-    #     X
+    def handle_hex_11(self, match_id, depth, sgf, text):
+        log.verbose("handle_hex_11, match_id:%s, depth:%d" % (match_id, depth))
+        our_role_index, state = hex_get_state(13, sgf)
+        move, prob, finished = self.play_move("hexLG11", state, depth, our_role_index)
 
-    #     def game_info(sgf):
-    #         tokens = re.split(r'([a-zA-Z]+\[[^\]]+\])', sgf)
-    #         tokens = [t for t in tokens if ']' in t.strip()]
-    #         for t in tokens:
-    #             key, value = re.search(r'([a-zA-Z]+)\[([^\]]+)\]', t).groups()
-    #             yield key, value
-
-    #     # get hex game
-    #     sm = lookup.by_name("hex_11x11").get_sm()
-    #     tup_sgf = list(game_info(sgf))
-    #     assert tup_sgf[0] == ('FF', '4')
-
-    #     moves = [(k, v) for k, v in tup_sgf if k == 'B' or k == 'W']
-
-    #     if len(moves) == 0:
-    #         m = random.choice(["bb", "jj", "bj", "jb"])
-    #         return m, 0.5, False
-
-    #     mapping_y_cord = {x0 : x1 for x0, x1 in zip('abcdefghi', '123456789')}
-    #     mapping_y_cord['j'] = '10'
-    #     mapping_y_cord['k'] = '11'
-
-    #     sm.reset()
-    #     lead_role_index = 0
-
-    #     def f(ri, i):
-    #         return sm.legal_to_move(ri, ls.get_legal(i))
-
-    #     flip_mapping = {x0 : x1 for x0, x1 in zip('abcdefghijk', 'kjihgfedcba')}
-    #     def flip(c):
-    #         return flip_mapping[c]
-
-    #     # get some states
-    #     joint_move = sm.get_joint_move()
-    #     base_state = sm.get_initial_state()
-
-    #     # this is nothing to do with swapping
-    #     swap_axis = True
-    #     for idx, (_, m) in enumerate(moves):
-    #         if m == "swap":
-    #             print "Game was swapped"
-    #             swap_axis = False
-    #             assert idx == 1
-    #             continue
-
-    #         for ri in range(len(sm.get_roles())):
-    #             if ri == lead_role_index:
-    #                 x, y = (m[1], m[0]) if swap_axis else (flip(m[0]), m[1])
-    #                 gdl_move = "(place %s %s)" % (x, mapping_y_cord[y])
-
-    #                 print "XXX", idx, m, "-->", gdl_move
-
-    #             else:
-    #                 gdl_move = "noop"
-
-    #             ls = sm.get_legal_state(ri)
-    #             the_moves = [f(ri, ii) for ii in range(ls.get_count())]
-    #             choice = the_moves.index(gdl_move)
-    #             joint_move.set(ri, ls.get_legal(choice))
-
-    #         # update state machine
-    #         sm.next_state(joint_move, base_state)
-    #         sm.update_bases(base_state)
-    #         # log.verbose("current state %s" % sm.basestate_to_str(base_state))
-
-    #         lead_role_index ^= 1
-
-    #     # actually play the move
-    #     our_lead_role_index = lead_role_index
-    #     trues = sm.basestate_to_str(base_state)
-
-    #     play_move, prob, finished = self.play_move("hex_11x11", trues, depth, our_lead_role_index)
-    #     print "move", play_move, prob, "finished" if finished else ""
-
-    #     if len(moves) == 1 and prob < 0.5:
-    #         print "swapping"
-    #         return "swap", prob, finished
-
-    #     # convert to what little golem expects
-    #     play_move = play_move.replace("(place ", "").replace(")", "")
-    #     a, b = play_move.split()
-    #     mapping_y_cord_reverse = {v : k for k, v in mapping_y_cord.items()}
-    #     b = mapping_y_cord_reverse[b]
-
-    #     if swap_axis:
-    #         move = '%s%s' % (b, a)
-    #     else:
-    #         move = '%s%s' % (flip(a), b)
-
-    #     return move, prob, finished
+    def handle_hex_13(self, match_id, depth, sgf, text):
+        log.verbose("handle_hex_13, match_id:%s, depth:%d" % (match_id, depth))
+        our_role_index, state = hex_get_state(13, sgf)
+        move, prob, finished = self.play_move("hexLG13", state, depth, our_role_index)
+        if move != "swap":
+            move = move.replace("(place", "").replace(")", "")
+            parts = move.split()
+            move = parts[0] + "_abcdefghijklm"[int(parts[1])]
+        return move, prob, finished
 
     def handle_breakthrough(self, match_id, depth, sgf, text):
         cords = []
@@ -530,8 +470,11 @@ class LittleGolemConnection(object):
         elif "Reversi 10x10-Size 10x10" in text:
             meth = self.handle_reversi_10x10
 
-        # elif "Hex-Size 11" in text:
-        #    meth = self.handle_hex_11x11
+        elif "Hex-Size 11" in text:
+            meth = self.handle_hex_11
+
+        elif "Hex-Size 13" in text:
+            meth = self.handle_hex_13
 
         else:
             assert False, "unknown game: '%s'" % text
