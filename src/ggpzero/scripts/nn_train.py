@@ -32,15 +32,19 @@ def get_nn_model(game, transformer, size="small"):
     assert config.cnn_kernel_size == 3
     assert not config.l2_regularisation
 
-    config.cnn_filter_size = 64
-    config.residual_layers = 6
+    # config.cnn_filter_size = 64
+    # config.residual_layers = 6
+    # config.value_hidden_size = 128
+
+    # abuse these for v2
+    config.cnn_filter_size = 48
+    config.residual_layers = -1
+    config.value_hidden_size = -1
 
     config.dropout_rate_policy = 0.25
     config.dropout_rate_value = 0.5
 
-    config.residual_layers = 8
     config.role_count = 2
-    config.value_hidden_size = 128
     config.leaky_relu = False
 
     return config

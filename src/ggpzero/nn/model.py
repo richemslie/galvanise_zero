@@ -162,7 +162,7 @@ def get_network_model(conf):
                                             conf.input_channels),
                                      name="inputs_board")
 
-    v2 = False
+    v2 = conf.residual_layers <= 0
     if v2:
         layer = klayers.Conv2D(conf.cnn_filter_size, 1,
                                padding="same",
@@ -231,8 +231,8 @@ def get_network_model(conf):
 
     # value
     #######
-    value_version_v2 = False
-    if value_version_v2:
+    value_v2 = conf.value_hidden_size < 0
+    if value_v2:
         assert conf.input_columns == conf.input_rows
         output_layer = layer
         dims = conf.input_columns
