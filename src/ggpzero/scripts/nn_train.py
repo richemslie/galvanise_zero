@@ -6,138 +6,62 @@ from ggpzero.nn import train
 from ggpzero.nn.manager import get_manager
 
 
-class Configs:
-    def breakthrough(self, gen_prefix):
-        conf = confs.TrainNNConfig("breakthrough")
+def get_train_config(game, gen_prefix, next_step, starting_step):
+    config = confs.TrainNNConfig(game)
 
-        conf.generation_prefix = gen_prefix
+    config.next_step = next_step
+    config.starting_step = starting_step
 
-        conf.use_previous = False
-        conf.next_step = 92
+    config.generation_prefix = gen_prefix
+    config.batch_size = 512
+    config.compile_strategy = "adam"
+    config.epochs = 8
+    config.learning_rate = None
+    config.overwrite_existing = False
+    config.use_previous = False
+    config.validation_split = 0.90000
 
-        conf.validation_split = 0.9
-        conf.batch_size = 512
-        conf.epochs = 6
-        conf.starting_step = 20
+    config.resample_buckets = []
 
-        return conf
-
-    def reversi(self, gen_prefix):
-        conf = confs.TrainNNConfig("reversi")
-        conf.generation_prefix = gen_prefix
-        conf.batch_size = 512
-        conf.compile_strategy = "adam"
-        conf.epochs = 6
-        conf.learning_rate = None
-        conf.next_step = 20
-
-        conf.overwrite_existing = False
-        conf.starting_step = 5
-        conf.use_previous = False
-        conf.validation_split = 0.90000
-
-        conf.resample_buckets = [[10, 1.0], [0, 0.5]]
-
-        return conf
-
-    def c4(self, gen_prefix):
-        conf = confs.TrainNNConfig("connectFour")
-
-        conf.generation_prefix = gen_prefix
-
-        conf.use_previous = False
-        conf.next_step = 33
-
-        conf.validation_split = 0.9
-        conf.batch_size = 4096
-        conf.epochs = 1
-        conf.starting_step = 25
-        conf.overwrite_existing = True
-
-        return conf
-
-    def hex(self, gen_prefix):
-        conf = confs.TrainNNConfig("hex")
-
-        conf.generation_prefix = gen_prefix
-
-        conf.use_previous = False
-        conf.next_step = 20
-
-        conf.validation_split = 0.9
-        conf.batch_size = 128
-        conf.epochs = 20
-        conf.max_sample_count = 300000
-        conf.starting_step = 3
-        conf.overwrite_existing = True
-
-        return conf
-
-    def speedChess(self, gen_prefix):
-        conf = confs.TrainNNConfig("speedChess")
-
-        conf.generation_prefix = gen_prefix
-
-        conf.use_previous = False
-        conf.next_step = 12
-
-        conf.validation_split = 0.9
-        conf.batch_size = 128
-        conf.epochs = 20
-        conf.max_sample_count = 300000
-        conf.starting_step = 3
-        conf.overwrite_existing = True
-
-        return conf
+    return config
 
 
 def get_nn_model(game, transformer, size="small"):
     config = templates.nn_model_config_template(game, size, transformer)
+    assert config.multiple_policies
+    assert config.cnn_kernel_size == 3
+    assert not config.l2_regularisation
 
-    config.cnn_filter_size = 128
-    config.cnn_kernel_size = 3
+    config.cnn_filter_size = 64
+    config.residual_layers = 6
+
     config.dropout_rate_policy = 0.25
     config.dropout_rate_value = 0.5
-    config.input_channels = 3
-    config.input_columns = 8
-    config.input_rows = 8
-    config.l2_regularisation = False
-    config.multiple_policies = True
-    config.policy_dist_count = [
-        155,
-        155
-    ]
+
     config.residual_layers = 8
     config.role_count = 2
-    config.value_hidden_size = 256
+    config.value_hidden_size = 128
     config.leaky_relu = False
 
     return config
 
 
-def retrain(args):
-    game = sys.argv[1]
-    gen_prefix = sys.argv[2]
-    gen_prefix_next = sys.argv[3]
-
-    configs = Configs()
-    train_config = getattr(configs, game)(gen_prefix)
-
-    generation_descr = templates.default_generation_desc(train_config.game,
-                                                         multiple_policy_heads=True,
-                                                         num_previous_states=0)
-
-    # create a transformer
+def do_training(game, gen_prefix, next_step, starting_step, num_previous_states, gen_prefix_next):
     man = get_manager()
 
-    transformer = man.get_transformer(train_config.game, generation_descr)
+    # create a transformer
+    generation_descr = templates.default_generation_desc(game,
+                                                         multiple_policy_heads=True,
+                                                         num_previous_states=num_previous_states)
+    transformer = man.get_transformer(game, generation_descr)
 
-    # create the manager
+    # create train_config
+    train_config = get_train_config(game, gen_prefix, next_step, starting_step)
     trainer = train.TrainManager(train_config, transformer)
     trainer.update_config(train_config, next_generation_prefix=gen_prefix_next)
 
+    # get the nn model and set on trainer
     nn_model_config = get_nn_model(train_config.game, transformer)
-    #nn_model_config = templates.nn_model_config_template(train_config.game, "small", transformer)
     trainer.get_network(nn_model_config, generation_descr)
 
     data = trainer.gather_data()
@@ -147,5 +71,18 @@ def retrain(args):
 
 
 if __name__ == "__main__":
+
+    def main(args):
+        gen_prefix_next = sys.argv[1]
+
+        # modify these >>>
+        game = "hexLG13"
+        gen_prefix = "h1"
+        next_step = 38
+        starting_step = 3
+        num_previous_states = 1
+
+        do_training(game, gen_prefix, next_step, starting_step, num_previous_states, gen_prefix_next)
+
     from ggpzero.util.main import main_wrap
-    main_wrap(retrain)
+    main_wrap(main)
