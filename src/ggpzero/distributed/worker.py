@@ -176,12 +176,16 @@ class Worker(Broker):
         self.supervisor.poll_loop(do_stats=True, cb=self.cb_from_superviser)
 
         msg = "#samp %d, pred()s %d/%d, py/pred/all %.1f/%.1f/%.1f"
+        time_since_last = time.time() - start_time
         log.info(msg % (len(self.samples),
                         self.supervisor.num_predictions_calls,
                         self.supervisor.total_predictions,
                         self.supervisor.acc_time_polling,
                         self.supervisor.acc_time_prediction,
-                        time.time() - start_time))
+                        time_since_last))
+
+        predicts_per_sec = self.supervisor.total_predictions / time_since_last
+        log.info("Average pred p/s %.1f" % predicts_per_sec)
 
         m = msgs.RequestSampleResponse(self.samples, 0)
         server.send_msg(m)
