@@ -15,6 +15,9 @@
 # log files
 *.log
 
+# game files
+*.sgf
+
 bin/install
 
 # spurious stuff in my repo XXX
