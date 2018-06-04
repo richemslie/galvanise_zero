@@ -59,7 +59,7 @@ class LGConfig(object):
     store_path = at.attribute("/home/rxe/working/ggpzero/data/lg/")
 
     # only let these games play, some manual control
-    allow_match_ids = []
+    allow_match_ids = at.attribute(default=at.attr_factory(list))
 
 
 def template_config():
