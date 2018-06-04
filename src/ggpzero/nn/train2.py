@@ -79,7 +79,7 @@ class TrainManager(object):
         self.cache.sync()
         # XXX fix worker.py and nn_train.py to not even call this
 
-    def do_epochs(self, _):
+    def do_epochs(self):
         # XXX remove leveled_data, since gather_data does not return anything anymore
 
         conf = self.train_config
