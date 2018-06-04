@@ -1,29 +1,3 @@
-"""
-
-phase 0:
-
-* Use generator in keras.
-
-* Have a callback, so we can poll other stuff (say lg)
-
-
-phase 1:
-* as phase 0
-
-* Use bcolz as one time cache.  Every time we start, we create a new cache.  This means no changes
-  to server.py or changes to communication protocol.
-
-* Another advantage is that we have no issues then with removes bad runs (just delete the gendata files).
-
-* It might be easy to maintain a cache overruns - at least it will be easier to do as phase 2nd
-  phase, hard to think about it upfront.
-
-
-
-"""
-
-
-
 import os
 import gzip
 from collections import Counter

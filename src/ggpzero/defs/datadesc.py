@@ -3,6 +3,7 @@ import attr
 from ggpzero.util.attrutil import register_attrs
 
 
+# XXX rename?
 @register_attrs
 class Sample(object):
     # state policy trained on.  This is a tuple of 0/1s.  Effectively a bit array.
@@ -35,6 +36,7 @@ class Sample(object):
     resultant_puct_visits = attr.ib(800)
 
 
+# XXX rename?
 @register_attrs
 class GenerationSamples(object):
     game = attr.ib("game")
@@ -88,3 +90,49 @@ class GenerationDescription(object):
     trained_validation_losses = attr.ib('not set')
     trained_policy_accuracy = attr.ib('not set')
     trained_value_accuracy = attr.ib('not set')
+
+
+@register_attrs
+class StepSummary(object):
+    step = attr.ib(42)
+    filename = attr.ib("gendata_hexLG11_6.json.gz")
+    with_generation = attr.ib("h_5")
+    num_samples = attr.ib(50000)
+
+    md5sum = attr.ib("93d6ce4b812d353c73f4a8ca5b605d37")
+
+    stats_unique_matches = attr.ib(2200)
+    stats_draw_ratio = attr.ib(0.03)
+
+    # when all policies lengths = 1
+    stats_bare_policies_ratio = attr.ib(0.03)
+
+    stats_av_starting_depth = attr.ib(5.5)
+    stats_av_ending_depth = attr.ib(5.5)
+    stats_av_resigns = attr.ib(0.05)
+    stats_av_resign_false_positive = attr.ib(0.2)
+
+    stats_av_puct_visits = attr.ib(2000)
+
+    # if len(policy dist) > 1 and len(other_policy dist) == 1: +1 / #samples
+    # [0.45, 0.55]
+    stats_ratio_of_roles = attr.ib(attr.Factory(list))
+
+    # average score by role
+    stats_av_final_scores = attr.ib(attr.Factory(list))
+
+    # score up to for lead_role_index (or role_index 0), number of samples
+    # [(0.1, 200), (0.1, 200),... (0.9, 200)]
+    stats_av_puct_score_dist = attr.ib(attr.Factory(list))
+
+
+@register_attrs
+class GenDataSummary(object):
+    game = attr.ib("game")
+    gen_prefix = attr.ib("x1")
+    last_updated = attr.ib('2018-01-24 22:28')
+    total_samples = attr.ib(10**10)
+
+    # isinstance StepSummary
+    step_summaries = attr.ib(attr.Factory(list))
+

@@ -1,7 +1,3 @@
-'''
-The idea is to automate much of this.
-'''
-
 import numpy as np
 
 from ggplib.util import log
@@ -299,12 +295,16 @@ class GdlBasesTransformer(object):
 
         return sample
 
-    def policy_to_array(self, policy, lead_role_index):
-        array = np.zeros(self.policy_dist_count[lead_role_index], dtype='float32')
+    def policy_to_array(self, policy, role_index):
+        array = np.zeros(self.policy_dist_count[role_index], dtype='float32')
         for idx, prob in policy:
             array[idx] = prob
 
         return array
+
+    def value_to_array(self, values):
+        assert len(values) == self.role_count
+        return np.array(values, dtype='float32')
 
     def sample_to_nn(self, sample, inputs, outputs):
         # transform samples -> numpy arrays as inputs/outputs to nn
@@ -325,4 +325,3 @@ class GdlBasesTransformer(object):
         # output - best/final scores
         output.append(np.array(sample.final_score, dtype='float32'))
         outputs.append(output)
-
