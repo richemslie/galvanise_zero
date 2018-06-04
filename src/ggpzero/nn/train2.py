@@ -1,14 +1,8 @@
-import os
-import gzip
-from collections import Counter
-
-import numpy as np
 
 from ggplib.util import log
 from ggplib.db import lookup
 
 from ggpzero.util import attrutil
-from ggpzero.util.state import decode_state
 
 from ggpzero.defs import confs
 
@@ -17,6 +11,9 @@ from ggpzero.nn.manager import get_manager
 from ggpzero.nn import network
 from ggpzero.nn import datacache
 
+# XXX tmp:
+from ggpzero.nn.train import TrainException
+
 
 ###############################################################################
 
@@ -24,19 +21,14 @@ class TrainManager(object):
     def __init__(self, train_config, transformer):
         # take a copy of the initial train_config
         assert isinstance(train_config, confs.TrainNNConfig)
-        self.train_config = attrutil.clone(train_config)
-
-        attrutil.pprint(train_config)
-
         self.transformer = transformer
 
         # lookup via game_name (this gets statemachine & statemachine model)
         self.game_info = lookup.by_name(train_config.game)
-
-        # will be created in gather_data
-        self.next_generation = "%s_%s" % (train_config.generation_prefix, train_config.next_step)
+        self.update_config(attrutil.clone(train_config))
 
     def update_config(self, train_config, next_generation_prefix=None):
+        # abbreviate, easier on the eyes
         self.train_config = train_config
         if next_generation_prefix is not None:
             self.next_generation = "%s_%s" % (next_generation_prefix, train_config.next_step)
@@ -85,15 +77,11 @@ class TrainManager(object):
 
         self.cache = datacache.DataCache(self.transformer, conf.generation_prefix)
         self.cache.sync()
+        # XXX fix worker.py and nn_train.py to not even call this
 
-    def train_epoch(self, epochs):
-        tc = self.config.trainer
-        self.model.model.fit_generator(generator=self.generate_train_data(tc.batch_size),
-                                       steps_per_epoch=tc.epoch_steps,
-                                       epochs=epochs)
-        return tc.epoch_steps * epochs
+    def do_epochs(self, _):
+        # XXX remove leveled_data, since gather_data does not return anything anymore
 
-    def do_epochs(self, leveled_data):
         conf = self.train_config
 
         train_at_step = conf.next_step - 1
@@ -105,7 +93,6 @@ class TrainManager(object):
                                                   starting_step=train_at_step,
                                                   ignore_after_step=ignore_after_step,
                                                   validation_split=conf.validation_split)
-
 
         # first get validation data, then we can forget about it as it doesn't need reshuffled
         validation_indices = indexer.validation_epoch()
@@ -127,8 +114,6 @@ class TrainManager(object):
         self.nn.compile(self.train_config.compile_strategy,
                         self.train_config.learning_rate,
                         value_weight=value_weight)
-
-        # num_samples = len(train_data.inputs)
 
         for i in range(num_epochs):
 
@@ -169,16 +154,15 @@ class TrainManager(object):
                    validation_data=self.cache.generate(validation_indices, conf.batch_size),
                    validation_steps=len(validation_indices) / conf.batch_size,
                    callbacks=[training_logger, controller],
-                   shuffle=False, # XXX really, shuffle?
+                   shuffle=False,
                    initial_epoch=0)
 
         self.controller = controller
 
-    def save(self, generation_test_name=None):
+    def save(self):
+        # XXX set generation attributes
+
         man = get_manager()
-        if generation_test_name:
-            man.save_network(self.nn, generation_name=generation_test_name)
-            return
 
         man.save_network(self.nn, generation_name=self.next_generation)
 

@@ -283,7 +283,11 @@ class Games(object):
     def _chess_like(self, game, steps):
         control = binary_control("control", "white", "black")
         step = step_control("step", 1, steps)
-        has_moveds = [simple_control(s) for s in "kingHasMoved hRookHasMoved aRookHasMoved aRookHasMoved".split()]
+
+        has_moveds = []
+        for s in "kingHasMoved hRookHasMoved aRookHasMoved".split():
+            has_moveds.append(simple_control(s, "black"))
+            has_moveds.append(simple_control(s, "white"))
 
         # cross product
         cell = BoardChannels("cell", 1, 2, [BoardTerm(3, "white black".split()),
@@ -299,8 +303,7 @@ class Games(object):
         return self._chess_like("speedChess", 150)
 
     def chess_150(self):
-        assert False, "check steps"
-        return self._chess_like("chess_150", 150)
+        return self._chess_like("chess_150", 151)
 
     def chess_200(self):
         assert False, "check steps"
@@ -340,4 +343,3 @@ class Games(object):
                         "1 2 3 4 5 6 7 8 9 10 11".split(),
                         "1 2 3 4 5 6 7 8 9 10 11".split(),
                         [cell], [control])
-

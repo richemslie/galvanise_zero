@@ -2,7 +2,9 @@ import sys
 
 from ggpzero.defs import confs, templates
 
-from ggpzero.nn import train
+#from ggpzero.nn import train
+from ggpzero.nn import train2 as train
+
 from ggpzero.nn.manager import get_manager
 
 
@@ -37,7 +39,7 @@ def get_nn_model(game, transformer, size="small"):
     # config.value_hidden_size = 128
 
     # abuse these for v2
-    config.cnn_filter_size = 48
+    config.cnn_filter_size = 32
     config.residual_layers = -1
     config.value_hidden_size = -1
 
@@ -68,9 +70,7 @@ def do_training(game, gen_prefix, next_step, starting_step, num_previous_states,
     nn_model_config = get_nn_model(train_config.game, transformer)
     trainer.get_network(nn_model_config, generation_descr)
 
-    data = trainer.gather_data()
-
-    trainer.do_epochs(data)
+    trainer.do_epochs()
     trainer.save()
 
 
@@ -80,10 +80,10 @@ if __name__ == "__main__":
         gen_prefix_next = sys.argv[1]
 
         # modify these >>>
-        game = "hexLG13"
-        gen_prefix = "h1"
-        next_step = 38
-        starting_step = 3
+        game = "amazons_10x10"
+        gen_prefix = "h3"
+        next_step = 15
+        starting_step = 1
         num_previous_states = 1
 
         do_training(game, gen_prefix, next_step, starting_step, num_previous_states, gen_prefix_next)

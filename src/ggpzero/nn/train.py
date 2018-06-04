@@ -405,6 +405,7 @@ class TrainManager(object):
         return leveled_data
 
     def do_epochs(self, leveled_data):
+        leveled_data = self.gather_data()
         conf = self.train_config
 
         # first get validation data, then we can forget about it as it doesn't need reshuffled
@@ -427,8 +428,6 @@ class TrainManager(object):
         self.nn.compile(self.train_config.compile_strategy,
                         self.train_config.learning_rate,
                         value_weight=value_weight)
-
-        # num_samples = len(train_data.inputs)
 
         for i in range(num_epochs):
 
@@ -469,34 +468,10 @@ class TrainManager(object):
                         shuffle=False,
                         callbacks=[training_logger, controller])
 
-            # sample_weights = [np.ones(outputs[0].shape[0], dtype='float32') * 0.5,
-            #                   np.ones(outputs[0].shape[0], dtype='float32') * 0.5,
-            #                   np.ones(outputs[0].shape[0], dtype='float32') * value_weight]
-
-            # sample_weights2 = [np.ones(validation_outputs[0].shape[0], dtype='float32') * 0.5,
-            #                    np.ones(validation_outputs[0].shape[0], dtype='float32') * 0.5,
-            #                    np.ones(validation_outputs[0].shape[0], dtype='float32') * value_weight]
-
-            # self.nn.keras_model.fit(inputs,
-            #                         outputs,
-            #                         verbose=0,
-            #                         batch_size=conf.batch_size,
-            #                         epochs=1,
-            #                         validation_data=[validation_inputs,
-            #                                          validation_outputs,
-            #                                          sample_weights2],
-            #                         shuffle=False,
-            #                         sample_weight=sample_weights,
-            #                         callbacks=[training_logger, controller])
-
         self.controller = controller
 
-    def save(self, generation_test_name=None):
+    def save(self):
         man = get_manager()
-        if generation_test_name:
-            man.save_network(self.nn, generation_name=generation_test_name)
-            return
-
         man.save_network(self.nn, generation_name=self.next_generation)
 
         ###############################################################################

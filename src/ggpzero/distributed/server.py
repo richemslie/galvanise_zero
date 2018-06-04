@@ -271,6 +271,10 @@ class ServerBroker(Broker):
                                                           self.conf.current_step))
 
     def save_sample_data(self):
+        if self.training_in_progress:
+            log.warning("skip writing json (gzipped): %s" % self.sample_data_filename)
+            return
+
         gen_samples = datadesc.GenerationSamples()
         gen_samples.game = self.conf.game
         gen_samples.date_created = get_date_string()
