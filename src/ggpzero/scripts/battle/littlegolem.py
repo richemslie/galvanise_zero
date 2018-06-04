@@ -1,5 +1,5 @@
 '''
-Copyright Richard Emslie 2018..
+Copyright Richard Emslie 2018.
 
 Original from hippolyta - from with license:
 Copyright Tom Plick 2010, 2014.
@@ -14,7 +14,7 @@ import time
 import pprint
 import urllib
 import urllib2
-import unicodedata
+import functools
 
 from bs4 import BeautifulSoup
 
@@ -58,6 +58,9 @@ class LGConfig(object):
     # store game path
     store_path = at.attribute("/home/rxe/working/ggpzero/data/lg/")
 
+    # only let these games play, some manual control
+    allow_match_ids = []
+
 
 def template_config():
     c = LGConfig()
@@ -94,7 +97,7 @@ class GameMasterByGame(object):
                                       playouts_per_iteration=playouts_per_iteration,
                                       playouts_per_iteration_noop=0,
 
-                                      dirichlet_noise_alpha=-1,
+                                      dirichlet_noise_alpha=0.03,
                                       root_expansions_preset_visits=-1,
                                       fpu_prior_discount=0.25,
 
@@ -122,7 +125,7 @@ class GameMasterByGame(object):
             state = self.gm.convert_to_base_state(state)
 
         self.gm.reset()
-        self.gm.start(meta_time=180, move_time=120,
+        self.gm.start(meta_time=180, move_time=300,
                       initial_basestate=state,
                       game_depth=depth)
 
@@ -173,6 +176,7 @@ class LittleGolemConnection(object):
     def games_waiting(self):
         text = self.get_page("jsp/game/index.jsp")
         soup = BeautifulSoup(text)
+
         for div in soup.find_all("div", attrs={"class": "row"}):
             if "On Move" in str(div):
                 for tbody in div.find_all("tbody"):
@@ -182,7 +186,7 @@ class LittleGolemConnection(object):
                         depth = re.findall(r'\d+', str(cols[5]))[0]
                         opponent = cols[2].string
                         if isinstance(opponent, unicode):
-                            opponent = opponent.encode('ascii','ignore')
+                            opponent = opponent.encode('ascii', 'ignore')
                         s = "game waiting: '%s', against '%s' @ depth %s (match_id: %s)" % (cols[4].get_text(),
                                                                                             opponent,
                                                                                             depth,
@@ -190,7 +194,9 @@ class LittleGolemConnection(object):
                         log.verbose(len(s) * "=")
                         log.verbose(s)
                         log.verbose(len(s) * "=")
-                        yield int(match_id), opponent, int(depth)
+                        match_id = int(match_id)
+                        if match_id in self.config.allow_match_ids:
+                            yield match_id, opponent, int(depth)
 
     def answer_invitation(self):
         text = self.get_page("jsp/invitation/index.jsp")
@@ -203,30 +209,8 @@ class LittleGolemConnection(object):
 
         log.info("GOT INVITATION: %s" % invite_id)
 
-        if "<td>Breakthrough :: Size 8</td>" in text:
-            log.info("Accepting invitation to play breakthrough game")
-            response = "accept"
-
-        elif "<td>Reversi" in text:
-            log.info("Accepting invitation to play reversi game")
-            response = "accept"
-
-        elif "<td>Hex :: Size 11" in text:
-            log.info("Accepting invitation to play hex 11x11 game")
-            response = "accept"
-
-        elif "<td>Hex :: Size 13" in text:
-            log.info("Accepting invitation to play hex 13x13 game")
-            response = "accept"
-
-        else:
-            log.warning("Refusing invitation to play game")
-            print text
-            response = "refuse"
-
-        if response == "refuse":
-            XXX
-
+        # accept all games - whether we play or not is decided by config.allow_match_ids
+        response = "accept"
         self.get_page("ng/a/Invitation.action?%s=&invid=%s" % (response,
                                                                invite_id))
         return True
@@ -234,19 +218,17 @@ class LittleGolemConnection(object):
     def play_move(self, game, *args):
         return self.games_by_gamemaster[game].get_move(*args)
 
-    def handle_hex_11(self, match_id, depth, sgf, text):
-        log.verbose("handle_hex_11, match_id:%s, depth:%d" % (match_id, depth))
-        our_role_index, state = hex_get_state(13, sgf)
-        move, prob, finished = self.play_move("hexLG11", state, depth, our_role_index)
+    def handle_hex(self, board_size, match_id, depth, sgf, text):
+        log.verbose("handle_hex, board_size %d, match_id:%s, depth:%d" % (board_size, match_id, depth))
+        role_index, state = hex_get_state(board_size, sgf)
+        game = "hexLG%d" % board_size
+        move, prob, finished = self.play_move(game, state, depth, role_index)
 
-    def handle_hex_13(self, match_id, depth, sgf, text):
-        log.verbose("handle_hex_13, match_id:%s, depth:%d" % (match_id, depth))
-        our_role_index, state = hex_get_state(13, sgf)
-        move, prob, finished = self.play_move("hexLG13", state, depth, our_role_index)
         if move != "swap":
             move = move.replace("(place", "").replace(")", "")
             parts = move.split()
             move = parts[0] + "_abcdefghijklm"[int(parts[1])]
+
         return move, prob, finished
 
     def handle_breakthrough(self, match_id, depth, sgf, text):
@@ -471,10 +453,10 @@ class LittleGolemConnection(object):
             meth = self.handle_reversi_10x10
 
         elif "Hex-Size 11" in text:
-            meth = self.handle_hex_11
+            meth = functools.partial(self.handle_hex, 11)
 
         elif "Hex-Size 13" in text:
-            meth = self.handle_hex_13
+            meth = functools.partial(self.handle_hex, 13)
 
         else:
             assert False, "unknown game: '%s'" % text
@@ -534,7 +516,7 @@ class LittleGolemConnection(object):
             log.error("Game didn't advance on sending move.  Aborting.")
             sys.exit(1)
 
-    def loop_forever(self):
+    def poll_gen(self):
         sleep_time = self.MIN_WAIT_TIME
         last_answer_invites = time.time() - 1
 
@@ -555,7 +537,10 @@ class LittleGolemConnection(object):
             if not handled:
                 # backoff, lets not hammer LG server
                 sleep_time = min(sleep_time + 10, self.MAX_WAIT_TIME)
+                yield sleep_time
 
+    def loop_forever(self):
+        for sleep_time in self.poll_gen():
             print "sleeping for %s seconds" % sleep_time
             time.sleep(sleep_time)
 

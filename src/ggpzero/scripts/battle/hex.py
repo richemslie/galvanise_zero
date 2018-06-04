@@ -49,7 +49,7 @@ def config(gen, **kwds):
                                   depth_temperature_max=5.0,
                                   depth_temperature_start=0,
                                   depth_temperature_increment=0.5,
-                                  depth_temperature_stop=6,
+                                  depth_temperature_stop=1,
                                   random_scale=1.00,
 
                                   fpu_prior_discount=0.25,
@@ -71,7 +71,7 @@ def swapaxis(s):
     return "%s%s" % (mapping_x[s[1]], mapping_y[s[0]])
 
 
-def play_moves(moves, game_size=13):
+def play_moves(moves, game_size):
     sm = lookup.by_name("hexLG%s" % game_size).get_sm()
     sm.reset()
 
@@ -111,6 +111,7 @@ def play_moves(moves, game_size=13):
         # update state machine
         sm.next_state(joint_move, base_state)
         sm.update_bases(base_state)
+        print sm.basestate_to_str(base_state)
 
         role_index = 1 if role_index == 0 else 0
 
@@ -124,21 +125,17 @@ def simplemcts_player(move_time):
     return player
 
 
-def play_game(config_0, config_1, moves=[], game_size=11, move_time=10.0):
-    # add players
+def play_game(player_black, player_white, moves=[], game_size=11, move_time=10.0):
+    # create gm and add players
     gm = GameMaster(get_gdl_for_game("hexLG%s" % game_size), verbose=True)
-
-    gm.add_player(simplemcts_player(move_time), "black")
-    # gm.add_player(simplemcts_player(move_time), "white")
-
-    # gm.add_player(PUCTPlayer(config_0), "black")
-    gm.add_player(PUCTPlayer(config_1), "white")
+    gm.add_player(player_black, "black")
+    gm.add_player(player_white, "white")
 
     # play move via gamemaster:
     gm.reset()
 
     if moves:
-        state = play_moves(moves)
+        _, state = play_moves(moves, game_size)
         gm.start(meta_time=15,
                  initial_basestate=state,
                  game_depth=len(moves),
@@ -150,48 +147,32 @@ def play_game(config_0, config_1, moves=[], game_size=11, move_time=10.0):
     def remove_gdl(m):
         return m.replace("(place ", "").replace(")", "").strip().replace(' ', '')
 
-    move = None
     sgf_moves = []
-    swapped = False
-    for i, m in enumerate(moves):
-        if i == 0:
-            ri = 0
-        elif m == "swap":
-            assert i == 1
-            ri = 1
-            swapped = True
-        else:
-            if swapped:
-                i -= 1
-            ri = i % 2
 
+    def add_sgf_move(ri, m):
         sgf_moves.append((ri, m))
-
-    while not gm.finished():
-        move = gm.play_single_move(last_move=move)
-        ri = 1 if move[0] == "noop" else 0
-        str_move = remove_gdl(move[ri])
-
-        sgf_moves.append((ri, str_move))
-
-        if str_move == "swap":
+        if m == "swap":
             assert ri == 1
+            assert len(sgf_moves) == 1
 
             # hexgui does do swap like LG.   THis is a (double) hack.
             moved_move = swapaxis(sgf_moves[0][1])
             sgf_moves[0] = (0, moved_move)
             sgf_moves.append((1, moved_move))
 
-    for ri, m in sgf_moves:
-        print ri, m
+    for i, move in enumerate(moves):
+        add_sgf_move(i % 2, move)
 
-    x = hashlib.md5(hashlib.sha1("%.5f" % time.time()).hexdigest()).hexdigest()[:6]
-    with open("game_%s_%s_%s.sgf" % (config_0.name, config_1.name, x), "w") as f:
-        f.write("(;FF[4]EV[null]PB[%s]PW[%s]SZ[%s]GC[game#%s];" % (config_1.name, config_0.name, game_size, x))
-        # piece colours are swapped for hexgui from LG
-        for ri, m in sgf_moves:
-            f.write("%s[%s];" % ("B" if ri == 0 else "W", m))
-        f.write(")\n")
+    move = None
+    while not gm.finished():
+        move = gm.play_single_move(last_move=move)
+        ri = 1 if move[0] == "noop" else 0
+        str_move = remove_gdl(move[ri])
+        add_sgf_move(ri, str_move)
+        write_hexgui_sgf(player_black.name, player_white.name, sgf_moves, gm.match_id)
+
+    write_hexgui_sgf(player_black.name, player_white.name, sgf_moves, gm.match_id)
+    return sgf_moves
 
 
 def parse_sgf(text):
@@ -229,24 +210,48 @@ def hex_get_state(game_size, sgf):
         move = move[0] + str("abcdefghijklmnop".index(move[1]) + 1)
         moves.append(move)
 
-    return play_moves(moves, game_size=game_size)
+    return play_moves(moves, game_size)
+
+
+def write_hexgui_sgf(black_name, white_name, sgf_moves, game_id=None):
+    if game_id is None:
+        game_id = hashlib.md5(hashlib.sha1("%.5f" % time.time()).hexdigest()).hexdigest()[:6]
+
+    with open("game_%s_%s_%s.sgf" % (black_name, white_name, game_id), "w") as f:
+        f.write("(;FF[4]EV[null]PB[%s]PW[%s]SZ[%s]GC[game#%s];" % (black_name, white_name, game_size, game_id))
+
+        # piece colours are swapped for hexgui from LG
+        for ri, m in sgf_moves:
+            f.write("%s[%s];" % ("B" if ri == 0 else "W", m))
+        f.write(")\n")
 
 
 if __name__ == "__main__":
+    game_size = 13
+    move_time = 30.0
+    number_of_games = 8
 
+    match = ""
     try:
         setup()
-        game_size = 11
 
-        config_0 = config(sys.argv[1])
-        config_1 = config(sys.argv[2], dirichlet_noise_alpha=0.03)
+        dirichlet_noise_alpha = 0.03
+        gen_black = sys.argv[1]
+        gen_white = sys.argv[2]
 
-        move_time = 15.0
-        number_of_games = 1
+        if gen_black == "-":
+            player_black = simplemcts_player(move_time)
+        else:
+            player_black = PUCTPlayer(config(gen_black, dirichlet_noise_alpha=dirichlet_noise_alpha))
+
+        if gen_white == "-":
+            player_white = simplemcts_player(move_time)
+        else:
+            player_white = PUCTPlayer(config(gen_white, dirichlet_noise_alpha=dirichlet_noise_alpha))
+
+        print player_white, player_black
 
         moves = []
-        match = ""
-
         if match:
             black_player, white_player, sgf_moves = parse_sgf(match)
             expect = 'W'
@@ -254,14 +259,17 @@ if __name__ == "__main__":
             for who, move in sgf_moves:
                 assert expect == who
                 expect = 'B' if who == 'W' else 'W'
-                move = move[0] + str("abcdefghijklmnop".index(move[1]) + 1)
+                if move != "swap":
+                    move = move[0] + str("abcdefghijklmnop".index(move[1]) + 1)
                 print move
                 moves.append(move)
 
         for i in range(number_of_games):
-            play_game(config_0, config_1, moves=moves,
-                      game_size=game_size, move_time=move_time)
-            config_0, config_1 = config_1, config_0
+            sgf_moves = play_game(player_black, player_white, moves=moves[:],
+                                  game_size=game_size, move_time=move_time)
+
+            # swap roles for next game
+            player_black, player_white = player_white, player_black
 
     except Exception as exc:
         print exc
