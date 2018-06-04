@@ -1,140 +1,39 @@
 '''
-* todo
+todo
+====
 * bcolz.set_nthreads(nthreads)
-* bucket sampling
+* call samples, samples -> call self play data - observations
+* evaluation speed tests
 
 
----
+Train Pipeline Overview:
+========================
 
-same bucket algorithm, with indexing:
-
-figure out the sizes required from each generation based on buckets (easy, any rounding issues,
-drop from oldest generation)
-
-create a range(n) where n is the size of a generation.  shuffle.  remove head or tail until size.
-[old version removed tail, but it doesn't matter]
-
-combine all (need to offset start index of each generation data]
-
-shuffle.
-
----
-
-old algo for validation set:
-* no shuffling done on generation.  ie always the same last n of the generation data.
-* any buckets < 1.0, threw away tail
-* was shuffled before training
-
----
-
-
-# XXX call samples -> observations (from self play).
-
-
-# steps:
+db is a bcolz table (and bcolz is awesome!)
+gendata - are json data files produced from self play (one server, n workers).
 
 init
 ----
 * read summary file (gendata_summary.json), and validate against cache
-* if no cache / summary file.  delete any spurious files.  Create.
-* Validate existing files (md5sum).
-
+* validate existing gendata files (number of samples & md5sum)
+* if invalid - delete db or summary file (if the exist).  Create empty db&summary.
 
 sync
 ----
-* check directory for any recent files.
-* read new data, and preprocessed into numpy arrays (as generator)
-* append numpy data to cache
-* update the summary
-
+* check directory for any recent gendata files:
+  * read new data, and preprocess into numpy arrays (for training data to keras/tf)
+  * add the numpy data to db
+  * update the summary file
 
 create an indexer
 -----------------
-* specify from buckets
-* init: how to do this?  Should be a bunch of ranges, I guess.
-* resample_data/validation_data() both create a chunk indexer
-* what about weightings?  Future step.
-
-
-generator
----------
-* bcolz generator.  yields batches.
-
-* inputs:
-  * cache & chunk indexer
-
-* evaluation speed tests
-
+* specified from buckets
+* create a chunk indexer - which will create train/validation batches for one epoch
+* XXX what about weightings?  Future step.
 
 callbacks
 ---------
 * before each epoch.  Idea is to keep epochs small (1 million)
-
-
-
-
-
-missing from train.py:
-
-
-    def verify_samples(self, sm):
-        # create a basestate
-        basestate = sm.new_base_state()
-
-        counters = [Counter(), Counter()]
-        max_values = [{}, {}]
-        min_values = [{}, {}]
-        for s in self.samples:
-            basestate.from_list(decode_state(s.state))
-            sm.update_bases(basestate)
-
-            # get legals...
-            for ri in range(2):
-                ls = sm.get_legal_state(ri)
-                policy = s.policies[ri]
-                for legal in ls.to_list():
-                    found = False
-                    for ll, pp in policy:
-                        if ll == legal:
-                            max_values[ri][legal] = max(max_values[ri].get(legal, -1), pp)
-                            min_values[ri][legal] = min(max_values[ri].get(legal, 2), pp)
-                            found = True
-                            break
-                    assert found
-                    counters[ri][legal] += 1
-
-
-
-
-
-    def debug(self):
-        # good to see some outputs
-        for x in (10, 420, 42):
-            log.info('train input, shape: %s.  Example: %s' % (self.inputs.shape, self.inputs[x]))
-            for o in self.outputs:
-                log.info('train output, shape: %s.  Example: %s' % (o.shape, o[x]))
-
-
-# XXX add tests
-class Buckets(object):
-    def __init__(self, bucket_def):
-        self.bucket_def = bucket_def
-
-    def get(self, depth, max_depth):
-        if not self.bucket_def:
-            return 1.0
-
-        for idx, (cut_off, pct) in enumerate(self.bucket_def):
-            if cut_off <= 0:
-                return self.get2(depth, max_depth, self.bucket_def[idx:])
-
-            if depth < cut_off:
-                return pct
-
-    def get2(self, depth, max_depth, stripped_def):
-        assert len(stripped_def) == 1
-        return stripped_def[0][1]
-
 
 '''
 
@@ -143,6 +42,8 @@ import gc
 import os
 import sys
 import gzip
+import math
+import random
 import hashlib
 import datetime
 
@@ -198,6 +99,139 @@ def fake_columns(transformer):
 
     assert len(cols) == 4
     return cols
+
+
+class Buckets(object):
+    def __init__(self, bucket_def):
+        self.bucket_def = bucket_def
+
+    def get(self, depth):
+        if not self.bucket_def:
+            return 1.0
+
+        for idx, (cut_off, pct) in enumerate(self.bucket_def):
+            if cut_off <= 0:
+                return self.get2(depth, self.bucket_def[idx:])
+
+            if depth < cut_off:
+                return pct
+
+    def get2(self, depth, stripped_def):
+        assert len(stripped_def) == 1
+        return stripped_def[0][1]
+
+
+class ChunkIndexer(object):
+
+    def __init__(self, buckets, step_summaries):
+        self.buckets = buckets
+        self.step_summaries = step_summaries
+
+    def find_levels(self, starting_step=None,
+                    ignore_after_step=None,
+                    validation_split=0.9):
+
+        ''' finds train_levels, validation_level
+        where levels is a range is a list of (start, end].
+
+        starting_step: says ignore the first n levels
+        ignore_after_step: says ignore after a step is reached
+        validation_split: the percentage to allocate to training
+        '''
+
+        self.train_levels = []
+        self.validation_levels = []
+
+        index = 0
+        for step, summary in enumerate(self.step_summaries):
+            if starting_step is not None and step > starting_step:
+                break
+
+            if ignore_after_step is not None and step < ignore_after_step:
+                continue
+
+            assert step == summary.step
+
+            index_end = index + summary.num_samples
+            validation_start = index + int(summary.num_samples * validation_split)
+
+            self.train_levels.append((index, validation_start))
+            self.validation_levels.append((validation_start, index_end))
+
+            index = index_end
+
+        # want most recent first
+        self.train_levels.reverse()
+        self.validation_levels.reverse()
+        assert len(self.train_levels) == len(self.validation_levels)
+
+    def create_indices_for_level(self, level_index, validation=False, max_size=-1):
+        ''' returns a shuffled list of indices '''
+        start, end = self.validation_levels[level_index] if validation else self.train_levels[level_index]
+        indices = range(start, end)
+        random.shuffle(indices)
+        if max_size > 0:
+            indices = indices[:max_size]
+        return indices
+
+    def get_indices(self, max_size=None, validation=False):
+        '''
+        same bucket algorithm as old way, but with indexing:
+
+        figure out the sizes required from each generation based on buckets (any rounding issues,
+        drop from oldest generation) [also works for scaling down if we add max_number_of_samples]
+
+        create a range(n) where n is the size of a generation.  shuffle.  remove head or tail until
+        size.  [old version removed tail, but it doesn't matter]
+
+        combine all (need to offset start index of each generation data]
+
+        shuffle.
+        '''
+
+        levels = self.validation_levels if validation else self.train_levels
+        sizes = [end - start for start, end in levels]
+
+        # apply buckets
+        bucket_sizes = []
+        for depth, sz in enumerate(sizes):
+            percent = self.buckets.get(depth)
+            if percent < 0:
+                continue
+
+            sz *= percent
+            bucket_sizes.append(int(sz))
+
+        # do we have more data than needed for epoch?
+        sizes = bucket_sizes
+        total_size = sum(sizes)
+
+        if max_size is not None:
+            if total_size > max_size:
+                scale = max_size / float(total_size)
+
+                # round up, but then we remove from last level
+                new_sizes = [int(math.ceil(s * scale)) for s in sizes]
+                if sum(new_sizes) > max_size:
+                    new_sizes[-1] -= sum(new_sizes) - max_size
+                sizes = new_sizes
+
+            assert sum(sizes) <= max_size
+
+        all_indices = []
+        for ii, s in enumerate(sizes):
+            all_indices += self.create_indices_for_level(ii, validation=validation, max_size=s)
+
+        random.shuffle(all_indices)
+        return all_indices
+
+    def training_epoch(self, epoch_size=None):
+        return self.get_indices(max_size=epoch_size, validation=False)
+
+    def validation_epoch(self, epoch_size=None):
+        # XXX maybe add a trim mode - so always taking most recent data???  Maybe better to just
+        # have seperate buckets?
+        return self.get_indices(max_size=epoch_size, validation=True)
 
 
 class StatsAccumulator(object):
@@ -271,7 +305,6 @@ class StatsAccumulator(object):
         return str([(p, total / float(self.num_samples)) for p, total in self.total_puct_score_dist])
 
     def add(self, sample):
-        # print "do stats for", sample
         self.total_draws += 1 if abs(sample.final_score[0] - 0.5) < 0.01 else 0
         self.bare_policies += 1 if all(len(p) == 1 for p in sample.policies) else 0
         self.match_depths.setdefault(sample.match_identifier, []).append(sample.depth)
@@ -290,7 +323,6 @@ class StatsAccumulator(object):
         indx = 0
         score = sample.resultant_puct_score[0]
         for ii, (upper_limit, _) in enumerate(self.total_puct_score_dist):
-            # print score, upper_limit
             if (score - 0.001) < upper_limit:
                 continue
 
@@ -299,6 +331,37 @@ class StatsAccumulator(object):
 
 
 class DataCache(object):
+    '''
+
+Add to cache
+
+    def verify_samples(self, sm):
+        # create a basestate
+        basestate = sm.new_base_state()
+
+        counters = [Counter(), Counter()]
+        max_values = [{}, {}]
+        min_values = [{}, {}]
+        for s in self.samples:
+            basestate.from_list(decode_state(s.state))
+            sm.update_bases(basestate)
+
+            # get legals...
+            for ri in range(2):
+                ls = sm.get_legal_state(ri)
+                policy = s.policies[ri]
+                for legal in ls.to_list():
+                    found = False
+                    for ll, pp in policy:
+                        if ll == legal:
+                            max_values[ri][legal] = max(max_values[ri].get(legal, -1), pp)
+                            min_values[ri][legal] = min(max_values[ri].get(legal, 2), pp)
+                            found = True
+                            break
+                    assert found
+                    counters[ri][legal] += 1
+    '''
+
     def __init__(self, transformer, gen_prefix):
         self.transformer = transformer
         self.gen_prefix = gen_prefix
@@ -309,6 +372,7 @@ class DataCache(object):
 
         self.summary = self.get_summary()
         self.save_summary_file()
+        bcolz.set_nthreads(4)
 
     def get_summary(self, create=False):
         if create or not os.path.exists(self.summary_path):
@@ -514,30 +578,99 @@ class DataCache(object):
         # lets delete any spurious memory
         gc.collect()
         self.save_summary_file()
+        log.info("Data cache synced, saved summary file.")
 
     def save_summary_file(self):
         with open(self.summary_path, 'w') as open_file:
             open_file.write(attrutil.attr_to_json(self.summary, pretty=True))
+
+    def create_chunk_indexer(self, buckets, **kwds):
+        assert isinstance(buckets, Buckets)
+        indexer = ChunkIndexer(buckets, self.summary.step_summaries)
+        indexer.find_levels(**kwds)
+        return indexer
+
+    def generate(self, indices, batch_size):
+        for ii in range(0, len(indices), batch_size):
+            next_indices = indices[ii:ii + batch_size]
+
+            record = self.db[next_indices]
+
+            inputs = record["channels"]
+            outputs = [record[name] for name in self.db.names[1:]]
+            yield inputs, outputs
+
+def get_cache(game, prev_states, gen):
+    from ggplib.db import lookup
+    lookup.get_database()
+
+    from ggpzero.defs import templates
+    generation_descr = templates.default_generation_desc(game,
+                                                         multiple_policy_heads=True,
+                                                         num_previous_states=prev_states)
+    man = get_manager()
+    transformer = man.get_transformer(game, generation_descr)
+    return DataCache(transformer, gen)
 
 
 def test_summary():
     from ggplib.util.init import setup_once
     setup_once()
 
-    from ggplib.db import lookup
-    lookup.get_database()
-
-    from ggpzero.defs import templates
-
     game = "amazons_10x10"
-    generation_descr = templates.default_generation_desc(game,
-                                                         multiple_policy_heads=True,
-                                                         num_previous_states=1)
-    man = get_manager()
-    transformer = man.get_transformer(game, generation_descr)
+    # game = "hexLG13"
 
-    cache = DataCache(transformer, "h3")
+    cache = get_cache(game, 1, "h3")
+
     for x in cache.list_files():
         print x
 
     cache.sync()
+
+    # good to see some outputs
+    for index in (10, 420, 42):
+        channels = cache.db[index]["channels"]
+        log.info('train input, shape: %s.  Example: %s' % (channels.shape, channels))
+
+        for name in cache.db.names[1:]:
+            log.info("Outputs: %s" % name)
+            output = cache.db[index]["channels"]
+            log.info('train output, shape: %s.  Example: %s' % (output.shape, output))
+
+
+def test_chunking():
+    game = "amazons_10x10"
+    cache = get_cache(game, 1, "h3")
+    cache.sync()
+
+    buckets_def = [(5, 0.8), (10, 0.5), (-1, 0.1)]
+    buckets = Buckets(buckets_def)
+
+    # max_training_count=None, max_validation_count=None
+    indexer = cache.create_chunk_indexer(buckets)
+
+    first = len(cache.summary.step_summaries) - 1
+    print indexer.create_indices_for_level(first, validation=False, max_size=42)
+    print indexer.create_indices_for_level(first, validation=True, max_size=42)
+
+    for s in cache.db[indexer.create_indices_for_level(first, validation=True, max_size=10)]:
+        print s
+
+    print len(indexer.training_epoch(100000))
+    print len(indexer.training_epoch(50000))
+    print len(indexer.training_epoch(5000))
+
+    import time
+    t = time.time()
+    epoch_indices = indexer.training_epoch(100000)
+    for batch_indices in chunks(epoch_indices, 512):
+        assert len(batch_indices) <= 1024
+
+        batch_data = cache.db[batch_indices]
+        assert len(batch_data) == len(batch_indices)
+        print batch_data.size
+
+
+    print time.time() - t
+
+
