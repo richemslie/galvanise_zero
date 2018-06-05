@@ -225,10 +225,10 @@ void SelfPlayWorker::doWork() {
                 this->outbound_queue.push(manager);
             }
 
-            if (did_nothing > 100000) {
+            if (did_nothing > 1000) {
                 did_nothing = 0;
                 // sleep for 1 millisecond
-                usleep(1000);
+                usleep(5000);
             }
         }
 
