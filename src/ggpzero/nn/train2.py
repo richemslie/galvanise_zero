@@ -71,18 +71,12 @@ class TrainManager(object):
         self.retraining = retraining
         log.info("Network %s, retraining: %s" % (self.nn, self.retraining))
 
-    def gather_data(self):
+    def do_epochs(self):
         # abbreviate, easier on the eyes
         conf = self.train_config
 
         self.cache = datacache.DataCache(self.transformer, conf.generation_prefix)
         self.cache.sync()
-        # XXX fix worker.py and nn_train.py to not even call this
-
-    def do_epochs(self):
-        # XXX remove leveled_data, since gather_data does not return anything anymore
-
-        conf = self.train_config
 
         train_at_step = conf.next_step - 1
         ignore_after_step = conf.starting_step

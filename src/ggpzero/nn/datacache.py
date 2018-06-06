@@ -10,13 +10,18 @@ Train Pipeline Overview:
 ========================
 
 db is a bcolz table (and bcolz is awesome!)
-gendata - are json data files produced from self play (one server, n workers).
+gendata_ZZZ_YY.json.gz - are json data files produced from self play (one server, n workers).
+ * ZZZ is game
+ * YY is network generation step played with
+gendata_summary.json - summary of the json data files, and what is in db
+
 
 init
 ----
-* read summary file (gendata_summary.json), and validate against cache
+* read summary file (gendata_summary.json), and validate against db
 * validate existing gendata files (number of samples & md5sum)
-* if invalid - delete db or summary file (if the exist).  Create empty db&summary.
+* if invalid - delete db or summary file (if the exist).  Create new db & summary.
+
 
 sync
 ----
@@ -25,15 +30,16 @@ sync
   * add the numpy data to db
   * update the summary file
 
+
 create an indexer
 -----------------
 * specified from buckets
-* create a chunk indexer - which will create train/validation batches for one epoch
-* XXX what about weightings?  Future step.
+* create a ChunkIndexer - which will create train/validation batches for one epoch
+* XXX what about weightings from training data?  Future step.
 
 callbacks
 ---------
-* before each epoch.  Idea is to keep epochs small (1 million)
+* before each epoch.  Idea is to keep epochs small (1 million) (XXX todo)
 
 '''
 
@@ -72,7 +78,7 @@ def timestamp():
 
 
 def reshape(d):
-    # reshape list of to a numpy array of -1, x,x,x
+    # reshape list of to a numpy array of -1, x, x, x
     new_shape = [-1] + list(d.shape)
     return np.concatenate([d], axis=0).reshape(new_shape)
 
@@ -87,14 +93,17 @@ def fake_columns(transformer):
 
     cols = [reshape(channels)]
 
-    # policies whacking
+    # create a fake policy for each role
     for role_index in range(len(sm.get_roles())):
         ls = sm.get_legal_state(role_index)
+
+        # create a uniform policy
         policy = [(ls.get_legal(c), 1 / float(ls.get_count())) for c in range(ls.get_count())]
+
         policy_array = t.policy_to_array(policy, role_index)
         cols.append(reshape(policy_array))
 
-    value_head = reshape(np.array([0, 1], dtype='float32'))
+    value_head = transformer.value_to_array([0, 1])
     cols.append(value_head)
 
     assert len(cols) == 4
@@ -110,15 +119,16 @@ class Buckets(object):
             return 1.0
 
         for idx, (cut_off, pct) in enumerate(self.bucket_def):
-            if cut_off <= 0:
-                return self.get2(depth, self.bucket_def[idx:])
+            assert cut_off != 0
+
+            if cut_off < 0:
+                # only allow one cut_off @ -1
+                assert cut_off == -1
+                assert len(self.bucket_def[idx:]) == 1
+                return pct
 
             if depth < cut_off:
                 return pct
-
-    def get2(self, depth, stripped_def):
-        assert len(stripped_def) == 1
-        return stripped_def[0][1]
 
 
 class ChunkIndexer(object):
@@ -599,78 +609,3 @@ Add to cache
             inputs = record["channels"]
             outputs = [record[name] for name in self.db.names[1:]]
             yield inputs, outputs
-
-def get_cache(game, prev_states, gen):
-    from ggplib.db import lookup
-    lookup.get_database()
-
-    from ggpzero.defs import templates
-    generation_descr = templates.default_generation_desc(game,
-                                                         multiple_policy_heads=True,
-                                                         num_previous_states=prev_states)
-    man = get_manager()
-    transformer = man.get_transformer(game, generation_descr)
-    return DataCache(transformer, gen)
-
-
-def test_summary():
-    from ggplib.util.init import setup_once
-    setup_once()
-
-    game = "amazons_10x10"
-    # game = "hexLG13"
-
-    cache = get_cache(game, 1, "h3")
-
-    for x in cache.list_files():
-        print x
-
-    cache.sync()
-
-    # good to see some outputs
-    for index in (10, 420, 42):
-        channels = cache.db[index]["channels"]
-        log.info('train input, shape: %s.  Example: %s' % (channels.shape, channels))
-
-        for name in cache.db.names[1:]:
-            log.info("Outputs: %s" % name)
-            output = cache.db[index]["channels"]
-            log.info('train output, shape: %s.  Example: %s' % (output.shape, output))
-
-
-def test_chunking():
-    game = "amazons_10x10"
-    cache = get_cache(game, 1, "h3")
-    cache.sync()
-
-    buckets_def = [(5, 0.8), (10, 0.5), (-1, 0.1)]
-    buckets = Buckets(buckets_def)
-
-    # max_training_count=None, max_validation_count=None
-    indexer = cache.create_chunk_indexer(buckets)
-
-    first = len(cache.summary.step_summaries) - 1
-    print indexer.create_indices_for_level(first, validation=False, max_size=42)
-    print indexer.create_indices_for_level(first, validation=True, max_size=42)
-
-    for s in cache.db[indexer.create_indices_for_level(first, validation=True, max_size=10)]:
-        print s
-
-    print len(indexer.training_epoch(100000))
-    print len(indexer.training_epoch(50000))
-    print len(indexer.training_epoch(5000))
-
-    import time
-    t = time.time()
-    epoch_indices = indexer.training_epoch(100000)
-    for batch_indices in chunks(epoch_indices, 512):
-        assert len(batch_indices) <= 1024
-
-        batch_data = cache.db[batch_indices]
-        assert len(batch_data) == len(batch_indices)
-        print batch_data.size
-
-
-    print time.time() - t
-
-
