@@ -296,7 +296,6 @@ class TrainManager(object):
 
         # first get validation data, then we can forget about it as it doesn't need reshuffled
         validation_size = int(conf.max_epoch_size * (1 - conf.validation_split))
-        print "XXX", validation_size
         validation_indices = indexer.validation_epoch(validation_size)
 
         # XXX should be specified on the server... bit hacky to do this here
