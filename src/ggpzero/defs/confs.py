@@ -182,6 +182,9 @@ class TrainNNConfig(object):
     # set the maximum size for an epoch.  buckets will be scaled accordingly.
     max_epoch_size = attribute(-1)
 
+    # set the initial weight before for the first epoch between training
+    initial_value_weight = attribute(1.0)
+
 
 @register_attrs
 class WorkerConfig(object):

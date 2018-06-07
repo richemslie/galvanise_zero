@@ -306,7 +306,7 @@ class TrainManager(object):
                                              len(self.transformer.policy_dist_count))
 
         # starting value weight
-        value_weight = 1.0
+        value_weight = conf.initial_value_weight
 
         self.nn.compile(self.train_config.compile_strategy,
                         self.train_config.learning_rate,
