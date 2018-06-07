@@ -29,7 +29,7 @@ def nn_model_config_template(game, network_size_hint, transformer):
     conf.dropout_rate_value = 0.5
 
     # residual_layers is the same size as max dimension of board
-    conf.residual_layers = min(transformer.num_rows, transformer.num_cols)
+    conf.residual_layers = max(transformer.num_rows, transformer.num_cols)
 
     if network_size_hint == "tiny":
         conf.residual_layers = max(4, conf.residual_layers / 2)
