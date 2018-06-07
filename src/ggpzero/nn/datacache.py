@@ -216,7 +216,7 @@ class ChunkIndexer(object):
         sizes = bucket_sizes
         total_size = sum(sizes)
 
-        if max_size is not None:
+        if max_size is not None or max_size > 0:
             if total_size > max_size:
                 scale = max_size / float(total_size)
 

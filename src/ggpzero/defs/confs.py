@@ -179,6 +179,9 @@ class TrainNNConfig(object):
     # the last 5.  also assert number of gens is more than sum(abs(k) for k,_ in resample_buckets)
     resample_buckets = attribute(default=attr_factory(list))
 
+    # set the maximum size for an epoch.  buckets will be scaled accordingly.
+    max_epoch_size = attribute(-1)
+
 
 @register_attrs
 class WorkerConfig(object):

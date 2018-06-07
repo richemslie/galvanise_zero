@@ -16,6 +16,8 @@ from ggpzero.nn.manager import get_manager
 
 from ggpzero.nn import network
 
+from ggpzero.nn.train import TrainException
+
 
 ###############################################################################
 
@@ -28,10 +30,6 @@ def unison_shuffle(*arrays):
     perms = np.random.permutation(length_of_array0)
 
     return [a[perms] for a in arrays]
-
-
-class TrainException(Exception):
-    pass
 
 
 def reshape(d):

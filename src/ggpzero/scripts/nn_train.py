@@ -2,9 +2,6 @@ import sys
 
 from ggpzero.defs import confs, templates
 
-#from ggpzero.nn import train
-from ggpzero.nn import train2 as train
-
 from ggpzero.nn.manager import get_manager
 
 
@@ -17,13 +14,15 @@ def get_train_config(game, gen_prefix, next_step, starting_step):
     config.generation_prefix = gen_prefix
     config.batch_size = 512
     config.compile_strategy = "adam"
-    config.epochs = 8
+    config.epochs = 5
+    #config.learning_rate = 0.0001
     config.learning_rate = None
     config.overwrite_existing = False
     config.use_previous = False
     config.validation_split = 0.90000
 
-    config.resample_buckets = []
+    config.resample_buckets = [(10, 1.0), (40, 0.8), (-1, 0.5)]
+    config.max_epoch_size = 500000
 
     return config
 
@@ -39,7 +38,7 @@ def get_nn_model(game, transformer, size="small"):
     # config.value_hidden_size = 128
 
     # abuse these for v2
-    config.cnn_filter_size = 32
+    config.cnn_filter_size = 64
     config.residual_layers = -1
     config.value_hidden_size = -1
 
@@ -52,7 +51,14 @@ def get_nn_model(game, transformer, size="small"):
     return config
 
 
-def do_training(game, gen_prefix, next_step, starting_step, num_previous_states, gen_prefix_next):
+def do_training(game, gen_prefix, next_step, starting_step, num_previous_states,
+                gen_prefix_next, use_old_training_method=False):
+
+    if use_old_training_method:
+        from ggpzero.nn import train_bak as train
+    else:
+        from ggpzero.nn import train
+
     man = get_manager()
 
     # create a transformer
@@ -79,12 +85,17 @@ if __name__ == "__main__":
     def main(args):
         gen_prefix_next = sys.argv[1]
 
+
         # modify these >>>
-        game = "amazons_10x10"
-        gen_prefix = "h3"
-        next_step = 15
-        starting_step = 1
+        #game = "amazons_10x10"
+
+        game = "hexLG11"
+        gen_prefix = "h1"
+
+        next_step = 70
+        starting_step = 5
         num_previous_states = 1
+        use_old_training_method = False
 
         do_training(game, gen_prefix, next_step, starting_step, num_previous_states, gen_prefix_next)
 
