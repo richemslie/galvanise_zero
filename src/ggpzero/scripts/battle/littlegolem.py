@@ -27,6 +27,7 @@ from ggpzero.defs import confs
 from ggpzero.player import puctplayer
 
 from ggpzero.scripts.battle.hex import hex_get_state
+from ggpzero.scripts.battle.amazons import amazons_get_state
 
 
 @at.register_attrs
@@ -118,7 +119,7 @@ class GameMasterByGame(object):
 
         return conf
 
-    def get_move(self, state, depth, lead_role_index):
+    def get_move(self, state, depth, lead_role_index, move_count=1):
         log.info("GameMasterByGame.get_move: %s" % state)
 
         if isinstance(state, str):
@@ -129,9 +130,19 @@ class GameMasterByGame(object):
                       initial_basestate=state,
                       game_depth=depth)
 
-        move = self.gm.play_single_move(last_move=None)
+        move = []
+        last_move = None
+        for i in range(move_count):
+            last_move = self.gm.play_single_move(last_move=last_move)
+            move.append(last_move)
+
+        if move_count == 1:
+            move = move[0][lead_role_index]
+        else:
+            move = [m[lead_role_index] for m in move]
+
         player = self.gm.get_player(lead_role_index)
-        return move[lead_role_index], player.last_probability, self.gm.finished()
+        return move, player.last_probability, self.gm.finished()
 
 
 class LittleGolemConnection(object):
@@ -191,9 +202,7 @@ class LittleGolemConnection(object):
                                                                                             opponent,
                                                                                             depth,
                                                                                             match_id)
-                        log.verbose(len(s) * "=")
                         log.verbose(s)
-                        log.verbose(len(s) * "=")
                         match_id = int(match_id)
                         if match_id in self.config.allow_match_ids:
                             yield match_id, opponent, int(depth)
@@ -215,8 +224,8 @@ class LittleGolemConnection(object):
                                                                invite_id))
         return True
 
-    def play_move(self, game, *args):
-        return self.games_by_gamemaster[game].get_move(*args)
+    def play_move(self, game, *args, **kwds):
+        return self.games_by_gamemaster[game].get_move(*args, **kwds)
 
     def handle_hex(self, board_size, match_id, depth, sgf, text):
         log.verbose("handle_hex, board_size %d, match_id:%s, depth:%d" % (board_size, match_id, depth))
@@ -229,6 +238,29 @@ class LittleGolemConnection(object):
             parts = move.split()
             move = parts[0] + "_abcdefghijklm"[int(parts[1])]
 
+        return move, prob, finished
+
+    def handle_amazons(self, match_id, depth, sgf, text):
+        log.verbose("handle_amazons, match_id:%s, depth:%d" % (match_id, depth))
+        role_index, state = amazons_get_state(sgf)
+
+        # play 2 moves, since need move queen and fire together for LG
+        move, prob, finished = self.play_move("amazons_10x10", state, depth * 2,
+                                              role_index, move_count=2)
+
+        assert len(move) == 2
+        queen_move, fire_move = move
+
+        queen_move = queen_move.replace("(move", "").replace(")", "")
+        fire_move = fire_move.replace("(fire", "").replace(")", "")
+        cords = map(int, queen_move.split()) + map(int, fire_move.split())
+
+        def ggp_to_lg(x, y):
+            return "%s%s" % (10 - x, y - 1)
+
+        move = "%s%s%s" % (ggp_to_lg(cords[0], cords[1]),
+                           ggp_to_lg(cords[2], cords[3]),
+                           ggp_to_lg(cords[4], cords[5]))
         return move, prob, finished
 
     def handle_breakthrough(self, match_id, depth, sgf, text):
@@ -457,6 +489,10 @@ class LittleGolemConnection(object):
 
         elif "Hex-Size 13" in text:
             meth = functools.partial(self.handle_hex, 13)
+
+        # XXX is this right?
+        elif "Amazons-Size 10" in text:
+            meth = self.handle_amazons
 
         else:
             assert False, "unknown game: '%s'" % text

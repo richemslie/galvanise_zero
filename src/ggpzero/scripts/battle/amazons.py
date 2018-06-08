@@ -1,97 +1,12 @@
-import os
-import re
-
-import tensorflow as tf
+import sys
 
 from ggplib.db import lookup
 from ggplib.db.helper import get_gdl_for_game
 from ggplib.player.gamemaster import GameMaster
 
-from ggpzero.defs import confs
 from ggpzero.player.puctplayer import PUCTPlayer
 
-
-def lg_to_gdl(m):
-    r = "abcdefghij"[::-1]
-    return r.index(m[0]) + 1, int(m[1:])
-
-
-def gdl_to_lg(x, y):
-    r = "abcdefghij"[::-1]
-    return "%s%s" % (r[x + 1], y)
-
-
-# print gdl_to_lg(1, 4)
-# print gdl_to_lg(4, 7)
-# print gdl_to_lg(7, 7)
-
-# print lg_to_gdl("j4")
-# print lg_to_gdl("g7")
-# print lg_to_gdl("d7")
-
-
-def setup():
-    from ggplib.util.init import setup_once
-    setup_once()
-
-    from ggpzero.util.keras import init
-    init()
-
-    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-    tf.logging.set_verbosity(tf.logging.ERROR)
-
-
-def config(gen):
-    return confs.PUCTPlayerConfig(name=gen,
-                                  generation=gen,
-                                  verbose=True,
-
-                                  playouts_per_iteration=-1,
-                                  playouts_per_iteration_noop=0,
-
-                                  dirichlet_noise_alpha=0.03,
-
-                                  root_expansions_preset_visits=-1,
-                                  puct_before_expansions=3,
-                                  puct_before_root_expansions=5,
-                                  puct_constant_before=3.0,
-                                  puct_constant_after=0.75,
-
-                                  choose="choose_temperature",
-                                  temperature=1.5,
-                                  depth_temperature_max=3.0,
-                                  depth_temperature_start=0,
-                                  depth_temperature_increment=0.5,
-                                  depth_temperature_stop=6,
-                                  random_scale=1.00,
-
-                                  fpu_prior_discount=0.3,
-
-                                  max_dump_depth=2)
-
-
-def parse_sgf(text):
-    tokens = re.split(r'([a-zA-Z]+\[[^\]]+\])', text)
-    tokens = [t for t in tokens if ']' in t.strip()]
-
-    def game_info():
-        for t in tokens:
-            key, value = re.search(r'([a-zA-Z]+)\[([^\]]+)\]', t).groups()
-            yield key, value
-
-    moves = []
-    moves = []
-    pb = pw = None
-    for k, v in game_info():
-        # white/black is wrong on LG
-        if k == "PB":
-            pw = v
-        if k == "PW":
-            pb = v
-        if k in "WB":
-            moves.append((k, v))
-
-    return pw, pb, moves
+from ggpzero.scripts.battle.common import simplemcts_player, parse_sgf, setup, get_puct_config
 
 
 def play_moves(moves):
@@ -101,6 +16,8 @@ def play_moves(moves):
     # get some objects
     joint_move = sm.get_joint_move()
     base_state = sm.get_initial_state()
+
+    # print sm.basestate_to_str(base_state)
 
     def f(ri, ls, i):
         return sm.legal_to_move(ri, ls.get_legal(i))
@@ -120,6 +37,9 @@ def play_moves(moves):
         sm.next_state(joint_move, base_state)
         sm.update_bases(base_state)
 
+    def lg_to_ggp(m):
+        return ("jihgfedcba".index(m[0]) + 1), int(m[1:])
+
     role_index = 0
     for who, move_str in moves:
         if role_index == 0:
@@ -130,67 +50,95 @@ def play_moves(moves):
         # actually 2 moves
         queen, fire = move_str.split("/")
         from_pos, to_pos = queen.split("-")
+        from_pos, to_pos, fire = map(lg_to_ggp, (from_pos, to_pos, fire))
 
-        gdl_move = "(move %s %s %s %s)" % (lg_to_gdl(from_pos)[0],
-                                           lg_to_gdl(from_pos)[1],
-                                           lg_to_gdl(to_pos)[0],
-                                           lg_to_gdl(to_pos)[1])
+        gdl_move = "(move %s %s %s %s)" % (from_pos + to_pos)
         next_sm(role_index, gdl_move)
-        print "%s -> %s" % (move_str, gdl_move)
 
-        gdl_move = "(fire %s %s)" % (lg_to_gdl(fire)[0],
-                                     lg_to_gdl(fire)[1])
+        gdl_move = "(fire %s %s)" % fire
         next_sm(role_index, gdl_move)
-        print "%s -> %s" % (move_str, gdl_move)
 
         role_index = 1 if role_index == 0 else 0
 
-    return base_state
+    return role_index, base_state
 
 
-def play_game(config_0, config_1, moves=[], move_time=10.0):
+def amazons_get_state(sgf):
+    _, _, sgf_moves = parse_sgf(sgf)
+    return play_moves(sgf_moves)
+
+
+def play_game(player_black, player_white, sgf_moves, move_time):
+
     # add players
     gm = GameMaster(get_gdl_for_game("amazons_10x10"))
-    gm.add_player(PUCTPlayer(config_0), "white")
-    gm.add_player(PUCTPlayer(config_1), "black")
+    gm.add_player(player_white, "white")
+    gm.add_player(player_black, "black")
 
     # play move via gamemaster:
     gm.reset()
 
-    if moves:
-        state = play_moves(moves)
+    if sgf_moves:
+        _, state = play_moves(sgf_moves)
         gm.start(meta_time=15,
                  initial_basestate=state,
-                 game_depth=len(moves) * 2,
+                 game_depth=len(sgf_moves) * 2,
                  move_time=move_time)
     else:
         gm.start(meta_time=15,
                  move_time=move_time)
 
-    def remove_gdl(m):
-        return m.replace("(place ", "").replace(")", "").strip().replace(' ', '')
+    gm.play_to_end()
 
-    move = None
-    while not gm.finished():
-        move = gm.play_single_move(last_move=move)
 
-        ri = 1 if move[0] == "noop" else 0
-        str_move = remove_gdl(move[ri])
+def main():
+    # command line options, gen v gen
 
-def test():
-    txt = "(;EV[null]PB[X]PW[Z]SO[K];W[j4-g7/d7];B[g10-h9/g8];W[g7-h8/g9];B[a7-b8/c8];W[d1-i6/j6];B[j7-i7/h7];W[h8-g7/h6])"
-    pw, pb, moves = parse_sgf(txt)
-    print "players (white) '%s' vs '%s' black " % (pw, pb)
+    gen_black = sys.argv[1]
+    gen_white = sys.argv[2]
 
-    config_0 = config("h1_27")
-    config_1 = config("h1_27")
-
-    move_time = 30.0
+    # modify these
+    move_time = 2.0
     number_of_games = 1
+    match = "(;EV[null]PB[xxx]PW[xxx]SO[http://www.littlegolem.com];W[j4-g7/d7];B[g10-h9/g8];W[g7-h8/g9];B[a7-b8/c8];W[d1-i6/j6];B[j7-i7/h7];W[h8-g7/h6];B[b8-b7/c7];W[g7-f8/f10];B[h9-h8/i8];W[f8-e9/g7])"
 
-    play_game(config_0, config_1, moves=moves, move_time=move_time)
+    dirichlet_noise_alpha = 0.03
+
+    if gen_black == "-":
+        player_black = simplemcts_player(move_time)
+    else:
+        player_black = PUCTPlayer(get_puct_config(gen_black,
+                                                  dirichlet_noise_alpha=dirichlet_noise_alpha))
+
+    if gen_white == "-":
+        player_white = simplemcts_player(move_time)
+    else:
+        player_white = PUCTPlayer(get_puct_config(gen_white,
+                                                  dirichlet_noise_alpha=dirichlet_noise_alpha))
+
+    print player_white, player_black
+
+    sgf_moves = []
+    if match:
+        _, _, sgf_moves = parse_sgf(match)
+
+    for i in range(number_of_games):
+        play_game(player_black, player_white, sgf_moves[:], move_time)
+
+        # swap roles for next game
+        player_black, player_white = player_white, player_black
 
 
 if __name__ == "__main__":
-    setup()
-    test()
+    import pdb
+    import traceback
+
+    try:
+        setup()
+        main()
+
+    except Exception as exc:
+        print exc
+        _, _, tb = sys.exc_info()
+        traceback.print_exc()
+        pdb.post_mortem(tb)
