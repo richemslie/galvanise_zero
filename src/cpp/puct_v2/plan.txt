@@ -1,0 +1,54 @@
+
+rationalise mess
+----------------
+* remove temporary code kicking around, and clean up repo
+
+* create puct_v2 and add to repo
+
+* similar to gurgeh and puct
+
+* uses traversals/visits
+
+* has transpositions
+
+
+match mode
+----------
+* batching
+
+  * new scheduler (initially w/o LR)
+
+  * virtual visits and virtual loss [midpoint(next move / 0.25 of current value) not zero]
+
+* pondering
+
+  * maximum number of visits to "top_visits" (possibly == num evaluations)
+
+  * always converge, ie doesn't use approximate converge hack
+
+
+* better runtime stats and reporting logic (where logic reporting is not a a hack)
+
+* play out tree when no turn ???
+
+* cached position (memory only)  ???
+
+  * future could cache tree to disk  ???
+
+
+
+evaluation mode
+---------------
+* just a script with X vs Y using gamemaster with ponder mode (should be fast)
+
+* round robin tournament mode of different generations
+
+* elo and bayesian elo
+
+* pretty pictures of graphs
+
+
+
+
+
+
