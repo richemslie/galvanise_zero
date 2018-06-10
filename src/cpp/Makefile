@@ -14,6 +14,8 @@ SRCS += gdltransformer.cpp scheduler.cpp selfplay.cpp selfplaymanager.cpp
 SRCS += player.cpp supervisor.cpp ggpzero_interface.cpp
 SRCS += greenlet/greenlet.cpp greenlet/greenlet-sys.cpp
 
+SRCS += puct_v2/node.cpp
+
 CORE_OBJS = $(patsubst %.cpp, %.o, $(SRCS))
 OBJS := $(CORE_OBJS) greenlet/greenlet-asm.o
 DEPS=$(SRCS:.cpp=.d)
