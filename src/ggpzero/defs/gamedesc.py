@@ -160,7 +160,7 @@ class Games(object):
                         "1 2 3 4 5 6 7 8".split(),
                         [cell], [control, step])
 
-    def amazonsSuicide_10x10(self):
+    def _amazons_like(self, game):
         # 4 control channels
         controls = [simple_control("turn", "black", "move"),
                     simple_control("turn", "black", "fire"),
@@ -170,25 +170,19 @@ class Games(object):
         just_moved = BoardChannels("justMoved", 1, 2)
         cell = simple_board_channels("cell", ["white", "black", "arrow"])
 
-        return GameDesc("amazonsSuicide_10x10",
+        return GameDesc(game,
                         "1 2 3 4 5 6 7 8 9 10".split(),
                         "1 2 3 4 5 6 7 8 9 10".split(),
                         [just_moved, cell], controls)
 
     def amazons_10x10(self):
-        # 4 control channels
-        controls = [simple_control("turn", "black", "move"),
-                    simple_control("turn", "black", "fire"),
-                    simple_control("turn", "white", "move"),
-                    simple_control("turn", "white", "fire")]
+        return self._amazons_like("amazons_10x10")
 
-        just_moved = BoardChannels("justMoved", 1, 2)
-        cell = simple_board_channels("cell", ["white", "black", "arrow"])
+    def amazonsLGcross(self):
+        return self._amazons_like("amazonsLGcross")
 
-        return GameDesc("amazons_10x10",
-                        "1 2 3 4 5 6 7 8 9 10".split(),
-                        "1 2 3 4 5 6 7 8 9 10".split(),
-                        [just_moved, cell], controls)
+    def amazonsSuicide_10x10(self):
+        return self._amazons_like("amazonsSuicide_10x10")
 
     def atariGo_7x7(self):
         # one channel, sharing roles
