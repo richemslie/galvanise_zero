@@ -16,13 +16,7 @@ the state of the art GGP players, given some (relatively) small time frame to tr
 days to a week, on commodity hardware - and not months/years worth of training time on hundreds of
 GPUs).
 
-I feel this goal has been somewhat achieved for zero sum games, where the game state can easily be
-represented as a 2D array of channels.
-
-Some games have been very friendly to such an approach, such as Breakthrough which has achieved
-super human and super bot level.
-
-Although many games have been trainined, there is a multitude of games left to try.  There are some
+Although many games have been trained, there is a multitude of games left to try.  There are some
 game types which are completely unsupported right now, for starters:
 
 * non-zero board games (such as non zero sum variant of Skirmish)
@@ -30,6 +24,13 @@ game types which are completely unsupported right now, for starters:
 * games that are not easily represented as a 2D array of channels
 * simultaneous games
 * single player games (puzzles)
+
+
+Related repos
+-------------
+* ggpzero is extension of [ggplib](https://github.com/ggplib/ggplib)
+* Models can be found [here](https://github.com/richemslie/gzero_data)
+* Custom games can be found [here](https://github.com/richemslie/gzero_games)
 
 
 Little Gollem
