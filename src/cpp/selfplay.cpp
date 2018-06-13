@@ -47,7 +47,7 @@ float clamp(float value, float amount) {
     }
 }
 
-PuctNode* SelfPlay::selectNode() {
+PuctNode* SelfPlay::selectNodeBak() {
     // reset the puct evaluator and establish root
     this->pe->reset(0);
     PuctNode* node = this->pe->establishRoot(this->initial_state);
@@ -139,6 +139,83 @@ PuctNode* SelfPlay::selectNode() {
             return node;
         }
     }
+
+    return node;
+}
+
+PuctNode* SelfPlay::selectNode() {
+    // reset the puct evaluator and establish root
+    this->pe->reset(0);
+    PuctNode* node = this->pe->establishRoot(this->initial_state);
+
+    this->pe->updateConf(this->conf->select_puct_config);
+    const int iterations = this->conf->select_iterations;
+
+    // start from initial_state if select is turned off
+    if (iterations < 0) {
+        return node;
+    }
+
+    // selecting - we playout whole game and then choose a random move
+    int game_depth = 0;
+    while (true) {
+        if (node->isTerminal()) {
+            break;
+        }
+
+        const PuctNodeChild* choice = this->pe->onNextMove(iterations);
+        node = this->pe->fastApplyMove(choice);
+        game_depth++;
+    }
+
+    ASSERT(node->game_depth == game_depth);
+
+    auto not_in_resign_state = [] (PuctNode* the_node, float prob) {
+        const float lead_score = the_node->getCurrentScore(the_node->lead_role_index);
+
+        // allow for a bit more than resign score
+        prob += 0.025;
+
+        return ! (lead_score < prob || lead_score > (1 - prob));
+    };
+
+    // set the new starting state before resign
+    int modified_game_depth = game_depth - this->conf->max_number_of_samples;
+    modified_game_depth = std::max(0, modified_game_depth);
+    node = this->pe->jumpRoot(modified_game_depth);
+
+    // don't start as if the game is done
+    // note this score isn't that reliable...  since likely we didn't do any iterations yet
+    if (this->can_resign0) {
+        while (modified_game_depth > 0) {
+            if (not_in_resign_state(node, this->conf->resign0_score_probability)) {
+                break;
+            }
+
+            modified_game_depth -=5;
+            modified_game_depth = std::max(0, modified_game_depth);
+            node = this->pe->jumpRoot(modified_game_depth);
+        }
+    }
+
+    if (this->can_resign1) {
+        while (modified_game_depth > 0) {
+            if (not_in_resign_state(node, this->conf->resign1_score_probability)) {
+                break;
+            }
+
+            modified_game_depth -=5;
+            modified_game_depth = std::max(0, modified_game_depth);
+            node = this->pe->jumpRoot(modified_game_depth);
+        }
+    }
+
+    if (modified_game_depth < 3) {
+        return node;
+    }
+
+    int sample_start_depth = this->rng.getWithMax(modified_game_depth);
+    node = this->pe->jumpRoot(sample_start_depth);
 
     return node;
 }

@@ -44,6 +44,7 @@ namespace GGPZero {
         ~SelfPlay();
 
     private:
+        PuctNode* selectNodeBak();
         PuctNode* selectNode();
         bool resign(const PuctNode* node);
         PuctNode* collectSamples(PuctNode* node);
