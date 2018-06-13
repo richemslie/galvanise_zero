@@ -240,8 +240,45 @@ def get_network_model(conf):
     # value
     #######
     # XXX config abuse:
+
+    value_v3 = conf.value_hidden_size == 0
     value_v2 = conf.value_hidden_size < 0
-    if value_v2:
+    if value_v3:
+        assert conf.input_columns == conf.input_rows
+        output_layer = layer
+        dims = conf.input_columns
+        while dims > 5:
+            if dims % 2 == 1:
+                output_layer = klayers.AveragePooling2D(4, 1)(output_layer)
+                dims -= 3
+            else:
+                output_layer = klayers.AveragePooling2D(2, 2)(output_layer)
+                dims /= 2
+
+        to_flatten1 = klayers.Conv2D(conf.cnn_kernel_size, 1,
+                                     name='to_flatten_value_head',
+                                     padding='valid',
+                                     activation=activation)(output_layer)
+
+        to_flatten2 = conv2d_block(1, 1,
+                                  name='to_flatten_value_head',
+                                  padding='valid',
+                                  activation=activation)(layer)
+
+        flat1 = klayers.Flatten()(to_flatten1)
+        flat2 = klayers.Flatten()(to_flatten2)
+        flat = klayers.concatenate([flat1, flat2])
+
+        hidden = klayers.Dense(2 * conf.cnn_kernel_size, name="value_hidden_layer",
+                               activation="relu")(flat)
+
+        if conf.dropout_rate_value > 0:
+            hidden = klayers.Dropout(conf.dropout_rate_value)(hidden)
+
+        value_head = klayers.Dense(conf.role_count,
+                                   activation="sigmoid", name="value")(hidden)
+
+    elif value_v2:
         assert conf.input_columns == conf.input_rows
         output_layer = layer
         dims = conf.input_columns
