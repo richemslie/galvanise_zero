@@ -23,10 +23,11 @@ class TrainException(Exception):
 class TrainingLoggerCb(keras_callbacks.Callback):
     ''' simple progress bar.  default was breaking with too much metrics '''
 
-    def __init__(self, num_epochs):
+    def __init__(self, num_epochs, batch_size):
         super().__init__()
         self.at_epoch = 0
         self.num_epochs = num_epochs
+        self.batch_size = batch_size
 
     def on_batch_begin(self, batch, logs=None):
         if self.seen < self.target:
@@ -50,7 +51,7 @@ class TrainingLoggerCb(keras_callbacks.Callback):
         try:
             self.target = self.params['samples']
         except KeyError:
-            self.target = self.params['steps'] * 512
+            self.target = self.params['steps'] * self.batch_size
 
         self.progbar = Progbar(target=self.target)
         self.seen = 0
@@ -301,7 +302,7 @@ class TrainManager(object):
         # XXX should be specified on the server... bit hacky to do this here
         num_epochs = conf.epochs if self.retraining else conf.epochs * 2
 
-        training_logger = TrainingLoggerCb(num_epochs)
+        training_logger = TrainingLoggerCb(num_epochs, conf.batch_size)
         self.controller = TrainingController(self.retraining,
                                              len(self.transformer.policy_dist_count))
 
