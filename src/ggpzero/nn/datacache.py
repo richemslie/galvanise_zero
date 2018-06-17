@@ -104,7 +104,7 @@ def fake_columns(transformer):
         cols.append(reshape(policy_array))
 
     value_head = transformer.value_to_array([0, 1])
-    cols.append(value_head)
+    cols.append(reshape(value_head))
 
     assert len(cols) == 4
     return cols
@@ -267,8 +267,7 @@ class StatsAccumulator(object):
         # XXX only 2 for now
         self.total_final_scores_per_roles = [0, 0]
 
-        # for role 0
-        self.total_puct_score_dist = [[(i + 1) / 10.0, 0] for i in range(10)]
+        self.total_puct_score_dist = [0.01, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.99, 1.0]
 
     @property
     def unique_matches(self):
@@ -333,7 +332,7 @@ class StatsAccumulator(object):
         indx = 0
         score = sample.resultant_puct_score[0]
         for ii, (upper_limit, _) in enumerate(self.total_puct_score_dist):
-            if (score - 0.001) < upper_limit:
+            if (score - 0.0001) < upper_limit:
                 continue
 
             indx = ii
