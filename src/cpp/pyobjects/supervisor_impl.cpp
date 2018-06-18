@@ -216,13 +216,11 @@ static PyObject* gi_Supervisor(PyObject* self, PyObject* args) {
     ssize_t ptr = 0;
     PyObject* obj = 0;
     int batch_size = 0;
-    int number_of_previous_states = 0;
 
     // sm, transformer, batch_size, expected_policy_size, role_1_index
-    if (! ::PyArg_ParseTuple(args, "nO!ii", &ptr,
+    if (! ::PyArg_ParseTuple(args, "nO!i", &ptr,
                              &(PyType_GdlBasesTransformerWrapper), &obj,
-                             &batch_size,
-                             &number_of_previous_states)) {
+                             &batch_size)) {
         return nullptr;
     }
 
@@ -231,8 +229,7 @@ static PyObject* gi_Supervisor(PyObject* self, PyObject* args) {
     GGPLib::StateMachine* sm = reinterpret_cast<GGPLib::StateMachine*> (ptr);
 
     // create the c++ object
-    Supervisor* supervisor = new Supervisor(sm, py_transformer->impl,
-                                            batch_size, number_of_previous_states);
+    Supervisor* supervisor = new Supervisor(sm, py_transformer->impl, batch_size);
 
     return (PyObject*) PyType_Supervisor_new(supervisor);
 }

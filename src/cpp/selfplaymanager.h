@@ -22,7 +22,6 @@ namespace GGPZero {
         SelfPlayManager(GGPLib::StateMachineInterface* sm,
                         const GdlBasesTransformer* transformer,
                         int batch_size,
-                        int number_of_previous_states,
                         UniqueStates* unique_states,
                         std::string identifier);
         ~SelfPlayManager();
@@ -52,6 +51,14 @@ namespace GGPZero {
             this->false_positive_resigns1++;
         }
 
+        void incrEarlyRunToEnds() {
+            this->number_early_run_to_ends++;
+        }
+
+        void incrActualResigns() {
+            this->number_actual_resigns++;
+        }
+
     public:
         void startSelfPlayers(const SelfPlayConfig* config);
 
@@ -76,9 +83,6 @@ namespace GGPZero {
         const GdlBasesTransformer* transformer;
         int batch_size;
 
-        // number of previous states to store in sample
-        int number_of_previous_states;
-
         std::vector <SelfPlay*> self_plays;
 
         // local scheduler
@@ -100,5 +104,7 @@ namespace GGPZero {
         int no_samples_taken;
         int false_positive_resigns0;
         int false_positive_resigns1;
+        int number_early_run_to_ends;
+        int number_actual_resigns;
     };
 }

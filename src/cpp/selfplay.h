@@ -48,7 +48,9 @@ namespace GGPZero {
         PuctNode* selectNode();
         bool resign(const PuctNode* node);
         PuctNode* collectSamples(PuctNode* node);
-        PuctNode* runToEnd(PuctNode* node);
+        int runToEnd(PuctNode* node, std::vector <float>& final_scores);
+        void addSamples(const std::vector <float>& final_scores,
+                        int starting_sample_depth, int game_depth);
 
         bool checkFalsePositive(const std::vector <float>& false_positive_check_scores,
                                 float resign_probability, float final_score,
@@ -79,6 +81,7 @@ namespace GGPZero {
         bool can_resign0;
         bool can_resign1;
         bool sample_to_end;
+        bool run_to_end_resigned;
 
         std::vector <float> resign0_false_positive_check_scores;
         std::vector <float> resign1_false_positive_check_scores;

@@ -19,19 +19,19 @@ using namespace GGPZero;
 SelfPlayManager::SelfPlayManager(GGPLib::StateMachineInterface* sm,
                                  const GdlBasesTransformer* transformer,
                                  int batch_size,
-                                 int number_of_previous_states,
                                  UniqueStates* unique_states,
                                  std::string identifier) :
     sm(sm->dupe()),
     transformer(transformer),
     batch_size(batch_size),
-    number_of_previous_states(number_of_previous_states),
     unique_states(unique_states),
     identifier(identifier),
     saw_dupes(0),
     no_samples_taken(0),
     false_positive_resigns0(0),
-    false_positive_resigns1(0) {
+    false_positive_resigns1(0),
+    number_early_run_to_ends(0),
+    number_actual_resigns(0) {
 
     this->scheduler = new NetworkScheduler(this->transformer,
                                            this->sm->getRoleCount(),
@@ -74,7 +74,7 @@ Sample* SelfPlayManager::createSample(const PuctEvaluator* pe, const PuctNode* n
 
     // Add previous states
     const PuctNode* cur = node->parent;
-    for (int ii=0; ii<this->number_of_previous_states; ii++) {
+    for (int ii=0; ii<this->transformer->getNumberPrevStates(); ii++) {
         if (cur == nullptr) {
             break;
         }
@@ -175,5 +175,15 @@ void SelfPlayManager::reportAndResetStats() {
     if (this->false_positive_resigns1) {
         K273::l_info("Number of false positive resigns (1) seen %d", this->false_positive_resigns1);
         this->false_positive_resigns1 = 0;
+    }
+
+    if (this->number_early_run_to_ends) {
+        K273::l_info("Number of early run to ends %d", this->number_early_run_to_ends);
+        this->number_early_run_to_ends = 0;
+    }
+
+    if (this->number_actual_resigns) {
+        K273::l_info("Number of actual resigns %d", this->number_actual_resigns);
+        this->number_actual_resigns = 0;
     }
 }

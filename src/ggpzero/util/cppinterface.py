@@ -167,8 +167,7 @@ class Supervisor(PollerBase):
 
         self.c_supervisor = ggpzero_interface.Supervisor(sm_to_ptr(sm),
                                                          self.c_transformer,
-                                                         batch_size,
-                                                         transformer.num_previous_states)
+                                                         batch_size)
         if workers:
             self.c_supervisor.set_num_workers(workers)
 
