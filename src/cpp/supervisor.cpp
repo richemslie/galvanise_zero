@@ -40,7 +40,7 @@ Supervisor::~Supervisor() {
 
 void Supervisor::slowPoll(SelfPlayManager* manager) {
     this->slow_poll_counter++;
-    if (this->slow_poll_counter < 128) {
+    if (this->slow_poll_counter < 1024) {
         return;
     }
 
