@@ -149,6 +149,8 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
     this->pe->updateConf(this->conf->sample_puct_config);
     const int iterations = this->conf->sample_iterations;
 
+    auto& man = *this->manager->getUniqueStates();
+
     while (true) {
         const int sample_count = this->game_samples.size();
         if (sample_count >= this->conf->max_number_of_samples) {
@@ -162,44 +164,46 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
             }
         }
 
-        if (node->isTerminal()) {
-            break;
-        }
+        const PuctNodeChild* choice = nullptr;
 
-        // run the simulations
-        const PuctNodeChild* choice = this->pe->onNextMove(iterations);
+        // not atomic, but good enough
+        if (man.isUnique(node->getBaseState())) {
+            man.add(node->getBaseState());
 
-        if (!this->manager->getUniqueStates()->isUnique(node->getBaseState())) {
+            // run the simulations
+            choice = this->pe->onNextMove(iterations);
+
+            // create a sample (call getProbabilities() to ensure probabilities are right for policy)
+            // ZZZ configure %
+            this->pe->getProbabilities(node, 1.15f, true);
+
+            // XXX why we get the manager to do this????  Doesn't make sense(we can grab the
+            // statemachine from this->pe)...
+            Sample* s = this->manager->createSample(this->pe, node);
+
+            // tmp XXX, we should also move the createSample() here
+            s->lead_role_index = node->lead_role_index;
+
+            // keep a local ref to it for when we score it
+            this->game_samples.push_back(s);
+
+        } else {
             this->manager->incrDupes();
 
-            node = this->pe->fastApplyMove(choice);
-            continue;
+            // use the score iterations to advance state
+            const int score_iterations = this->conf->score_iterations;
+            choice = this->pe->onNextMove(score_iterations);
         }
 
-        // we will create a sample, add to unique states here
-        this->manager->getUniqueStates()->add(node->getBaseState());
-
-        // create a sample (call getProbabilities() to ensure probabilities are right for policy)
-        // ZZZ configure %
-        this->pe->getProbabilities(node, 1.15f, true);
-
-        ASSERT (choice != nullptr);
-
-        // XXX why we get the manager to do this????  Doesn't make sense(we can grab the
-        // statemachine from this->pe)...
-        Sample* s = this->manager->createSample(this->pe, node);
-
-        // tmp XXX, we should also move the createSample() here
-        s->lead_role_index = node->lead_role_index;
-
-        // keep a local ref to it for when we score it
-        this->game_samples.push_back(s);
+        // apply the move
+        ASSERT(choice != nullptr);
         node = this->pe->fastApplyMove(choice);
 
         if (node->isTerminal()) {
             break;
         }
 
+        // the node score is most accurate at this point, so can check resign here
         if (!this->has_resigned) {
             this->resign(node);
         }
@@ -223,9 +227,9 @@ int SelfPlay::runToEnd(PuctNode* node, std::vector <float>& final_scores) {
     this->pe->updateConf(this->conf->score_puct_config);
     const int iterations = this->conf->score_iterations;
 
-    const float XX_run_to_end_early_pct = 0.5;
+    const float XX_run_to_end_early_pct = 0.75;
     const float XX_run_to_end_early_score = 0.02;
-    const float XX_run_to_end_minimum_game_depth = 65;
+    const float XX_run_to_end_minimum_game_depth = 30;
 
     const bool run_to_end_can_resign = this->rng.get() < XX_run_to_end_early_pct;
 
