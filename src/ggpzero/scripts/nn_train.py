@@ -14,15 +14,15 @@ def get_train_config(game, gen_prefix, next_step, starting_step):
     config.generation_prefix = gen_prefix
     config.batch_size = 512
     config.compile_strategy = "adam"
-    config.epochs = 5
-    #config.learning_rate = 0.0001
-    config.learning_rate = None
-    config.overwrite_existing = False
+    config.epochs = 10
+
+    config.learning_rate = 0.0005
+
+    config.overwrite_existing = True
     config.use_previous = False
     config.validation_split = 0.90000
-
-    config.resample_buckets = [(10, 1.0), (40, 0.8), (-1, 0.5)]
-    config.max_epoch_size = 500000
+    config.resample_buckets = [(15, 1.0), (50, 0.8), (-1, 0.5)]
+    config.max_epoch_size = 1048576
 
     return config
 
@@ -33,6 +33,7 @@ def get_nn_model(game, transformer, size="small"):
     assert config.cnn_kernel_size == 3
     assert not config.l2_regularisation
 
+    # v1
     # config.cnn_filter_size = 64
     # config.residual_layers = 6
     # config.value_hidden_size = 128
@@ -40,10 +41,10 @@ def get_nn_model(game, transformer, size="small"):
     # abuse these for v2
     config.cnn_filter_size = 64
     config.residual_layers = -1
-    config.value_hidden_size = -1
+    config.value_hidden_size = 0
 
     config.dropout_rate_policy = 0.25
-    config.dropout_rate_value = 0.5
+    config.dropout_rate_value = 0.25
 
     config.role_count = 2
     config.leaky_relu = False
@@ -85,15 +86,14 @@ if __name__ == "__main__":
     def main(args):
         gen_prefix_next = sys.argv[1]
 
-
         # modify these >>>
-        #game = "amazons_10x10"
+        game = "reversi_10x10"
 
-        game = "hexLG11"
-        gen_prefix = "h1"
+        #game = "breakthrough"
+        gen_prefix = "h5"
 
-        next_step = 70
-        starting_step = 5
+        next_step = 107
+        starting_step = 20
         num_previous_states = 1
         use_old_training_method = False
 

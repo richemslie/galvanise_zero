@@ -17,6 +17,8 @@ class PUCTPlayer(MatchPlayer):
     last_probability = -1
 
     def __init__(self, conf):
+        assert isinstance(conf, confs.PUCTPlayerConfig)
+
         self.conf = conf
         self.identifier = "%s_%s_%s" % (self.conf.name,
                                         self.conf.playouts_per_iteration,
@@ -39,7 +41,7 @@ class PUCTPlayer(MatchPlayer):
             gen = self.conf.generation
 
             self.nn = man.load_network(game_info.game, gen)
-            self.poller = PlayPoller(self.sm, self.nn, attr.asdict(self.conf))
+            self.poller = PlayPoller(self.sm, self.nn, attr.asdict(self.conf.evaluator_config))
 
             def get_noop_idx(actions):
                 for idx, a in enumerate(actions):
@@ -85,31 +87,32 @@ class PUCTPlayer(MatchPlayer):
 
 ###############################################################################
 
+compete_eval = confs.PUCTEvaluatorConfig(verbose=True,
+                                         choose="choose_top_visits",
+
+                                         dirichlet_noise_alpha=0.03,
+                                         dirichlet_noise_pct=0.1,
+
+                                         puct_before_expansions=3,
+                                         puct_before_root_expansions=10,
+                                         puct_constant_before=2.5,
+                                         puct_constant_after=0.9,
+
+                                         temperature=1.00,
+                                         depth_temperature_max=2.0,
+                                         depth_temperature_start=1,
+                                         depth_temperature_increment=0.25,
+                                         depth_temperature_stop=1,
+                                         random_scale=1.0,
+
+                                         fpu_prior_discount=0.25,
+                                         max_dump_depth=3)
+
 compete = confs.PUCTPlayerConfig(name="puct",
                                  verbose=True,
-
                                  playouts_per_iteration=100,
                                  playouts_per_iteration_noop=0,
-
-                                 dirichlet_noise_alpha=-1,
-
-                                 root_expansions_preset_visits=-1,
-                                 puct_before_expansions=3,
-                                 puct_before_root_expansions=5,
-                                 puct_constant_before=3.0,
-                                 puct_constant_after=0.75,
-
-                                 choose="choose_temperature",
-                                 temperature=1.0,
-                                 depth_temperature_max=5.0,
-                                 depth_temperature_start=0,
-                                 depth_temperature_increment=0.5,
-                                 depth_temperature_stop=6,
-                                 random_scale=0.75,
-
-                                 fpu_prior_discount=0.25,
-
-                                 max_dump_depth=2)
+                                 evaluator_config=compete_eval)
 
 
 def main():
@@ -121,22 +124,14 @@ def main():
     port = int(args[0])
 
     conf = compete
-    if args[1] == "-fpu":
-        conf.name += "_fpu"
-        conf.fpu_prior_discount = 0.25
-        args = args[1:]
-
     generation = args[1]
 
     conf.generation = generation
 
-    # conf = templates.puct_config_template(generation, config_name)
-
-
     if len(args) >= 2:
         playouts_multiplier = int(args[2])
         if playouts_multiplier == 0:
-            conf.playouts_per_iteration = 1
+            conf.playouts_per_iteration = 0
         else:
             conf.playouts_per_iteration *= playouts_multiplier
 

@@ -1,3 +1,5 @@
+# XXX add support for new config : unique_identifier / number_of_polls_before_dumping_stats
+
 from builtins import super
 
 import os

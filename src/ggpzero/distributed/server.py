@@ -1,3 +1,13 @@
+'''
+
+XXX write to a temporary file before sending to worker?  This will prevent datacache from adding it
+to's database, which can be painful.
+
+   * ALSO XXX only write to file once.  If training fails, the header is recreated in the file and
+     the md5sum changes.
+
+'''
+
 import os
 import sys
 import gzip
@@ -345,11 +355,12 @@ class ServerBroker(Broker):
         m = msgs.RequestNetworkTrain()
         m.game = self.conf.game
         m.train_conf = train_conf
-        # new network every 5 steps...  (XXX back again)
-        if next_step % 5 == 0:
-            m.train_conf.use_previous = False
-        else:
-            m.train_conf.use_previous = True
+
+        if self.conf.reset_network_every_n_generations > 0:
+            if next_step % self.conf.reset_network_every_n_generations == 0:
+                m.train_conf.use_previous = False
+            else:
+                m.train_conf.use_previous = True
 
         m.network_model = self.conf.base_network_model
         m.generation_description = self.conf.base_generation_description
