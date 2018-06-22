@@ -35,9 +35,39 @@ namespace GGPZero {
         float depth_temperature_max;
 
         float fpu_prior_discount;
+    };
 
-        static PuctConfig* defaultConfig();
+    struct ExtraPuctConfig {
+        bool matchmode = true;
 
+        // do a minimax during backprop - not had much success with this.
+        // < 0 off
+
+        // float minimax_backup_ratio = 0.75;
+        float minimax_backup_ratio = -1;
+        int minimax_required_visits = 100;
+
+        // scaling backprop
+        // < 0 off
+
+        // int scaled_visits_at = 200;
+        int scaled_visits_at = -1;
+        double scaled_visits_reduce = 10.0;
+        double scaled_visits_finalised_reduce = 100.0;
+
+        // finalised nodes on (only set during backprop, so this turns it on)
+        bool backprop_finalised = true;
+
+        // < 0, off
+        float top_visits_best_guess_converge_ratio = 0.8;
+        float cpuct_after_root_multiplier = 2.0;
+        bool bypass_evaluation_single_node = true;
+
+        double evaluation_multipler_on_terminal = 1.5;
+        double evaluation_multipler_to_convergence = 2;
+
+        // Moves the score so that PUCT exploration is normalised
+        bool adjust_score_puct_normalisation = true;
     };
 
 }

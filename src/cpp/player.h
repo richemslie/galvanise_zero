@@ -22,7 +22,7 @@ namespace GGPZero {
     public:
         Player(GGPLib::StateMachineInterface* sm,
                const GdlBasesTransformer* transformer,
-               PuctConfig* conf);
+               const PuctConfig* conf);
         ~Player();
 
     public:

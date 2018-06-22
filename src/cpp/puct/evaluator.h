@@ -35,7 +35,7 @@ namespace GGPZero {
         virtual ~PuctEvaluator();
 
     public:
-        void updateConf(const PuctConfig* conf);
+        void updateConf(const PuctConfig* conf, const ExtraPuctConfig* extra=nullptr);
 
     private:
         Sample* createSample(const PuctNode* node);
@@ -88,6 +88,8 @@ namespace GGPZero {
         GGPLib::BaseState* basestate_expand_node;
 
         const PuctConfig* conf;
+        const ExtraPuctConfig* extra;
+
         NetworkScheduler* scheduler;
 
         std::string identifier;

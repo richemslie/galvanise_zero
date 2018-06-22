@@ -14,7 +14,7 @@ using namespace GGPZero;
 
 Player::Player(GGPLib::StateMachineInterface* sm,
                const GdlBasesTransformer* transformer,
-               PuctConfig* conf) :
+               const PuctConfig* conf) :
     transformer(transformer),
     evaluator(nullptr),
     scheduler(nullptr),

@@ -230,7 +230,7 @@ int SelfPlay::runToEnd(PuctNode* node, std::vector <float>& final_scores) {
 
     const float XX_run_to_end_early_pct = 0.75;
     const float XX_run_to_end_early_score = 0.02;
-    const float XX_run_to_end_minimum_game_depth = 30;
+    const float XX_run_to_end_minimum_game_depth = 60;
 
     const bool run_to_end_can_resign = this->rng.get() < XX_run_to_end_early_pct;
 

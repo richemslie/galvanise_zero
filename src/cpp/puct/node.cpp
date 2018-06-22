@@ -275,8 +275,8 @@ void PuctNode::dumpNode(const PuctNode* node,
                                      child->policy_prob * 100,
                                      child->next_prob * 100,
                                      score.c_str(),
-                                     child->debug_puct_score,
-                                     child->debug_node_score + child->debug_puct_score);
+                                     child->debug_node_score,
+                                     child->debug_puct_score);
 
         if (child == highlight) {
             K273::l_info(msg);
