@@ -38,7 +38,7 @@ namespace GGPZero {
     };
 
     struct ExtraPuctConfig {
-        bool matchmode = true;
+        bool matchmode = false;
 
         // do a minimax during backprop - not had much success with this.
         // < 0 off

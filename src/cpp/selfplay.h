@@ -36,6 +36,13 @@ namespace GGPZero {
         float sample_to_end_pct;
     };
 
+    struct SelfPlayExtraConfig {
+        float pct_actually_resign = 0.33;
+        float run_to_end_early_pct = 0.80;
+        float run_to_end_early_score = 0.01;
+        float run_to_end_minimum_game_depth = 45;
+    };
+
     class SelfPlay {
     public:
         SelfPlay(SelfPlayManager* manager, const SelfPlayConfig* conf,
@@ -63,6 +70,7 @@ namespace GGPZero {
     private:
         SelfPlayManager* manager;
         const SelfPlayConfig* conf;
+        const SelfPlayExtraConfig* extra;
 
         // only one evaluator - allow to swap in/out config
         PuctEvaluator* pe;
@@ -80,7 +88,7 @@ namespace GGPZero {
         bool has_resigned;
         bool can_resign0;
         bool can_resign1;
-        bool sample_to_end;
+        bool collect_until_finalised;
         bool run_to_end_resigned;
 
         std::vector <float> resign0_false_positive_check_scores;

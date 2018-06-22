@@ -29,10 +29,13 @@ SelfPlay::SelfPlay(SelfPlayManager* manager, const SelfPlayConfig* conf, PuctEva
     role_count(role_count),
     identifier(identifier),
     match_count(0) {
+
+    this->extra = new SelfPlayExtraConfig;
 }
 
 
 SelfPlay::~SelfPlay() {
+    delete this->extra;
 }
 
 PuctNode* SelfPlay::selectNode() {
@@ -155,7 +158,7 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
     while (true) {
         const int sample_count = this->game_samples.size();
         if (sample_count >= this->conf->max_number_of_samples) {
-            if (this->sample_to_end) {
+            if (this->collect_until_finalised) {
                 if (node->is_finalised) {
                     break;
                 }
@@ -209,11 +212,11 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
             this->resign(node);
         }
 
-        const float XX_pct_actually_resign = 0.3;
-        // some of time actually resign (if we have at least one sample)
+        // some of the time actually resign (if we have at least one sample)
+        // note, that this is done every turn, so over n time steps, more likely to actually resign
         if (this->has_resigned) {
             if (this->game_samples.size() > 1) {
-                if (this->rng.get() < XX_pct_actually_resign) {
+                if (this->rng.get() < this->extra->pct_actually_resign) {
                     this->manager->incrActualResigns();
                     break;
                 }
@@ -228,11 +231,7 @@ int SelfPlay::runToEnd(PuctNode* node, std::vector <float>& final_scores) {
     this->pe->updateConf(this->conf->score_puct_config);
     const int iterations = this->conf->score_iterations;
 
-    const float XX_run_to_end_early_pct = 0.75;
-    const float XX_run_to_end_early_score = 0.02;
-    const float XX_run_to_end_minimum_game_depth = 60;
-
-    const bool run_to_end_can_resign = this->rng.get() < XX_run_to_end_early_pct;
+    const bool run_to_end_can_resign = this->rng.get() < this->extra->run_to_end_early_pct;
 
     // simply run the game to end
     while (true) {
@@ -247,9 +246,9 @@ int SelfPlay::runToEnd(PuctNode* node, std::vector <float>& final_scores) {
             break;
         }
 
-        if (run_to_end_can_resign && node->game_depth > XX_run_to_end_minimum_game_depth) {
+        if (run_to_end_can_resign && node->game_depth > this->extra->run_to_end_minimum_game_depth) {
             const float lead_score = node->getCurrentScore(node->lead_role_index);
-            if (lead_score < XX_run_to_end_early_score) {
+            if (lead_score < this->extra->run_to_end_early_score) {
                 this->manager->incrEarlyRunToEnds();
 
                 for (int ri=0; ri<this->role_count; ri++) {
@@ -350,11 +349,12 @@ void SelfPlay::playOnce() {
     // reset resignation status
     this->has_resigned = false;
 
-    this->sample_to_end = false;
+    this->collect_until_finalised = false;
+    // XXX rename this to collect_until_finalised_pct
     if (this->conf->sample_to_end_pct > 0) {
         double r = this->rng.get();
         if (r < this->conf->sample_to_end_pct) {
-            this->sample_to_end = true;
+            this->collect_until_finalised = true;
         }
     }
 
