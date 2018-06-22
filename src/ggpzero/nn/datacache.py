@@ -267,7 +267,8 @@ class StatsAccumulator(object):
         # XXX only 2 for now
         self.total_final_scores_per_roles = [0, 0]
 
-        self.total_puct_score_dist = [0.01, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.99, 1.0]
+        d = [0.01, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.99, 1.0]
+        self.total_puct_score_dist = [[x, 0] for x in d]
 
     @property
     def unique_matches(self):
@@ -436,8 +437,11 @@ Add to cache
                     raise Check("step_sum(%d) != step(%d)" % (step_sum.step, step))
 
                 if step_sum.md5sum != md5sum:
-                    raise Check("for file %s, md5sum(%s) != md5sum(%s)" % (file_path,
-                                                                           step_sum.md5sum, md5sum))
+                    msg = "Summary check: for file %s, md5sum(%s) != md5sum(%s)" % (file_path,
+                                                                                    step_sum.md5sum,
+                                                                                    md5sum)
+                    log.warning(msg)
+                    # raise Check(msg)
 
                 total_samples += step_sum.num_samples
                 expect += 1
