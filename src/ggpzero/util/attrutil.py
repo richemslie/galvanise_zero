@@ -172,5 +172,9 @@ def clone(attr_object):
     return fromdict_plus(asdict_plus(attr_object))
 
 
+def has(inst, key):
+    return key in attr.asdict(inst).keys()
+
+
 attribute = attr.ib
 attr_factory = attr.Factory
