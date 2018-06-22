@@ -605,13 +605,16 @@ void PuctEvaluator::playoutLoop(int max_evaluations, double end_time) {
         if (next_report_time > 0 && K273::get_time() > next_report_time) {
             next_report_time = K273::get_time() + 2.5;
 
-            auto children = PuctNode::sortedChildren(this->root,
-                                                     this->sm->getRoleCount());
-
-            K273::l_info("Evals %d/%d, depth %.2f/%d, best: %.4f",
-                         this->evaluations, iterations,
-                         total_depth / float(iterations), max_depth,
-                         children[0]->to_node->getCurrentScore(this->root->lead_role_index));
+            const PuctNodeChild* best = this->chooseTopVisits(this->root);
+            if (best->to_node != nullptr) {
+                const int our_role_index = this->root->lead_role_index;
+                const int choice = best->move.get(our_role_index);
+                K273::l_info("Evals %d/%d, depth %.2f/%d, best: %.4f, move: %s",
+                             this->evaluations, iterations,
+                             total_depth / float(iterations), max_depth,
+                             best->to_node->getCurrentScore(our_role_index),
+                             this->sm->legalToMove(our_role_index, choice));
+            }
         }
     }
 
@@ -805,8 +808,17 @@ bool PuctEvaluator::converged(const PuctNode* node) const {
         PuctNode* n1 = children[1]->to_node;
         if (n0 != nullptr && n1 != nullptr) {
             const int role_index = node->lead_role_index;
-            return n0->getCurrentScore(role_index) > n1->getCurrentScore(role_index);
-        }
+
+            if (n0->getCurrentScore(role_index) > n1->getCurrentScore(role_index)) {
+                // hardcode, but it is ok,  Just needs to actually move a little beyond 0.
+                if (n0->visits > n1->visits + 8) {
+                    return true;
+                }
+            }
+
+            return false;
+         }
+
     }
 
     return true;
