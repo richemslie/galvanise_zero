@@ -6,6 +6,11 @@ from ggpzero.defs.datadesc import GenerationDescription
 # DO NOT IMPORT msgs.py
 
 @register_attrs
+class PUCTEvaluatorExtraConfig(object):
+    ''' extra experimental features on puct1 evaluator '''
+
+
+@register_attrs
 class PUCTEvaluatorConfig(object):
     verbose = attribute(False)
 
@@ -25,7 +30,7 @@ class PUCTEvaluatorConfig(object):
     dirichlet_noise_pct = attribute(0.25)
     dirichlet_noise_alpha = attribute(0.1)
 
-    # looks up method() to use
+    # looks up method() to use.  one of (choose_top_visits | choose_temperature)
     choose = attribute("choose_top_visits")
 
     # debug, only if verbose is true
@@ -46,50 +51,16 @@ class PUCTEvaluatorConfig(object):
 
 @register_attrs
 class PUCTPlayerConfig(object):
-    # XXX split this into PUCTPlayerConfig & PUCTEvaluatorConfig
-
     name = attribute("PUCTPlayer")
-    verbose = attribute(True)
 
-    # XXX player only attributes
+    verbose = attribute(False)
+
     generation = attribute("latest")
     playouts_per_iteration = attribute(800)
     playouts_per_iteration_noop = attribute(1)
-    playouts_per_iteration_resign = attribute(1)
 
-    # root level minmax ing, an old galvanise nn idea.  Expands the root node, and presets visits.
-    # -1 off.
-    root_expansions_preset_visits = attribute(-1)
+    evaluator_config = attribute(default=attr_factory(PUCTEvaluatorConfig))
 
-    # applies different constant until the following expansions are met
-    puct_before_expansions = attribute(4)
-    puct_before_root_expansions = attribute(4)
-
-    # the puct constant.  before expansions, and after expansions are met
-    puct_constant_before = attribute(0.75)
-    puct_constant_after = attribute(0.75)
-
-    # added to root child policy pct (less than 0 is off)
-    dirichlet_noise_pct = attribute(0.25)
-    dirichlet_noise_alpha = attribute(0.1)
-
-    # looks up method() to use
-    choose = attribute("choose_top_visits")
-
-    # debug, only if verbose is true
-    max_dump_depth = attribute(2)
-
-    random_scale = attribute(0.5)
-    temperature = attribute(1.0)
-    depth_temperature_start = attribute(5)
-    depth_temperature_increment = attribute(0.5)
-    depth_temperature_stop = attribute(10)
-    depth_temperature_max = attribute(5.0)
-
-    # popular leela-zero feature: First Play Urgency.  When the policy space is large - this might
-    # be neccessary.  If > 0, applies the prior of the parent, minus a discount to unvisited nodes
-    # < 0 is off.
-    fpu_prior_discount = attribute(-1)
 
 @register_attrs
 class SelfPlayConfig(object):
@@ -194,6 +165,12 @@ class WorkerConfig(object):
     do_self_play = attribute(False)
     self_play_batch_size = attribute(1)
 
+    # passed into Supervisor, used instead of hard coded value.
+    number_of_polls_before_dumping_stats = attribute(1024)
+
+    # use to create SelfPlayManager
+    unique_identifier = attribute("pleasesetme")
+
     # slow things down
     sleep_between_poll = attribute(-1)
 
@@ -242,3 +219,6 @@ class ServerConfig(object):
 
     # save the samples every n seconds
     checkpoint_interval = attribute(60.0 * 5)
+
+    # this forces the network to be reset to random weights, every n generations
+    reset_network_every_n_generations = attribute(-1)
