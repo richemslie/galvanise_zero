@@ -337,3 +337,18 @@ class Games(object):
                         "1 2 3 4 5 6 7 8 9 10 11".split(),
                         "1 2 3 4 5 6 7 8 9 10 11".split(),
                         [cell], [control])
+
+    def draughts_bt_8x8(self):
+        interim_status = simple_control("interim_status")
+        control = binary_control("control", "white", "black")
+
+        cell = BoardChannels("cell", 2, 3, [BoardTerm(1, "white black".split()),
+                                            BoardTerm(4, "man king".split())])
+
+        capturing_piece = BoardChannels("capturing_piece", 1, 2)
+        last_piece = BoardChannels("last_at", 1, 2)
+
+        return GameDesc("draughts_bt_8x8",
+                        "a b c d e f g h".split(),
+                        "1 2 3 4 5 6 7 8".split(),
+                        [cell, capturing_piece, last_piece], [interim_status, control])
