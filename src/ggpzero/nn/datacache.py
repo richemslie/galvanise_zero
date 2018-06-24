@@ -341,37 +341,6 @@ class StatsAccumulator(object):
 
 
 class DataCache(object):
-    '''
-
-Add to cache
-
-    def verify_samples(self, sm):
-        # create a basestate
-        basestate = sm.new_base_state()
-
-        counters = [Counter(), Counter()]
-        max_values = [{}, {}]
-        min_values = [{}, {}]
-        for s in self.samples:
-            basestate.from_list(decode_state(s.state))
-            sm.update_bases(basestate)
-
-            # get legals...
-            for ri in range(2):
-                ls = sm.get_legal_state(ri)
-                policy = s.policies[ri]
-                for legal in ls.to_list():
-                    found = False
-                    for ll, pp in policy:
-                        if ll == legal:
-                            max_values[ri][legal] = max(max_values[ri].get(legal, -1), pp)
-                            min_values[ri][legal] = min(max_values[ri].get(legal, 2), pp)
-                            found = True
-                            break
-                    assert found
-                    counters[ri][legal] += 1
-    '''
-
     def __init__(self, transformer, gen_prefix):
         self.transformer = transformer
         self.gen_prefix = gen_prefix
