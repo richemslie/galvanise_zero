@@ -122,6 +122,14 @@ namespace GGPZero {
             return this->expected_policy_sizes[i];
         }
 
+        // XXX wip:
+        int getNumberRewards() const {
+            // XXX currently we have one reward/value head per role.  Same as policy.  So we can
+            // abuse that for now.  In the future, we want to be able to modify these
+            // independently.
+            return this->getNumberPolicies();
+        }
+
     private:
         const int channel_size;
         const int channels_per_state;
