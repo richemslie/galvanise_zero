@@ -246,7 +246,10 @@ int SelfPlay::runToEnd(PuctNode* node, std::vector <float>& final_scores) {
             break;
         }
 
-        if (run_to_end_can_resign && node->game_depth > this->extra->run_to_end_minimum_game_depth) {
+        if (this->has_resigned &&
+            run_to_end_can_resign &&
+            node->game_depth > this->extra->run_to_end_minimum_game_depth) {
+
             const float lead_score = node->getCurrentScore(node->lead_role_index);
             if (lead_score < this->extra->run_to_end_early_score) {
                 this->manager->incrEarlyRunToEnds();
