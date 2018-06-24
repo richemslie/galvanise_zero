@@ -200,6 +200,15 @@ class TrainManager(object):
         # lookup via game_name (this gets statemachine & statemachine model)
         self.game_info = lookup.by_name(train_config.game)
         self.update_config(attrutil.clone(train_config))
+        self.cb = None
+
+    def set_callback(self, cb):
+        self.cb = cb
+
+    def do_callbacks(self):
+        ''' so can do other stuff - used to share GPU '''
+        if self.cb is not None:
+            self.cb()
 
     def update_config(self, train_config, next_generation_prefix=None):
         # abbreviate, easier on the eyes
@@ -314,7 +323,6 @@ class TrainManager(object):
                         value_weight=value_weight)
 
         for i in range(num_epochs):
-
             if self.controller.stop_training:
                 log.warning("Stop training early via controller")
                 break
@@ -337,12 +345,15 @@ class TrainManager(object):
                    shuffle=False,
                    initial_epoch=0)
 
+            self.do_callbacks()
+
     def save(self):
         # XXX set generation attributes
 
         man = get_manager()
 
         man.save_network(self.nn, generation_name=self.next_generation)
+        self.do_callbacks()
 
         ###############################################################################
         # save a previous model for next time
@@ -366,3 +377,4 @@ class TrainManager(object):
         prev_nn = network.NeuralNetwork(self.nn.gdl_bases_transformer,
                                         prev_model, prev_generation_descr)
         man.save_network(prev_nn, for_next_generation)
+        self.do_callbacks()
