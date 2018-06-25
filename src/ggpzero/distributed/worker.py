@@ -5,7 +5,9 @@ from builtins import super
 import os
 import sys
 import time
+import base64
 import shutil
+import importlib
 import traceback
 
 from twisted.internet import reactor
@@ -19,7 +21,7 @@ from ggpzero.defs import msgs, confs
 
 from ggpzero.util.broker import Broker, BrokerClientFactory
 from ggpzero.util import cppinterface
-from ggpzero.util.state import encode_state, decode_state
+from ggpzero.util.state import encode_state
 
 from ggpzero.nn.manager import get_manager
 
@@ -35,10 +37,12 @@ def default_conf():
 
 
 class Worker(Broker):
-    def __init__(self, conf_filename):
+    def __init__(self, conf_filename, cb_fn=None):
         super().__init__()
 
         self.conf_filename = conf_filename
+        self.cb_fn = cb_fn
+
         if os.path.exists(conf_filename):
             conf = attrutil.json_to_attr(open(conf_filename).read())
             assert isinstance(conf, confs.WorkerConfig)
@@ -66,6 +70,14 @@ class Worker(Broker):
         self.trainer = None
 
         self.cmds_running = []
+
+        if False and self.conf.callback:
+            module = importlib.import_module(self.conf.callback[0])
+            fn_py_path = self.conf.callback
+            mod_name, func_name = function_string.rsplit('.', 1)
+            mod = importlib.import_module(mod_name)
+            func = getattr(mod, func_name)
+            func()
 
         # connect to server
         reactor.callLater(0, self.connect)
@@ -172,7 +184,8 @@ class Worker(Broker):
 
         # update duplicates
         for s in msg.new_states:
-            self.supervisor.add_unique_state(decode_state(s))
+            # note we decode the string and set it rawly.  using decode_state() was too slow.
+            self.supervisor.add_unique_state(base64.decodestring(s))
 
         start_time = time.time()
         self.supervisor.poll_loop(do_stats=True, cb=self.cb_from_superviser)
@@ -208,7 +221,7 @@ class Worker(Broker):
             transformer = man.get_transformer(game, generation_description)
 
             # create the manager
-            self.trainer = TrainManager(train_config, transformer)
+            self.trainer = TrainManager(train_config, transformer, cb=self.cb_fn)
 
         self.trainer.update_config(train_config)
         self.trainer.get_network(network_model, generation_description)
@@ -223,6 +236,9 @@ def start_worker_factory():
 
     from ggpzero.util.keras import init
     init()
+
+    from gzero_games.ggphack import addgame
+    addgame.install_games()
 
     broker = Worker(sys.argv[1])
     broker.start()

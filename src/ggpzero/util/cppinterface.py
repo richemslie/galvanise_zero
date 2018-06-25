@@ -189,8 +189,10 @@ class Supervisor(PollerBase):
         else:
             return []
 
-    def add_unique_state(self, l):
-        self.bs_for_unique_states.from_list(l)
+    def add_unique_state(self, s):
+        assert isinstance(s, str)
+        assert len(s) == self.bs_for_unique_states.num_bytes
+        self.bs_for_unique_states.from_string(s)
         self.c_supervisor.add_unique_state(basestate_to_ptr(self.bs_for_unique_states))
 
     def clear_unique_states(self):
