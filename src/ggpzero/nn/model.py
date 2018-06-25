@@ -189,13 +189,6 @@ def get_network_model(conf):
                                       activation=activation)(layer)
             prev_filter_size = filter_size
 
-        # would make sense to add these, but it seems to hurt more than anything.  Straight line
-        # all the way eh?
-        # XXX
-        # layer = klayers.BatchNormalization(axis=get_bn_axis(),
-        #                                    name="final_bn")(layer)
-        # layer = act(layer, activation, "final_act")
-
     else:
         # AG0 way:
 
@@ -245,33 +238,36 @@ def get_network_model(conf):
     value_v2 = conf.value_hidden_size < 0
     if value_v3:
         assert conf.input_columns == conf.input_rows
-        output_layer = layer
+        average_layer = layer
         dims = conf.input_columns
         while dims >= 5:
             if dims % 2 == 1:
-                output_layer = klayers.AveragePooling2D(4, 1)(output_layer)
+                average_layer = klayers.AveragePooling2D(4, 1)(average_layer)
                 dims -= 3
             else:
-                output_layer = klayers.AveragePooling2D(2, 2)(output_layer)
+                average_layer = klayers.AveragePooling2D(2, 2)(average_layer)
                 dims /= 2
 
-        to_flatten1 = klayers.Conv2D(16, 1,
-                                     name='to_flatten1',
-                                     padding='valid',
-                                     activation=activation)(output_layer)
+        assert dims < conf.input_columns
 
-        to_flatten2 = klayers.Conv2D(2, 1,
-                                     name='to_flatten2',
-                                     padding='valid',
-                                     activation=activation)(layer)
+        to_flatten1 = conv2d_block(16, 1,
+                                   name='reward_flatten1',
+                                   padding='valid',
+                                   kernel_regularizer=keras_regularizers.l2(1e-4),
+                                   activation=activation)(average_layer)
 
-        if conf.dropout_rate_value > 0:
-            to_flatten1 = klayers.Dropout(conf.dropout_rate_value)(to_flatten1)
-            to_flatten2 = klayers.Dropout(conf.dropout_rate_value)(to_flatten2)
+        to_flatten2 = conv2d_block(2, 1,
+                                   name='reward_flatten2',
+                                   padding='valid',
+                                   kernel_regularizer=keras_regularizers.l2(1e-4),
+                                   activation=activation)(layer)
 
         flat1 = klayers.Flatten()(to_flatten1)
         flat2 = klayers.Flatten()(to_flatten2)
         flat = klayers.concatenate([flat1, flat2])
+
+        if conf.dropout_rate_value > 0:
+            flat = klayers.Dropout(conf.dropout_rate_value)(flat)
 
         value_head = klayers.Dense(conf.role_count,
                                    activation="sigmoid", name="value")(flat)
@@ -323,7 +319,10 @@ def get_network_model(conf):
 
     model = keras_models.Model(inputs=[inputs_board], outputs=outputs)
 
-    # add in weight decay?  XXX rename conf to reflect it is weight decay and use +ve value instead of hard coded value.
+    # add in weight decay?  XXX rename conf to reflect it is weight decay and use +ve value instead
+    # of hard coded value.
+    # XXX this hasn't been tested
+
     if conf.l2_regularisation:
         for layer in model.layers:
             # XXX To get global weight decay in keras regularizers have to be added to every layer
