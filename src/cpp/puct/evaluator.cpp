@@ -431,7 +431,11 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, int depth) {
 
     // very, very simple.  Moves the score so that PUCT exploration is normalised.
     if (this->extra->adjust_score_puct_normalisation) {
-        score_adjustment = 0.5 - node->getCurrentScore(node->lead_role_index);
+        if (node->getCurrentScore(node->lead_role_index) < 0.1) {
+            score_adjustment = 0.1 - node->getCurrentScore(node->lead_role_index);
+        } else if (node->getCurrentScore(node->lead_role_index) > 0.9) {
+            score_adjustment = 0.9 - node->getCurrentScore(node->lead_role_index);
+        }
     }
 
     for (int ii=0; ii<node->num_children; ii++) {

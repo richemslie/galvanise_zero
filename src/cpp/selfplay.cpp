@@ -87,7 +87,7 @@ PuctNode* SelfPlay::selectNode() {
                 break;
             }
 
-            modified_game_depth -=5;
+            modified_game_depth -=1;
             modified_game_depth = std::max(0, modified_game_depth);
             node = this->pe->jumpRoot(modified_game_depth);
         }
@@ -99,7 +99,7 @@ PuctNode* SelfPlay::selectNode() {
                 break;
             }
 
-            modified_game_depth -=5;
+            modified_game_depth -=1;
             modified_game_depth = std::max(0, modified_game_depth);
             node = this->pe->jumpRoot(modified_game_depth);
         }
