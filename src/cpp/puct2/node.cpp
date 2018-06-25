@@ -1,4 +1,4 @@
-#include "puct_v2/node.h"
+#include "puct2/node.h"
 
 #include <statemachine/statemachine.h>
 #include <statemachine/jointmove.h>

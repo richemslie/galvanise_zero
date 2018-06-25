@@ -1,5 +1,7 @@
 #include "puct/node.h"
 
+#include "gdltransformer.h"
+
 #include <statemachine/statemachine.h>
 #include <statemachine/jointmove.h>
 #include <statemachine/basestate.h>
@@ -312,3 +314,76 @@ Children PuctNode::sortedChildren(const PuctNode* node, int role_count, bool nex
     std::sort(children.begin(), children.end(), f);
     return children;
 }
+
+
+
+void PuctNodeRequest::add(float* buf, const GdlBasesTransformer* transformer) {
+    std::vector <const GGPLib::BaseState*> prev_states;
+    const PuctNode* cur = this->node->parent;
+
+    for (int ii=0; ii<transformer->getNumberPrevStates(); ii++) {
+        if (cur != nullptr) {
+            prev_states.push_back(cur->getBaseState());
+            cur = cur->parent;
+        }
+    }
+
+    transformer->toChannels(node->getBaseState(), prev_states, buf);
+}
+
+void PuctNodeRequest::reply(const SchedulerV2::ModelResult& result,
+                            const GdlBasesTransformer* transformer) {
+
+    const int role_count = transformer->getNumberPolicies();
+    // Update children in new_node with prediction
+    float total_prediction = 0.0f;
+
+    auto* raw_policy = result.getPolicy(node->lead_role_index);
+    for (int ii=0; ii<node->num_children; ii++) {
+        PuctNodeChild* c = node->getNodeChild(role_count, ii);
+
+        c->policy_prob = raw_policy[c->move.get(node->lead_role_index)];
+
+        if (c->policy_prob < 0.001) {
+            // XXX stats?
+            c->policy_prob = 0.001;
+        }
+
+        total_prediction += c->policy_prob;
+    }
+
+    if (total_prediction > std::numeric_limits<float>::min()) {
+        // normalise:
+        for (int ii=0; ii<node->num_children; ii++) {
+            PuctNodeChild* c = node->getNodeChild(role_count, ii);
+            c->policy_prob /= total_prediction;
+        }
+
+    } else {
+        // well that sucks - absolutely no predictions, just make it uniform then...
+        for (int ii=0; ii<node->num_children; ii++) {
+            PuctNodeChild* c = node->getNodeChild(role_count, ii);
+            c->policy_prob = 1.0 / node->num_children;
+        }
+    }
+
+    for (int ri=0; ri<role_count; ri++) {
+        float s = result.getReward(ri);
+        if (s > 1.0) {
+            s = 1.0f;
+
+        } else if (s < 0.0) {
+            s = 0.0f;
+        }
+
+        node->setFinalScore(ri, s);
+        node->setCurrentScore(ri, s);
+    }
+}
+
+
+
+
+
+
+

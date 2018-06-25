@@ -1,5 +1,8 @@
 #pragma once
 
+// for NodeRequestInterface
+#include "scheduler2.h"
+
 #include "statemachine/statemachine.h"
 #include "statemachine/jointmove.h"
 #include "statemachine/basestate.h"
@@ -152,6 +155,26 @@ namespace GGPZero {
                                        bool next_probability=false);
     };
 
+    ///////////////////////////////////////////////////////////////////////////////
+
+    class PuctNodeRequest : public SchedulerV2::NodeRequestInterface {
+    public:
+        PuctNodeRequest(PuctNode* node) :
+            node(node) {
+        }
+
+        virtual ~PuctNodeRequest() {
+        }
+
+    public:
+        // implement interface
+        void add(float* buf, const GdlBasesTransformer* transformer);
+        void reply(const SchedulerV2::ModelResult& result,
+                   const GdlBasesTransformer* transformer);
+
+    private:
+        PuctNode* node;
+    };
 
 }
 
