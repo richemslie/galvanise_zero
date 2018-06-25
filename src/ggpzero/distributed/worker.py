@@ -1,4 +1,4 @@
-# XXX add support for new config : unique_identifier / number_of_polls_before_dumping_stats
+# XXX add support for new config : unique_identifier / number_of_polls_before_dumping_stats / cb
 
 from builtins import super
 
@@ -72,9 +72,8 @@ class Worker(Broker):
         self.cmds_running = []
 
         if False and self.conf.callback:
-            module = importlib.import_module(self.conf.callback[0])
             fn_py_path = self.conf.callback
-            mod_name, func_name = function_string.rsplit('.', 1)
+            mod_name, func_name = fn_py_path.rsplit('.', 1)
             mod = importlib.import_module(mod_name)
             func = getattr(mod, func_name)
             func()
@@ -236,9 +235,6 @@ def start_worker_factory():
 
     from ggpzero.util.keras import init
     init()
-
-    from gzero_games.ggphack import addgame
-    addgame.install_games()
 
     broker = Worker(sys.argv[1])
     broker.start()

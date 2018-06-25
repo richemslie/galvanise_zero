@@ -22,7 +22,6 @@ from ggplib.db import lookup
 
 from ggpzero.util import attrutil
 from ggpzero.util.broker import Broker, ServerFactory
-from ggpzero.util.state import encode_state
 
 from ggpzero.defs import msgs, confs, datadesc, templates
 
