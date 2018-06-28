@@ -1,6 +1,5 @@
-#include "scheduler2.h"
+#include "scheduler.h"
 
-#include "sample.h"
 #include "gdltransformer.h"
 
 #include <statemachine/basestate.h>
@@ -12,14 +11,14 @@
 
 #include <string>
 
-using namespace GGPZero::PuctV2;
+using namespace GGPZero;
 
 ///////////////////////////////////////////////////////////////////////////////
 
 void ModelResult::set(const GGPLib::BaseState* bs,
                       int idx,
-                      const GGPZero::PredictDoneEvent* evt,
-                      const GGPZero::GdlBasesTransformer* transformer) {
+                      const PredictDoneEvent* evt,
+                      const GdlBasesTransformer* transformer) {
 
     // XXX how can we ensure this lives on??? with lru
     this->basestate = bs;
@@ -42,7 +41,7 @@ void ModelResult::set(const GGPLib::BaseState* bs,
 
 ///////////////////////////////////////////////////////////////////////////////
 
-NetworkScheduler::NetworkScheduler(const GGPZero::GdlBasesTransformer* transformer,
+NetworkScheduler::NetworkScheduler(const GdlBasesTransformer* transformer,
                                    int role_count, int batch_size,
                                    int lru_cache_size) :
     transformer(transformer),
@@ -189,8 +188,8 @@ void NetworkScheduler::mainLoop() {
     K273::l_verbose("requestors.size on exiting runScheduler():  %zu", this->requestors.size());
 }
 
-void NetworkScheduler::poll(const GGPZero::PredictDoneEvent* predict_done_event,
-                            GGPZero::ReadyEvent* ready_event) {
+void NetworkScheduler::poll(const PredictDoneEvent* predict_done_event,
+                            ReadyEvent* ready_event) {
     // poll() must be called with an event.  The even resides in the parent process (which is the
     // self play manager / player).  This is passed to the main_loop()..
 

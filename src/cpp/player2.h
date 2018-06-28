@@ -1,6 +1,7 @@
 #pragma once
 
 #include "events.h"
+#include "scheduler.h"
 #include "gdltransformer.h"
 
 #include <statemachine/basestate.h>
@@ -15,7 +16,6 @@ namespace GGPZero::PuctV2 {
     class PuctConfig;
     class PuctEvaluator;
     class PuctNodeChild;
-    class NetworkScheduler;
 
     // this is a bit of hack, wasnt really designed to actually play from c++
     class Player {

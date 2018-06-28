@@ -1,11 +1,11 @@
 #pragma once
 
 // for NodeRequestInterface
-#include "scheduler2.h"
+#include "scheduler.h"
 
-#include "statemachine/statemachine.h"
-#include "statemachine/jointmove.h"
-#include "statemachine/basestate.h"
+#include <statemachine/statemachine.h>
+#include <statemachine/jointmove.h>
+#include <statemachine/basestate.h>
 
 #include <k273/util.h>
 

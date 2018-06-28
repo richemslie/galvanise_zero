@@ -1,11 +1,11 @@
 #pragma once
 
 // for NodeRequestInterface
-#include "scheduler2.h"
+#include "scheduler.h"
 
-#include "statemachine/statemachine.h"
-#include "statemachine/jointmove.h"
-#include "statemachine/basestate.h"
+#include <statemachine/statemachine.h>
+#include <statemachine/jointmove.h>
+#include <statemachine/basestate.h>
 
 #include <k273/util.h>
 
@@ -157,7 +157,7 @@ namespace GGPZero {
 
     ///////////////////////////////////////////////////////////////////////////////
 
-    class PuctNodeRequest : public GGPZero::PuctV2::ModelRequestInterface {
+    class PuctNodeRequest : public GGPZero::ModelRequestInterface {
     public:
         PuctNodeRequest(PuctNode* node) :
             node(node) {
@@ -170,7 +170,7 @@ namespace GGPZero {
         // implement interface
         const GGPLib::BaseState* getBaseState() const;
         void add(float* buf, const GdlBasesTransformer* transformer);
-        void reply(const GGPZero::PuctV2::ModelResult& result,
+        void reply(const GGPZero::ModelResult& result,
                    const GdlBasesTransformer* transformer);
 
     private:

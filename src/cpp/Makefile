@@ -15,7 +15,6 @@ SRCS += player.cpp supervisor.cpp ggpzero_interface.cpp
 SRCS += greenlet/greenlet.cpp greenlet/greenlet-sys.cpp
 
 # experimental
-SRCS += scheduler2.cpp
 SRCS += puct2/node.cpp puct2/evaluator.cpp player2.cpp
 
 CORE_OBJS = $(patsubst %.cpp, %.o, $(SRCS))

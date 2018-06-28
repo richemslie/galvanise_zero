@@ -14,10 +14,10 @@
 #include <algorithm>
 
 using namespace std;
-using namespace GGPLib;
 using namespace GGPZero::PuctV2;
 
-static string scoreString(const PuctNode* node, StateMachineInterface* sm, bool final=false) {
+static string scoreString(const PuctNode* node,
+                          GGPLib::StateMachineInterface* sm, bool final=false) {
     const int role_count = sm->getRoleCount();
     string res = "(";
     for (int ii=0; ii<role_count; ii++) {
@@ -39,7 +39,7 @@ static string scoreString(const PuctNode* node, StateMachineInterface* sm, bool 
 
 ///////////////////////////////////////////////////////////////////////////////
 
-static PuctNode* createNode(const BaseState* base_state,
+static PuctNode* createNode(const GGPLib::BaseState* base_state,
                             bool is_finalised,
                             int lead_role_index,
                             int num_children,
@@ -48,10 +48,10 @@ static PuctNode* createNode(const BaseState* base_state,
     const int child_size = sizeof(PuctNodeChild);
     int current_score_bytes = round_up_8(role_count * sizeof(Score));
     int final_score_bytes = round_up_8(role_count * sizeof(Score));
-    int base_state_bytes = round_up_8(sizeof(BaseState) + base_state->byte_count);
+    int base_state_bytes = round_up_8(sizeof(GGPLib::BaseState) + base_state->byte_count);
 
     // remember that the JointMove is inline, so we only need to count the indices
-    int node_child_bytes = round_up_8(child_size + role_count * sizeof(JointMove::IndexType));
+    int node_child_bytes = round_up_8(child_size + role_count * sizeof(GGPLib::JointMove::IndexType));
 
     int total_bytes = (sizeof(PuctNode) + current_score_bytes + final_score_bytes +
                        base_state_bytes + (num_children * node_child_bytes));
@@ -93,7 +93,7 @@ static PuctNode* createNode(const BaseState* base_state,
     }
 
     // copy the base state
-    BaseState* node_bs = node->getBaseState();
+    GGPLib::BaseState* node_bs = node->getBaseState();
     node_bs->init(base_state->size);
     node_bs->assign(base_state);
 
@@ -102,9 +102,10 @@ static PuctNode* createNode(const BaseState* base_state,
 }
 
 static int initialiseChildHelper(PuctNode* node, int role_index, int child_index,
-                                 int role_count, StateMachineInterface* sm, JointMove* joint_move) {
+                                 int role_count, GGPLib::StateMachineInterface* sm,
+                                 GGPLib::JointMove* joint_move) {
 
-    LegalState* ls = sm->getLegalState(role_index);
+    GGPLib::LegalState* ls = sm->getLegalState(role_index);
     bool final_role = role_index == role_count - 1;
 
     for (int ii=0; ii<ls->getCount(); ii++) {
@@ -143,8 +144,8 @@ static int initialiseChildHelper(PuctNode* node, int role_index, int child_index
 
 
 // This is a static method.
-PuctNode* PuctNode::create(const BaseState* base_state,
-                           StateMachineInterface* sm) {
+PuctNode* PuctNode::create(const GGPLib::BaseState* base_state,
+                           GGPLib::StateMachineInterface* sm) {
 
     const int role_count = sm->getRoleCount();
     sm->updateBases(base_state);
@@ -160,7 +161,7 @@ PuctNode* PuctNode::create(const BaseState* base_state,
         // how many children do we need? (effectively a cross product)
         int max_moves_for_a_role = 1;
         for (int ri=0; ri<role_count; ri++) {
-            LegalState* ls = sm->getLegalState(ri);
+            GGPLib::LegalState* ls = sm->getLegalState(ri);
             total_children *= ls->getCount();
             if (ls->getCount() > max_moves_for_a_role) {
                 max_moves_for_a_role = ls->getCount();
@@ -176,7 +177,7 @@ PuctNode* PuctNode::create(const BaseState* base_state,
             // are the rest 1?
             bool rest_one = true;
             for (int ri=0; ri<role_count; ri++) {
-                LegalState* ls = sm->getLegalState(ri);
+                GGPLib::LegalState* ls = sm->getLegalState(ri);
                 if (ri != lead_role_index && ls->getCount() > 1) {
                     rest_one = false;
                 }
@@ -196,8 +197,8 @@ PuctNode* PuctNode::create(const BaseState* base_state,
                                   role_count);
 
     if (!node->is_finalised) {
-        char buf[JointMove::mallocSize(role_count)];
-        JointMove* move = (JointMove*) buf;
+        char buf[GGPLib::JointMove::mallocSize(role_count)];
+        GGPLib::JointMove* move = (GGPLib::JointMove*) buf;
         int count = initialiseChildHelper(node, 0, 0, role_count, sm, move);
         ASSERT (count == total_children);
 
@@ -215,7 +216,8 @@ PuctNode* PuctNode::create(const BaseState* base_state,
 
 ///////////////////////////////////////////////////////////////////////////////
 
-string PuctNode::moveString(const JointMove& move, StateMachineInterface* sm) {
+string PuctNode::moveString(const GGPLib::JointMove& move,
+                            GGPLib::StateMachineInterface* sm) {
     const int role_count = sm->getRoleCount();
 
     string res = "(";
@@ -249,7 +251,7 @@ void PuctNode::dumpNode(const PuctNode* node,
                         const PuctNodeChild* highlight,
                         const std::string& indent,
                         bool sort_by_next_probability,
-                        StateMachineInterface* sm) {
+                        GGPLib::StateMachineInterface* sm) {
 
     const int role_count = sm->getRoleCount();
 

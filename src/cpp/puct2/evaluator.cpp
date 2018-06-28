@@ -10,7 +10,7 @@
 #include "puct2/node.h"
 
 // for NodeRequestInterface
-#include "scheduler2.h"
+#include "scheduler.h"
 #include "gdltransformer.h"
 
 #include <k273/util.h>

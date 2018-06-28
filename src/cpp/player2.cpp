@@ -3,8 +3,7 @@
 #include "puct2/config.h"
 #include "puct2/evaluator.h"
 
-#include "events.h"
-#include "scheduler2.h"
+#include "scheduler.h"
 #include "gdltransformer.h"
 
 #include <k273/logging.h>
@@ -24,7 +23,7 @@ Player::Player(GGPLib::StateMachineInterface* sm,
 
     // first create a scheduler
     const int batch_size = 64;
-    this->scheduler = new NetworkScheduler(transformer, sm->getRoleCount(), batch_size);
+    this->scheduler = new GGPZero::NetworkScheduler(transformer, sm->getRoleCount(), batch_size);
 
     // ... and then the evaluator...
     // dupe statemachine here, as the PuctEvaluator thinks it is sharing a statemachine (ie it

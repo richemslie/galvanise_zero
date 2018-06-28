@@ -147,7 +147,8 @@ PuctNode* PuctEvaluator::createNode(PuctNode* parent, const GGPLib::BaseState* s
         }
 
         // goodbye kansas
-        this->scheduler->evaluateNode(this, new_node);
+        PuctNodeRequest req(new_node);
+        this->scheduler->evaluate(&req);
         this->evaluations++;
     }
 

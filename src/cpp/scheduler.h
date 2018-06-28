@@ -12,12 +12,10 @@
 #include <vector>
 #include <string>
 
-// forwards fun:
 namespace GGPZero {
-    class GdlBasesTransformer;
-}
 
-namespace GGPZero::PuctV2 {
+    // forwards
+    class GdlBasesTransformer;
 
     ///////////////////////////////////////////////////////////////////////////////
 
@@ -28,8 +26,8 @@ namespace GGPZero::PuctV2 {
         }
 
         void set(const GGPLib::BaseState* basestate,
-                 int idx, const GGPZero::PredictDoneEvent* evt,
-                 const GGPZero::GdlBasesTransformer* transformer);
+                 int idx, const PredictDoneEvent* evt,
+                 const GdlBasesTransformer* transformer);
 
         const float* getPolicy(int index) const {
             return this->policies[index];
@@ -67,11 +65,11 @@ namespace GGPZero::PuctV2 {
         virtual const GGPLib::BaseState* getBaseState() const = 0;
 
         // low level adds info to buffer
-        virtual void add(float* buf, const GGPZero::GdlBasesTransformer* transformer) = 0;
+        virtual void add(float* buf, const GdlBasesTransformer* transformer) = 0;
 
         // given a result, populated
         virtual void reply(const ModelResult& result,
-                           const GGPZero::GdlBasesTransformer* transformer) = 0;
+                           const GdlBasesTransformer* transformer) = 0;
     };
 
     ///////////////////////////////////////////////////////////////////////////////
@@ -79,7 +77,7 @@ namespace GGPZero::PuctV2 {
 
     class NetworkScheduler {
     public:
-        NetworkScheduler(const GGPZero::GdlBasesTransformer* transformer,
+        NetworkScheduler(const GdlBasesTransformer* transformer,
                          int role_count, int batch_size, int lru_cache_size=1000);
         ~NetworkScheduler();
 
@@ -104,14 +102,14 @@ namespace GGPZero::PuctV2 {
         }
 
         // called directly/indirectly from python, sending events to/fro:
-        void poll(const GGPZero::PredictDoneEvent* predict_done_event,
-                  GGPZero::ReadyEvent* ready_event);
+        void poll(const PredictDoneEvent* predict_done_event,
+                  ReadyEvent* ready_event);
 
     private:
         void mainLoop();
 
     private:
-        const GGPZero::GdlBasesTransformer* transformer;
+        const GdlBasesTransformer* transformer;
         const int role_count;
         const unsigned int batch_size;
 
@@ -138,6 +136,6 @@ namespace GGPZero::PuctV2 {
         GGPLib::BaseState::HashMap < ModelResultList::Node*> lru_lookup;
 
         // set via poll().  Don't own this memory.  However, it won't change under feet.
-        const GGPZero::PredictDoneEvent* predict_done_event;
+        const PredictDoneEvent* predict_done_event;
    };
 }

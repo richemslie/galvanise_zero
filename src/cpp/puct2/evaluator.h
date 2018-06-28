@@ -3,7 +3,7 @@
 #include "puct2/node.h"
 #include "puct2/config.h"
 
-#include "scheduler2.h"
+#include "scheduler.h"
 
 #include <statemachine/basestate.h>
 #include <statemachine/statemachine.h>
@@ -25,9 +25,6 @@ namespace GGPZero::PuctV2 {
         PuctNodeChild* child;
         PuctNode* to_node;
     };
-
-    // forwards
-    class NetworkScheduler;
 
     class PuctEvaluator {
     public:
