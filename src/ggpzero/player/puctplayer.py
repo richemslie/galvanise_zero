@@ -87,7 +87,7 @@ class PUCTPlayer(MatchPlayer):
         return move
 
 
-class PUCTPlayerV2(MatchPlayer):
+class PUCTPlayerV2(PUCTPlayer):
     poller_clz = PlayPollerV2
 
 
