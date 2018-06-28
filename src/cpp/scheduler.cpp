@@ -1,7 +1,6 @@
-#include "scheduler.h"
+#include "scheduler2.h"
 
 #include "sample.h"
-#include "puct/node.h"
 #include "gdltransformer.h"
 
 #include <statemachine/basestate.h>
@@ -13,22 +12,57 @@
 
 #include <string>
 
-using namespace GGPZero;
+using namespace GGPZero::PuctV2;
 
-NetworkScheduler::NetworkScheduler(const GdlBasesTransformer* transformer,
-                                   int role_count, int batch_size) :
+///////////////////////////////////////////////////////////////////////////////
+
+void ModelResult::set(const GGPLib::BaseState* bs,
+                      int idx,
+                      const GGPZero::PredictDoneEvent* evt,
+                      const GGPZero::GdlBasesTransformer* transformer) {
+
+    // XXX how can we ensure this lives on??? with lru
+    this->basestate = bs;
+
+    // XXX todo go back and rename final_scores -> rewards...
+    this->policies.resize(transformer->getNumberPolicies());
+    this->rewards.resize(transformer->getNumberRewards());
+
+    for (int ii=0; ii<transformer->getNumberPolicies(); ii++) {
+        float* pt_policy = evt->policies[ii];
+        pt_policy += idx * transformer->getPolicySize(ii);
+        this->policies[ii] = pt_policy;
+    }
+
+    for (int ii=0; ii<transformer->getNumberRewards(); ii++) {
+        float* pt_reward = evt->final_scores + idx * transformer->getNumberRewards() + ii;
+        this->rewards[ii] = *pt_reward;
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+NetworkScheduler::NetworkScheduler(const GGPZero::GdlBasesTransformer* transformer,
+                                   int role_count, int batch_size,
+                                   int lru_cache_size) :
     transformer(transformer),
     role_count(role_count),
     batch_size(batch_size),
     main_loop(nullptr),
     top(nullptr),
     channel_buf(nullptr),
-    channel_buf_indx(0) {
+    channel_buf_indx(0),
+    lru_cache_size(lru_cache_size) {
 
     const int num_floats = this->transformer->totalSize() * this->batch_size;
     K273::l_debug("Creating channel_buf of size %d", num_floats);
 
     this->channel_buf = (float*) new float[num_floats];
+
+    // create a free list
+    for (int ii=0; ii<this->lru_cache_size; ii++) {
+        this->free_list.emplaceBack();
+    }
 }
 
 NetworkScheduler::~NetworkScheduler() {
@@ -36,74 +70,26 @@ NetworkScheduler::~NetworkScheduler() {
     delete this->transformer;
 }
 
-void NetworkScheduler::updateFromPolicyHead(const int idx, PuctNode* node) {
-    // XXX for now we are only interested in new nodes lead_role_index.  For PUCTPlus will want to
-    // populate all policies.
+void NetworkScheduler::evaluate(ModelRequestInterface* request) {
 
-    float* policies_start = this->predict_done_event->policies[node->lead_role_index];
-    policies_start += idx * this->transformer->getPolicySize(node->lead_role_index);
+    // check if in LRU, if so return that, update position
+    auto const found = this->lru_lookup.find(request->getBaseState());
+    if (found != this->lru_lookup.end()) {
+        ModelResultList::Node* item = found->second;
 
-    // Update children in new_node with prediction
-    float total_prediction = 0.0f;
-    for (int ii=0; ii<node->num_children; ii++) {
-        PuctNodeChild* c = node->getNodeChild(this->role_count, ii);
-        c->policy_prob = *(policies_start + c->move.get(node->lead_role_index));
-        if (c->policy_prob < 0.001) {
-            // XXX stats?
-            c->policy_prob = 0.001;
-        }
+        // call the requestor
+        request->reply(item->get(), transformer);
 
-        total_prediction += c->policy_prob;
-    }
+        // move the item to front
+        this->lru_list.remove(item);
+        this->lru_list.pushFront(item);
 
-    if (total_prediction > std::numeric_limits<float>::min()) {
-        // normalise:
-        for (int ii=0; ii<node->num_children; ii++) {
-            PuctNodeChild* c = node->getNodeChild(this->role_count, ii);
-            c->policy_prob /= total_prediction;
-        }
-
-    } else {
-        // well that sucks - absolutely no predictions, just make it uniform then...
-        for (int ii=0; ii<node->num_children; ii++) {
-            PuctNodeChild* c = node->getNodeChild(this->role_count, ii);
-            c->policy_prob = 1.0 / node->num_children;
-        }
-    }
-}
-
-void NetworkScheduler::updateFromValueHead(const int idx, PuctNode* node) {
-    const int final_score_incr = idx * role_count;
-    float* final_scores_start = this->predict_done_event->final_scores + final_score_incr;
-
-    for (int ii=0; ii<role_count; ii++) {
-        float s = *(final_scores_start + ii);
-        if (s > 1.0) {
-            s = 1.0f;
-        } else if (s < 0.0) {
-            s = 0.0f;
-        }
-
-        node->setFinalScore(ii, s);
-        node->setCurrentScore(ii, s);
-    }
-}
-
-void NetworkScheduler::evaluateNode(PuctEvaluator* pe, PuctNode* node) {
-
-    // XXX be more optimal to have this vector the scheduler
-    std::vector <const GGPLib::BaseState*> prev_states;
-    const PuctNode* cur = node->parent;
-    for (int ii=0; ii<this->transformer->getNumberPrevStates(); ii++) {
-        if (cur != nullptr) {
-            prev_states.push_back(cur->getBaseState());
-            cur = cur->parent;
-        }
+        return;
     }
 
     // index into the current position of the channel buffer
     float* buf = this->channel_buf + this->channel_buf_indx;
-    this->transformer->toChannels(node->getBaseState(), prev_states, buf);
+    request->add(buf, this->transformer);
 
     // increment index for the next evaluateNode()
     this->channel_buf_indx += this->transformer->totalSize();
@@ -119,10 +105,30 @@ void NetworkScheduler::evaluateNode(PuctEvaluator* pe, PuctNode* node) {
     // back now! at this point we have predicted
     ASSERT(this->predict_done_event->pred_count >= idx);
 
-    this->updateFromPolicyHead(idx, node);
-    this->updateFromValueHead(idx, node);
+    // * get next from free list
+    // * populate
+    // * call requester
+    // * add to lru
+    //if (this->free_list->empty()) {
+    //    // remove last 5% from lru_list/
+    //}
+
+    //ModelResult* this->free_list->remove(this->free_list->head();
+
+    ModelResult tmp_xxx_res;
+
+    // careful with requester->getBaseState() here XXX if added to LRU, needs to create a new
+    // basestate
+    tmp_xxx_res.set(request->getBaseState(), idx, this->predict_done_event, this->transformer);
+    request->reply(tmp_xxx_res, this->transformer);
 
     // we return before continuing, we will be pushed back onto runnables queue
+    greenlet_switch_to(this->main_loop);
+}
+
+void NetworkScheduler::yield() {
+    // yields until next request returns
+    this->yielders.emplace_back(greenlet_current());
     greenlet_switch_to(this->main_loop);
 }
 
@@ -166,6 +172,11 @@ void NetworkScheduler::mainLoop() {
                 this->runnables.emplace_back(req);
             }
 
+            // push all yielders onto to runnables queue
+            for (greenlet_t* y : this->yielders) {
+                this->runnables.emplace_back(y);
+            }
+
             // clean up
             this->requestors.clear();
         }
@@ -178,9 +189,10 @@ void NetworkScheduler::mainLoop() {
     K273::l_verbose("requestors.size on exiting runScheduler():  %zu", this->requestors.size());
 }
 
-void NetworkScheduler::poll(const PredictDoneEvent* predict_done_event, ReadyEvent* ready_event) {
-    //poll() must be called with an event.  The even resides in the parent process (which is the
-    //self play manager / player).  This is passed to the main_loop()..
+void NetworkScheduler::poll(const GGPZero::PredictDoneEvent* predict_done_event,
+                            GGPZero::ReadyEvent* ready_event) {
+    // poll() must be called with an event.  The even resides in the parent process (which is the
+    // self play manager / player).  This is passed to the main_loop()..
 
     // this is top
     if (this->top == nullptr) {
