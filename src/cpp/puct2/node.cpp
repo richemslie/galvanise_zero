@@ -1,5 +1,7 @@
 #include "puct2/node.h"
 
+#include "gdltransformer.h"
+
 #include <statemachine/statemachine.h>
 #include <statemachine/jointmove.h>
 #include <statemachine/basestate.h>
@@ -15,7 +17,7 @@ using namespace std;
 using namespace GGPLib;
 using namespace GGPZero::PuctV2;
 
-static string scoreString(const PuctNode* node, StateMachineInterface* sm) {
+static string scoreString(const PuctNode* node, StateMachineInterface* sm, bool final=false) {
     const int role_count = sm->getRoleCount();
     string res = "(";
     for (int ii=0; ii<role_count; ii++) {
@@ -23,7 +25,11 @@ static string scoreString(const PuctNode* node, StateMachineInterface* sm) {
             res += " ";
         }
 
-        res += K273::fmtString("%.2f", node->getCurrentScore(ii));
+        if (final) {
+            res += K273::fmtString("%.2f", node->getFinalScore(ii));
+        } else {
+            res += K273::fmtString("%.2f", node->getCurrentScore(ii));
+        }
     }
 
     res += ")";
@@ -50,17 +56,17 @@ static PuctNode* createNode(const BaseState* base_state,
     int total_bytes = (sizeof(PuctNode) + current_score_bytes + final_score_bytes +
                        base_state_bytes + (num_children * node_child_bytes));
 
-    //K273::l_debug("total_bytes %d #child %d (%d / %d / %d / %d)",
-    //              total_bytes, num_children, current_score_bytes,
-    //              final_score_bytes, base_state_bytes,
-    //             (num_children * node_child_bytes));
+    // K273::l_debug("total_bytes %d #child %d (%d / %d / %d / %d)",
+    //               total_bytes, num_children, current_score_bytes,
+    //               final_score_bytes, base_state_bytes,
+    //               (num_children * node_child_bytes));
 
     PuctNode* node = static_cast <PuctNode*>(malloc(total_bytes));
     node->parent = nullptr;
     node->visits = 0;
     node->inflight_visits = 0;
-
     node->ref_count = 1;
+
     node->unselectable_count = 0;
 
     node->num_children = num_children;
@@ -109,9 +115,14 @@ static int initialiseChildHelper(PuctNode* node, int role_index, int child_index
             PuctNodeChild* child = node->getNodeChild(role_count, child_index++);
             child->to_node = nullptr;
 
+            child->unselectable = false;
+            child->traversals = 0;
+
             // by default set to 1.0, will be overridden
             child->policy_prob = 1.0f;
             child->next_prob = 0.0f;
+
+            // not sure this should be on child XXX
             child->dirichlet_noise = 0.0f;
 
             child->debug_node_score = 0.0;
@@ -242,17 +253,12 @@ void PuctNode::dumpNode(const PuctNode* node,
 
     const int role_count = sm->getRoleCount();
 
-    float total_score = 0;
-    for (int ii=0; ii<role_count; ii++) {
-        total_score += node->getCurrentScore(ii);
-    }
 
     string finalised_top = node->isTerminal() ? "[Terminal]" : (node->is_finalised ? "[Final]" : ".");
-    K273::l_verbose("%s(%d) :: %s == %.4f / #childs %d / %s / Depth: %d, Lead : %d",
+    K273::l_verbose("%s(%d) :: %s / #childs %d / %s / Depth: %d, Lead : %d",
                     indent.c_str(),
                     node->visits,
-                    scoreString(node, sm).c_str(),
-                    total_score,
+                    scoreString(node, sm, true).c_str(),
                     node->num_children,
                     finalised_top.c_str(),
                     node->game_depth,
@@ -271,16 +277,17 @@ void PuctNode::dumpNode(const PuctNode* node,
             visits = child->to_node->visits;
         }
 
-        string msg = K273::fmtString("%s %s %d:%s %.2f/%.2f   %s   %.2f/%.2f",
+        string msg = K273::fmtString("%s %s v:%d/t:%d:%s %.2f/%.2f   %s   %.2f/%.2f",
                                      indent.c_str(),
                                      move.c_str(),
                                      visits,
+                                     child->traversals,
                                      finalised.c_str(),
                                      child->policy_prob * 100,
                                      child->next_prob * 100,
                                      score.c_str(),
-                                     child->debug_puct_score,
-                                     child->debug_node_score + child->debug_puct_score);
+                                     child->debug_node_score,
+                                     child->debug_puct_score);
 
         if (child == highlight) {
             K273::l_info(msg);
@@ -315,4 +322,74 @@ Children PuctNode::sortedChildren(const PuctNode* node, int role_count, bool nex
 
     std::sort(children.begin(), children.end(), f);
     return children;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+const GGPLib::BaseState* PuctNodeRequest::getBaseState() const {
+    return this->node->getBaseState();
+}
+
+void PuctNodeRequest::add(float* buf, const GdlBasesTransformer* transformer) {
+    std::vector <const GGPLib::BaseState*> prev_states;
+    const PuctNode* cur = this->node->parent;
+
+    for (int ii=0; ii<transformer->getNumberPrevStates(); ii++) {
+        if (cur != nullptr) {
+            prev_states.push_back(cur->getBaseState());
+            cur = cur->parent;
+        }
+    }
+
+    transformer->toChannels(node->getBaseState(), prev_states, buf);
+}
+
+void PuctNodeRequest::reply(const ModelResult& result,
+                            const GdlBasesTransformer* transformer) {
+
+    const int role_count = transformer->getNumberPolicies();
+    // Update children in new_node with prediction
+    float total_prediction = 0.0f;
+
+    auto* raw_policy = result.getPolicy(node->lead_role_index);
+    for (int ii=0; ii<node->num_children; ii++) {
+        PuctNodeChild* c = node->getNodeChild(role_count, ii);
+
+        c->policy_prob = raw_policy[c->move.get(node->lead_role_index)];
+
+        if (c->policy_prob < 0.001) {
+            // XXX stats?
+            c->policy_prob = 0.001;
+        }
+
+        total_prediction += c->policy_prob;
+    }
+
+    if (total_prediction > std::numeric_limits<float>::min()) {
+        // normalise:
+        for (int ii=0; ii<node->num_children; ii++) {
+            PuctNodeChild* c = node->getNodeChild(role_count, ii);
+            c->policy_prob /= total_prediction;
+        }
+
+    } else {
+        // well that sucks - absolutely no predictions, just make it uniform then...
+        for (int ii=0; ii<node->num_children; ii++) {
+            PuctNodeChild* c = node->getNodeChild(role_count, ii);
+            c->policy_prob = 1.0 / node->num_children;
+        }
+    }
+
+    for (int ri=0; ri<role_count; ri++) {
+        float s = result.getReward(ri);
+        if (s > 1.0) {
+            s = 1.0f;
+
+        } else if (s < 0.0) {
+            s = 0.0f;
+        }
+
+        node->setFinalScore(ri, s);
+        node->setCurrentScore(ri, s);
+    }
 }

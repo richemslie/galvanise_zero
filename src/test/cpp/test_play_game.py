@@ -4,12 +4,13 @@ import tensorflow as tf
 
 from ggplib.player import get
 from ggplib.player.gamemaster import GameMaster
-from ggplib.db.helper import get_gdl_for_game
+from ggplib.db import lookup
 
+from ggpzero.util import attrutil
 from ggpzero.defs import templates
 from ggpzero.nn.manager import get_manager
 
-from ggpzero.player.cpuctplayer import CppPUCTPlayer
+from ggpzero.player.puctplayer import PUCTPlayer, PUCTPlayerV2, get_default_conf
 
 
 def setup():
@@ -23,7 +24,7 @@ def setup():
     tf.logging.set_verbosity(tf.logging.ERROR)
 
 
-def play_game(generation_name, num_previous_states):
+def play_game(generation_name, player_clz, num_previous_states=1):
     game = "breakthrough"
 
     # ensure we have a network
@@ -36,22 +37,40 @@ def play_game(generation_name, num_previous_states):
     man.save_network(nn, generation_name)
     nn.summary()
 
-    conf = templates.puct_config_template(generation_name, "compete")
+    conf = get_default_conf(generation_name, max_dump_depth=2, playouts_per_iteration=42)
 
-    gm = GameMaster(get_gdl_for_game(game))
+    attrutil.pprint(conf)
 
-    gm.add_player(CppPUCTPlayer(conf=conf), "white")
+    gm = GameMaster(lookup.by_name(game))
+
+    gm.add_player(player_clz(conf), "white")
     gm.add_player(get.get_player("random"), "black")
 
     gm.start(meta_time=30, move_time=15)
-    gm.play_to_end()
+
+    last_move = None
+    while not gm.finished():
+        last_move = gm.play_single_move(last_move=last_move)
+
+    gm.finalise_match(last_move)
+    return gm
 
 
 def test_play_game():
     generation_name = "test_play_0"
-    play_game(generation_name, num_previous_states=0)
+    play_game(generation_name, PUCTPlayer, num_previous_states=0)
 
 
-def test_play_game2():
+def test_play_game_prev_states():
     generation_name = "test_play_3"
-    play_game(generation_name, num_previous_states=3)
+    play_game(generation_name, PUCTPlayer, num_previous_states=3)
+
+
+def test_play_game_v2():
+    generation_name = "test_play_0"
+    play_game(generation_name, PUCTPlayerV2, num_previous_states=0)
+
+
+def test_play_game_v2_prev_states():
+    generation_name = "test_play_3"
+    play_game(generation_name, PUCTPlayerV2, num_previous_states=3)

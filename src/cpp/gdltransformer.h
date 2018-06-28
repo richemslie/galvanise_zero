@@ -3,12 +3,11 @@
 
 #pragma once
 
-#include "puct/node.h"
-
+// ggplib includes
 #include <statemachine/basestate.h>
-#include <statemachine/statemachine.h>
 
-#include <string>
+// std includes
+#include <set>
 #include <vector>
 
 namespace GGPZero {
@@ -85,10 +84,12 @@ namespace GGPZero {
         // builder methods
         void addBoardBase(int base_indx, int buf_incr) {
             this->board_space.emplace_back(base_indx, buf_incr);
+            this->interested_set.emplace(base_indx);
         }
 
         void addControlBase(int base_indx, int channel_id, float value) {
             this->control_space.emplace_back(base_indx, channel_id, value);
+            this->interested_set.emplace(base_indx);
         }
 
     private:
@@ -127,8 +128,10 @@ namespace GGPZero {
             // XXX currently we have one reward/value head per role.  Same as policy.  So we can
             // abuse that for now.  In the future, we want to be able to modify these
             // independently.
-            return this->getNumberPolicies();
+            return 2;
         }
+
+        GGPLib::BaseState::ArrayType* createHashMask(GGPLib::BaseState* bs) const;
 
     private:
         const int channel_size;
@@ -139,6 +142,7 @@ namespace GGPZero {
         std::vector <BaseToChannelSpace> control_space;
 
         std::vector <int> expected_policy_sizes;
+        std::set <int> interested_set;
     };
 
 }

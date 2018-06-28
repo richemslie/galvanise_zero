@@ -1,5 +1,8 @@
 #pragma once
 
+// for NodeRequestInterface
+#include "scheduler2.h"
+
 #include "statemachine/statemachine.h"
 #include "statemachine/jointmove.h"
 #include "statemachine/basestate.h"
@@ -120,9 +123,9 @@ namespace GGPZero::PuctV2 {
             return *(scores + role_index);
         }
 
-        Score setFinalScore(int role_index, Score score) {
+        void setFinalScore(int role_index, Score score) {
             Score* scores = this->getIncr <Score>(this->final_score_ptr_incr);
-            return *(scores + role_index);
+            *(scores + role_index) = score;
         }
 
         GGPLib::BaseState* getBaseState() {
@@ -159,6 +162,29 @@ namespace GGPZero::PuctV2 {
         static Children sortedChildren(const PuctNode* node,
                                        int role_count,
                                        bool next_probability=false);
+    };
+
+
+    ///////////////////////////////////////////////////////////////////////////////
+
+    class PuctNodeRequest : public ModelRequestInterface {
+    public:
+        PuctNodeRequest(PuctNode* node) :
+            node(node) {
+        }
+
+        virtual ~PuctNodeRequest() {
+        }
+
+    public:
+        // implement interface
+        const GGPLib::BaseState* getBaseState() const;
+        void add(float* buf, const GdlBasesTransformer* transformer);
+        void reply(const ModelResult& result,
+                   const GdlBasesTransformer* transformer);
+
+    private:
+        PuctNode* node;
     };
 
 }

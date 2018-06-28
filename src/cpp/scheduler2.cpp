@@ -12,7 +12,7 @@
 
 #include <string>
 
-using namespace SchedulerV2;
+using namespace GGPZero::PuctV2;
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -21,7 +21,7 @@ void ModelResult::set(const GGPLib::BaseState* bs,
                       const GGPZero::PredictDoneEvent* evt,
                       const GGPZero::GdlBasesTransformer* transformer) {
 
-    // how can we ensure this lives on???
+    // XXX how can we ensure this lives on??? with lru
     this->basestate = bs;
 
     // XXX todo go back and rename final_scores -> rewards...
@@ -35,7 +35,7 @@ void ModelResult::set(const GGPLib::BaseState* bs,
     }
 
     for (int ii=0; ii<transformer->getNumberRewards(); ii++) {
-        float* pt_reward = evt->final_scores + idx * transformer->getNumberRewards();
+        float* pt_reward = evt->final_scores + idx * transformer->getNumberRewards() + ii;
         this->rewards[ii] = *pt_reward;
     }
 }
@@ -70,17 +70,15 @@ NetworkScheduler::~NetworkScheduler() {
     delete this->transformer;
 }
 
-void NetworkScheduler::evaluateNode(const GGPLib::BaseState* state,
-                                    std::vector <const GGPLib::BaseState*>& prev_states,
-                                    NodeRequestInterface* node_requestor) {
+void NetworkScheduler::evaluate(ModelRequestInterface* request) {
 
     // check if in LRU, if so return that, update position
-    auto const found = this->lru_lookup.find(state);
+    auto const found = this->lru_lookup.find(request->getBaseState());
     if (found != this->lru_lookup.end()) {
         ModelResultList::Node* item = found->second;
 
         // call the requestor
-        node_requestor->reply(item->get(), transformer);
+        request->reply(item->get(), transformer);
 
         // move the item to front
         this->lru_list.remove(item);
@@ -91,7 +89,7 @@ void NetworkScheduler::evaluateNode(const GGPLib::BaseState* state,
 
     // index into the current position of the channel buffer
     float* buf = this->channel_buf + this->channel_buf_indx;
-    node_requestor->add(buf, this->transformer);
+    request->add(buf, this->transformer);
 
     // increment index for the next evaluateNode()
     this->channel_buf_indx += this->transformer->totalSize();
@@ -118,10 +116,19 @@ void NetworkScheduler::evaluateNode(const GGPLib::BaseState* state,
     //ModelResult* this->free_list->remove(this->free_list->head();
 
     ModelResult tmp_xxx_res;
-    tmp_xxx_res.set(state, idx, this->predict_done_event, this->transformer);
-    node_requestor->reply(tmp_xxx_res, this->transformer);
+
+    // careful with requester->getBaseState() here XXX if added to LRU, needs to create a new
+    // basestate
+    tmp_xxx_res.set(request->getBaseState(), idx, this->predict_done_event, this->transformer);
+    request->reply(tmp_xxx_res, this->transformer);
 
     // we return before continuing, we will be pushed back onto runnables queue
+    greenlet_switch_to(this->main_loop);
+}
+
+void NetworkScheduler::yield() {
+    // yields until next request returns
+    this->yielders.emplace_back(greenlet_current());
     greenlet_switch_to(this->main_loop);
 }
 
@@ -163,6 +170,11 @@ void NetworkScheduler::mainLoop() {
 
                 // and then add them to runnables
                 this->runnables.emplace_back(req);
+            }
+
+            // push all yielders onto to runnables queue
+            for (greenlet_t* y : this->yielders) {
+                this->runnables.emplace_back(y);
             }
 
             // clean up

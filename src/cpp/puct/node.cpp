@@ -315,7 +315,11 @@ Children PuctNode::sortedChildren(const PuctNode* node, int role_count, bool nex
     return children;
 }
 
+///////////////////////////////////////////////////////////////////////////////
 
+const GGPLib::BaseState* PuctNodeRequest::getBaseState() const {
+    return this->node->getBaseState();
+}
 
 void PuctNodeRequest::add(float* buf, const GdlBasesTransformer* transformer) {
     std::vector <const GGPLib::BaseState*> prev_states;
@@ -331,7 +335,7 @@ void PuctNodeRequest::add(float* buf, const GdlBasesTransformer* transformer) {
     transformer->toChannels(node->getBaseState(), prev_states, buf);
 }
 
-void PuctNodeRequest::reply(const SchedulerV2::ModelResult& result,
+void PuctNodeRequest::reply(const GGPZero::PuctV2::ModelResult& result,
                             const GdlBasesTransformer* transformer) {
 
     const int role_count = transformer->getNumberPolicies();
@@ -380,10 +384,4 @@ void PuctNodeRequest::reply(const SchedulerV2::ModelResult& result,
         node->setCurrentScore(ri, s);
     }
 }
-
-
-
-
-
-
 

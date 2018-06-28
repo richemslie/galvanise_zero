@@ -143,13 +143,15 @@ class PollerBase(object):
 
 
 class PlayPoller(PollerBase):
-    def __init__(self, sm, nn, conf):
-        super().__init__(sm, nn, batch_size=1)
+    clz = ggpzero_interface.Player
+
+    def __init__(self, sm, nn, conf, batch_size=1):
+        super().__init__(sm, nn, batch_size=batch_size)
         transformer = nn.gdl_bases_transformer
         self.c_transformer = create_c_transformer(transformer)
-        self.c_player = ggpzero_interface.Player(sm_to_ptr(sm),
-                                                 self.c_transformer,
-                                                 conf)
+        self.c_player = self.clz(sm_to_ptr(sm),
+                                 self.c_transformer,
+                                 conf)
 
         for name in "reset apply_move move get_move".split():
             name = "player_" + name
@@ -157,6 +159,13 @@ class PlayPoller(PollerBase):
 
     def _get_poller(self):
         return self.c_player
+
+
+class PlayPollerV2(PlayPoller):
+    clz = ggpzero_interface.Player2
+
+    def __init__(self, sm, nn, conf, batch_size=32):
+        super().__init__(sm, nn, batch_size=batch_size)
 
 
 class Supervisor(PollerBase):

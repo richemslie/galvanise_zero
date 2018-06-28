@@ -1,7 +1,9 @@
 #pragma once
 
-#include "puct/node.h"
-#include "puct/config.h"
+#include "puct2/node.h"
+#include "puct2/config.h"
+
+#include "scheduler2.h"
 
 #include <statemachine/basestate.h>
 #include <statemachine/statemachine.h>
@@ -12,7 +14,7 @@
 #include <vector>
 
 
-namespace GGPZero {
+namespace GGPZero::PuctV2 {
 
     struct PathElement {
         PathElement(PuctNodeChild* c, PuctNode* n) :
@@ -25,51 +27,37 @@ namespace GGPZero {
     };
 
     // forwards
-    class Sample;
     class NetworkScheduler;
 
     class PuctEvaluator {
     public:
         PuctEvaluator(GGPLib::StateMachineInterface* sm, const PuctConfig* conf,
-                      NetworkScheduler* scheduler);
+                      NetworkScheduler* scheduler, const GGPZero::GdlBasesTransformer* transformer);
         virtual ~PuctEvaluator();
 
     public:
-        void updateConf(const PuctConfig* conf);
+        void updateConf(const PuctConfig* conf, const ExtraPuctConfig* extra=nullptr);
 
     private:
-        Sample* createSample(const PuctNode* node);
+        // tree manangement
+        void removeNode(PuctNode*);
+        void releaseNodes(PuctNode*);
+        PuctNode* lookupNode(const GGPLib::BaseState* bs);
+        PuctNode* createNode(PuctNode* parent, const GGPLib::BaseState* state);
+        PuctNode* expandChild(PuctNode* parent, PuctNodeChild* child);
 
-    private:
-
-        /*
-          ZZZ
-        GGPLib::Node* lookupNode(const GGPLib::BaseState* bs);
-        GGPLib::Node* createNode(const GGPLib::BaseState* bs);
-        void removeNode(GGPLib::Node* n);
-        void releaseNodes(GGPLib::Node* current);
-        */
-
-        void addNode(PuctNode* new_node);
-        void removeNode(PuctNode* n);
-
-        void expandChild(PuctNode* parent, PuctNodeChild* child, bool expansion_time=false);
-        PuctNode* createNode(PuctNode* parent, const GGPLib::BaseState* state, bool expansion_time=false);
 
         // set dirichlet noise on node
         bool setDirichletNoise(int depth);
         float getPuctConstant(PuctNode* node, int depth) const;
 
     public:
-        void updateNodePolicy(PuctNode* node, float* array);
-        // do_predictions
-
         PuctNodeChild* selectChild(PuctNode* node, int depth);
 
         void backUpMiniMax(float* new_node, const PathElement* prev, const PathElement& cur);
         void backPropagate(float* new_scores);
         int treePlayout();
-        void playoutLoop(int max_evaluations, double end_time);
+        void playoutLoop(int max_evaluations, double end_time, bool main=false);
 
         void reset(int game_depth);
         PuctNode* fastApplyMove(const PuctNodeChild* next);
@@ -89,49 +77,32 @@ namespace GGPZero {
 
         void logDebug(const PuctNodeChild* choice_root);
 
-        PuctNode* jumpRoot(int depth);
-
     private:
         // statemachine shared between evaluators - be careful with its use
         GGPLib::StateMachineInterface* sm;
         GGPLib::BaseState* basestate_expand_node;
 
         const PuctConfig* conf;
+        const ExtraPuctConfig* extra;
+
         NetworkScheduler* scheduler;
 
         std::string identifier;
 
         int game_depth;
         int evaluations;
+        int transpositions;
 
-        // tree for the entire game (different from root)
-        PuctNode* initial_root;
+        GGPLib::BaseState::HashMapMasked <PuctNode*>* lookup;
 
-        // not const PuctNodeChild, as we may need to fix tree
-        std::vector <PuctNode*> all_chained_nodes;
+        std::vector <PuctNode*> garbage;
+
         std::vector <PuctNodeChild*> moves;
 
         // root for evaluation
         PuctNode* root;
         int number_of_nodes;
         long node_allocated_memory;
-
-        //ZZZGGPLib::BaseState::HashMap<GGPLib::Node*> lookup;
-        //ZZZstd::vector<GGPLib::Node*> garbage;
-
-        // ZZZ
-        // struct PlayoutStats {
-        //     int transpositions;
-        //     int total_tree_playout_depth;
-        //     int tree_playouts;
-        //     int finalised_count;
-        //     long total_unselectable_count;
-        //     void reset() {
-        //         memset(this, 0, sizeof(PlayoutStats));
-        //     }
-        // };
-
-        // PlayoutStats playout_stats;
 
         std::vector <PathElement> path;
 

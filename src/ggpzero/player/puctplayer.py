@@ -6,15 +6,17 @@ import attr
 from ggplib.util import log
 from ggplib.player.base import MatchPlayer
 
+from ggpzero.util import attrutil
 from ggpzero.defs import confs
 
-from ggpzero.util.cppinterface import joint_move_to_ptr, basestate_to_ptr, PlayPoller
+from ggpzero.util.cppinterface import joint_move_to_ptr, basestate_to_ptr, PlayPoller, PlayPollerV2
 
 from ggpzero.nn.manager import get_manager
 
 
 class PUCTPlayer(MatchPlayer):
     last_probability = -1
+    poller_clz = PlayPoller
 
     def __init__(self, conf):
         assert isinstance(conf, confs.PUCTPlayerConfig)
@@ -41,7 +43,7 @@ class PUCTPlayer(MatchPlayer):
             gen = self.conf.generation
 
             self.nn = man.load_network(game_info.game, gen)
-            self.poller = PlayPoller(self.sm, self.nn, attr.asdict(self.conf.evaluator_config))
+            self.poller = self.poller_clz(self.sm, self.nn, attr.asdict(self.conf.evaluator_config))
 
             def get_noop_idx(actions):
                 for idx, a in enumerate(actions):
@@ -85,34 +87,55 @@ class PUCTPlayer(MatchPlayer):
         return move
 
 
+class PUCTPlayerV2(MatchPlayer):
+    poller_clz = PlayPollerV2
+
+
 ###############################################################################
 
-compete_eval = confs.PUCTEvaluatorConfig(verbose=True,
-                                         choose="choose_top_visits",
+def get_default_conf(gen, **kwds):
+    eval_config = confs.PUCTEvaluatorConfig(verbose=True,
+                                            choose="choose_top_visits",
 
-                                         dirichlet_noise_alpha=0.03,
-                                         dirichlet_noise_pct=0.1,
+                                            dirichlet_noise_alpha=0.03,
+                                            dirichlet_noise_pct=0.1,
 
-                                         puct_before_expansions=3,
-                                         puct_before_root_expansions=10,
-                                         puct_constant_before=2.5,
-                                         puct_constant_after=0.9,
+                                            puct_before_expansions=3,
+                                            puct_before_root_expansions=10,
+                                            puct_constant_before=2.0,
+                                            puct_constant_after=0.85,
 
-                                         temperature=1.00,
-                                         depth_temperature_max=2.0,
-                                         depth_temperature_start=1,
-                                         depth_temperature_increment=0.25,
-                                         depth_temperature_stop=1,
-                                         random_scale=1.0,
+                                            temperature=1.00,
+                                            depth_temperature_max=2.0,
+                                            depth_temperature_start=1,
+                                            depth_temperature_increment=0.25,
+                                            depth_temperature_stop=1,
+                                            random_scale=1.0,
 
-                                         fpu_prior_discount=0.25,
-                                         max_dump_depth=3)
+                                            fpu_prior_discount=0.25,
+                                            max_dump_depth=3)
 
-compete = confs.PUCTPlayerConfig(name="puct",
-                                 verbose=True,
-                                 playouts_per_iteration=100,
-                                 playouts_per_iteration_noop=0,
-                                 evaluator_config=compete_eval)
+    config = confs.PUCTPlayerConfig(name="puct",
+                                    verbose=True,
+                                    generation=gen,
+                                    playouts_per_iteration=100,
+                                    playouts_per_iteration_noop=0,
+                                    evaluator_config=eval_config)
+
+    for k, v in kwds.items():
+        actually_set = False
+        if attrutil.has(eval_config, k):
+            setattr(eval_config, k, v)
+            actually_set = True
+
+        if attrutil.has(config, k):
+            setattr(config, k, v)
+            actually_set = True
+
+        if not actually_set:
+            print '*** Attribute not found:', k
+
+    return config
 
 
 def main():
@@ -123,10 +146,8 @@ def main():
     args = sys.argv[1:]
     port = int(args[0])
 
-    conf = compete
     generation = args[1]
-
-    conf.generation = generation
+    conf = get_default_conf(generation)
 
     if len(args) >= 2:
         playouts_multiplier = int(args[2])

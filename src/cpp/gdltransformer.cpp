@@ -51,4 +51,13 @@ void GdlBasesTransformer::toChannels(const GGPLib::BaseState* the_base_state,
     }
 }
 
+GGPLib::BaseState::ArrayType* GdlBasesTransformer::createHashMask(GGPLib::BaseState* bs) const {
+    // first we set bs true for everything we are interested in
+    for (int ii=0; ii<bs->size; ii++) {
+        bs->set(ii, this->interested_set.find(ii) != this->interested_set.end());
+    }
 
+    GGPLib::BaseState::ArrayType* buf = (GGPLib::BaseState::ArrayType*) malloc(bs->byte_count);
+    memcpy(buf, bs->data, bs->byte_count);
+    return buf;
+}

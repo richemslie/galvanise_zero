@@ -17,7 +17,7 @@ namespace GGPZero {
     class GdlBasesTransformer;
 }
 
-namespace SchedulerV2 {
+namespace GGPZero::PuctV2 {
 
     ///////////////////////////////////////////////////////////////////////////////
 
@@ -40,7 +40,8 @@ namespace SchedulerV2 {
         }
 
     private:
-        // better to be a chunk of memory...
+        // XXX better if all of this was one chunk of memory... but maybe later
+
         std::vector <float*> policies;
         std::vector <float> rewards;
 
@@ -51,26 +52,30 @@ namespace SchedulerV2 {
     using ModelResultList = K273::InplaceList <ModelResult>;
 
     ///////////////////////////////////////////////////////////////////////////////
-    // pure interface
+    // pure abstract interface
 
-    class NodeRequestInterface {
+    class ModelRequestInterface {
     public:
-        NodeRequestInterface() {
+        ModelRequestInterface() {
         }
 
-        virtual ~NodeRequestInterface() {
+        virtual ~ModelRequestInterface() {
         }
 
     public:
+        // called to check if in NN cache
+        virtual const GGPLib::BaseState* getBaseState() const = 0;
+
         // low level adds info to buffer
         virtual void add(float* buf, const GGPZero::GdlBasesTransformer* transformer) = 0;
 
-        // low level fetches from evt, and sets stuff
+        // given a result, populated
         virtual void reply(const ModelResult& result,
                            const GGPZero::GdlBasesTransformer* transformer) = 0;
     };
 
     ///////////////////////////////////////////////////////////////////////////////
+    // XXX finish LRU NN cache
 
     class NetworkScheduler {
     public:
@@ -79,14 +84,11 @@ namespace SchedulerV2 {
         ~NetworkScheduler();
 
     public:
-        // called from a puct evaluator
-        void evaluateNode(const GGPLib::BaseState* state,
-                          std::vector <const GGPLib::BaseState*>& prev_states,
-                          NodeRequestInterface* request);
+        // called an evaluator engine
+        void evaluate(ModelRequestInterface* request);
+        void yield();
 
     public:
-
-        // called from client:
         template <typename Callable>
         void addRunnable(Callable& f) {
             ASSERT(this->main_loop != nullptr);
@@ -101,6 +103,7 @@ namespace SchedulerV2 {
                 });
         }
 
+        // called directly/indirectly from python, sending events to/fro:
         void poll(const GGPZero::PredictDoneEvent* predict_done_event,
                   GGPZero::ReadyEvent* ready_event);
 
@@ -113,6 +116,7 @@ namespace SchedulerV2 {
         const unsigned int batch_size;
 
         std::vector <greenlet_t*> requestors;
+        std::vector <greenlet_t*> yielders;
         std::deque <greenlet_t*> runnables;
 
         // the main looper
@@ -121,18 +125,19 @@ namespace SchedulerV2 {
         // exit in and of the main_loop (and is parent of main_loop)
         greenlet_t* top;
 
-        // outbound predictions (we own this memory - although it will end up in python/tensorflow
-        // for predictions, but that point we will be in a preserved state.)
+        // outbound predictions (we malloc/own this memory - although it will end up in
+        // python/tensorflow for predictions, but that point we will be in a preserved state.)
         float* channel_buf;
         int channel_buf_indx;
 
-        // all the linked lists
+        // size of the lru cachce
         int lru_cache_size;
 
         ModelResultList free_list;
         ModelResultList lru_list;
         GGPLib::BaseState::HashMap < ModelResultList::Node*> lru_lookup;
 
+        // set via poll().  Don't own this memory.  However, it won't change under feet.
         const GGPZero::PredictDoneEvent* predict_done_event;
    };
 }

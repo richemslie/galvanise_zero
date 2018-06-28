@@ -157,7 +157,7 @@ namespace GGPZero {
 
     ///////////////////////////////////////////////////////////////////////////////
 
-    class PuctNodeRequest : public SchedulerV2::NodeRequestInterface {
+    class PuctNodeRequest : public GGPZero::PuctV2::ModelRequestInterface {
     public:
         PuctNodeRequest(PuctNode* node) :
             node(node) {
@@ -168,8 +168,9 @@ namespace GGPZero {
 
     public:
         // implement interface
+        const GGPLib::BaseState* getBaseState() const;
         void add(float* buf, const GdlBasesTransformer* transformer);
-        void reply(const SchedulerV2::ModelResult& result,
+        void reply(const GGPZero::PuctV2::ModelResult& result,
                    const GdlBasesTransformer* transformer);
 
     private:

@@ -2,11 +2,14 @@
 
 #include "events.h"
 #include "player.h"
+#include "player2.h"
 #include "selfplay.h"
 #include "scheduler.h"
 #include "supervisor.h"
 #include "puct/config.h"
 #include "puct/evaluator.h"
+#include "puct2/config.h"
+#include "puct2/evaluator.h"
 
 // ggplib imports
 #include <statemachine/goalless_sm.h>

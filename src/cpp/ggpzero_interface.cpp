@@ -3,9 +3,6 @@
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include <numpy/arrayobject.h>
 
-// k273 testing
-#include <k273/rng.h>
-
 ///////////////////////////////////////////////////////////////////////////////
 // global variables
 
@@ -19,37 +16,15 @@ PyObject* ggpzero_interface_error;
 #include "pyobjects/common.cpp"
 #include "pyobjects/gdltransformer_impl.cpp"
 #include "pyobjects/player_impl.cpp"
+#include "pyobjects/player_impl2.cpp"
 #include "pyobjects/supervisor_impl.cpp"
-
-///////////////////////////////////////////////////////////////////////////////
-// testing cpython:
-
-static PyObject* GGPZero_Interface_hello_test(PyObject* self, PyObject* args) {
-    const char* name = nullptr;
-    if (! ::PyArg_ParseTuple(args, "s", &name)) {
-        return nullptr;
-    }
-
-    std::string msg = K273::fmtString("Hello world %s", name);
-
-    K273::xoroshiro128plus32 random;
-    for (int ii=0; ii<10000; ii++) {
-        K273::l_verbose("random/42 %d", random.getWithMax(42));
-        K273::l_verbose("random/float %.4f", (random() / (double) random.max()));
-    }
-
-    K273::l_critical(msg);
-
-    return ::Py_BuildValue("s", msg.c_str());
-}
 
 ///////////////////////////////////////////////////////////////////////////////
 
 PyMethodDef gi_functions[] = {
-    {"hello_test", GGPZero_Interface_hello_test, METH_VARARGS, "hello_test"},
-
     {"GdlBasesTransformer", gi_GdlBasesTransformer, METH_VARARGS, "GdlBasesTransformer"},
     {"Player", gi_Player, METH_VARARGS, "Player"},
+    {"Player2", gi_Player2, METH_VARARGS, "Player2"},
     {"Supervisor", gi_Supervisor, METH_VARARGS, "Supervisor"},
 
     {nullptr, nullptr, 0, nullptr}
@@ -71,6 +46,12 @@ extern "C" {
         Py_TYPE(&PyType_Player) = &PyType_Type;
 
         if (::PyType_Ready(&PyType_Player) < 0) {
+            return;
+        }
+
+        Py_TYPE(&PyType_Player2) = &PyType_Type;
+
+        if (::PyType_Ready(&PyType_Player2) < 0) {
             return;
         }
 

@@ -25,7 +25,6 @@ namespace GGPZero {
     };
 
     // forwards
-    class Sample;
     class NetworkScheduler;
 
     class PuctEvaluator {
@@ -36,9 +35,6 @@ namespace GGPZero {
 
     public:
         void updateConf(const PuctConfig* conf, const ExtraPuctConfig* extra=nullptr);
-
-    private:
-        Sample* createSample(const PuctNode* node);
 
     private:
         void addNode(PuctNode* new_node);
