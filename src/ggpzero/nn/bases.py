@@ -305,23 +305,3 @@ class GdlBasesTransformer(object):
     def value_to_array(self, values):
         assert len(values) == self.role_count
         return np.array(values, dtype='float32')
-
-    def sample_to_nn(self, sample, inputs, outputs):
-        # transform samples -> numpy arrays as inputs/outputs to nn
-
-        # input - planes
-        inputs.append(self.state_to_channels(decode_state(sample.state),
-                                             [decode_state(s) for s in sample.prev_states]))
-
-        output = []
-
-        # output - policies
-        assert self.role_count == 2
-        assert len(self.policy_dist_count) == 2
-        for i in range(self.role_count):
-            array = self.policy_to_array(sample.policies[i], i)
-            output.append(array)
-
-        # output - best/final scores
-        output.append(np.array(sample.final_score, dtype='float32'))
-        outputs.append(output)
