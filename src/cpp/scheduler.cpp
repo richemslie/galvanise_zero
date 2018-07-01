@@ -54,7 +54,7 @@ NetworkScheduler::NetworkScheduler(const GdlBasesTransformer* transformer,
     lru_cache_size(lru_cache_size) {
 
     const int num_floats = this->transformer->totalSize() * this->batch_size;
-    K273::l_debug("Creating channel_buf of size %d", num_floats);
+    K273::l_debug("Creating channel_buf with batch size %d", this->batch_size);
 
     this->channel_buf = (float*) new float[num_floats];
 
@@ -162,22 +162,28 @@ void NetworkScheduler::mainLoop() {
             // once we return, we must handle the results before doing anything else
             ASSERT(this->predict_done_event->pred_count == (int) this->requestors.size());
 
-            for (greenlet_t* req : this->requestors) {
-                // handle them straight away (will jump back to "see you later" in
-                // NetworkScheduler::createNode()
-                greenlet_switch_to(req);
+            if (!this->requestors.empty()) {
+                for (greenlet_t* req : this->requestors) {
+                    // handle them straight away (will jump back to "see you later" in
+                    // NetworkScheduler::createNode()
+                    greenlet_switch_to(req);
 
-                // and then add them to runnables
-                this->runnables.emplace_back(req);
+                    // and then add them to runnables
+                    this->runnables.emplace_back(req);
+                }
+
+                // clean up
+                this->requestors.clear();
             }
 
             // push all yielders onto to runnables queue
-            for (greenlet_t* y : this->yielders) {
-                this->runnables.emplace_back(y);
-            }
+            if (!this->yielders.empty()) {
+                for (greenlet_t* y : this->yielders) {
+                    this->runnables.emplace_back(y);
+                }
 
-            // clean up
-            this->requestors.clear();
+                this->yielders.clear();
+            }
         }
 
         greenlet_t *g = this->runnables.front();
