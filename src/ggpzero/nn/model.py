@@ -250,27 +250,28 @@ def get_network_model(conf):
 
         assert dims < conf.input_columns
 
-        to_flatten1 = conv2d_block(16, 1,
+        to_flatten1 = conv2d_block(32, 1,
                                    name='reward_flatten1',
                                    padding='valid',
-                                   kernel_regularizer=keras_regularizers.l2(1e-4),
                                    activation=activation)(average_layer)
 
-        to_flatten2 = conv2d_block(2, 1,
+        to_flatten2 = conv2d_block(1, 1,
                                    name='reward_flatten2',
                                    padding='valid',
-                                   kernel_regularizer=keras_regularizers.l2(1e-4),
                                    activation=activation)(layer)
 
-        flat1 = klayers.Flatten()(to_flatten1)
-        flat2 = klayers.Flatten()(to_flatten2)
-        flat = klayers.concatenate([flat1, flat2])
+        flat = klayers.concatenate([klayers.Flatten()(to_flatten1),
+                                    klayers.Flatten()(to_flatten2)])
 
         if conf.dropout_rate_value > 0:
             flat = klayers.Dropout(conf.dropout_rate_value)(flat)
 
+        hidden = klayers.Dense(256, name="value_hidden")(flat)
+        hidden = klayers.BatchNormalization(axis=get_bn_axis(), name="value_hidden_bn")(hidden)
+        hidden = klayers.Activation('relu')(hidden)
+
         value_head = klayers.Dense(conf.role_count,
-                                   activation="sigmoid", name="value")(flat)
+                                   activation="sigmoid", name="value")(hidden)
 
     elif value_v2:
         assert conf.input_columns == conf.input_rows
