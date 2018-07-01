@@ -37,29 +37,17 @@ namespace GGPZero::PuctV2 {
     };
 
     struct ExtraPuctConfig {
-        bool matchmode = false;
-
-        // float minimax_backup_ratio = 0.75;
-        float minimax_backup_ratio = -1;
-        int minimax_required_visits = 100;
-
-        // scaling backprop
-        // < 0 off
-
-        // int scaled_visits_at = 200;
-        int scaled_visits_at = -1;
-        double scaled_visits_reduce = 5.0;
+        // int scaled_visits_at = -1;
+        int scaled_visits_at = 1000;
+        double scaled_visits_reduce = 4.0;
         double scaled_visits_finalised_reduce = 100.0;
 
-        // finalised nodes on (only set during backprop, so this turns it on)
-        bool backprop_finalised = true;
+        float max_puct = 3.5f;
+        float min_puct = 0.75;
+        float min_puct_root = 1.25;
 
         // < 0, off
         float top_visits_best_guess_converge_ratio = 0.8;
-        float cpuct_after_root_multiplier = 2.0;
-
-        double evaluation_multipler_on_terminal = 1.5;
-        double evaluation_multipler_to_convergence = 2;
     };
 
 

@@ -72,6 +72,9 @@ static PuctNode* createNode(const GGPLib::BaseState* base_state,
     node->num_children = num_children;
     node->num_children_expanded = 0;
 
+    // will be set in selectChild()
+    node->puct_constant = 1.44;
+
     node->is_finalised = is_finalised;
 
     node->lead_role_index = lead_role_index;
@@ -122,12 +125,6 @@ static int initialiseChildHelper(PuctNode* node, int role_index, int child_index
             // by default set to 1.0, will be overridden
             child->policy_prob = 1.0f;
             child->next_prob = 0.0f;
-
-            // not sure this should be on child XXX
-            child->dirichlet_noise = 0.0f;
-
-            child->debug_node_score = 0.0;
-            child->debug_puct_score = 0.0;
 
             child->move.setSize(role_count);
             child->move.assign(joint_move);
@@ -257,14 +254,15 @@ void PuctNode::dumpNode(const PuctNode* node,
 
 
     string finalised_top = node->isTerminal() ? "[Terminal]" : (node->is_finalised ? "[Final]" : ".");
-    K273::l_verbose("%s(%d) :: %s / #childs %d / %s / Depth: %d, Lead : %d",
+    K273::l_verbose("%s(%d) :: %s / #childs %d / %s / Depth: %d, Lead : %d / PUCT %.2f",
                     indent.c_str(),
                     node->visits,
                     scoreString(node, sm, true).c_str(),
                     node->num_children,
                     finalised_top.c_str(),
                     node->game_depth,
-                    node->lead_role_index);
+                    node->lead_role_index,
+                    node->puct_constant);
 
 
     auto children = PuctNode::sortedChildren(node, role_count, sort_by_next_probability);
@@ -279,17 +277,15 @@ void PuctNode::dumpNode(const PuctNode* node,
             visits = child->to_node->visits;
         }
 
-        string msg = K273::fmtString("%s %s v:%d/t:%d:%s %.2f/%.2f   %s   %.2f/%.2f",
+        string msg = K273::fmtString("%s %s %d(%d):%s %.2f/%.2f   %s",
                                      indent.c_str(),
                                      move.c_str(),
-                                     visits,
                                      child->traversals,
+                                     visits - child->traversals,
                                      finalised.c_str(),
                                      child->policy_prob * 100,
                                      child->next_prob * 100,
-                                     score.c_str(),
-                                     child->debug_node_score,
-                                     child->debug_puct_score);
+                                     score.c_str());
 
         if (child == highlight) {
             K273::l_info(msg);

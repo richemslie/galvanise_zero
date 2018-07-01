@@ -17,14 +17,17 @@
 namespace GGPZero::PuctV2 {
 
     struct PathElement {
-        PathElement(PuctNodeChild* c, PuctNode* n) :
-            child(c),
-            to_node(n) {
-        }
+        PathElement(PuctNode* node, PuctNodeChild* choice, PuctNodeChild* best, int num_expanded_children);
 
-        PuctNodeChild* child;
-        PuctNode* to_node;
+        PuctNode* node;
+        PuctNodeChild* choice;
+        PuctNodeChild* best;
+        int num_children_expanded;
     };
+
+    using Path = std::vector <PathElement>;
+
+    ///////////////////////////////////////////////////////////////////////////////
 
     class PuctEvaluator {
     public:
@@ -43,17 +46,18 @@ namespace GGPZero::PuctV2 {
         PuctNode* createNode(PuctNode* parent, const GGPLib::BaseState* state);
         PuctNode* expandChild(PuctNode* parent, PuctNodeChild* child);
 
-
         // set dirichlet noise on node
-        bool setDirichletNoise(int depth);
-        float getPuctConstant(PuctNode* node, int depth) const;
+        // note can't be const method as rng state modified
+        std::vector <float> getDirichletNoise(int depth);
+        void setPuctConstant(PuctNode* node, int depth) const;
 
     public:
-        PuctNodeChild* selectChild(PuctNode* node, int depth);
+        PuctNodeChild* selectChild(PuctNode* node, Path& path);
 
         void backUpMiniMax(float* new_node, const PathElement* prev, const PathElement& cur);
-        void backPropagate(float* new_scores);
+        void backPropagate(float* new_scores, const Path& path);
         int treePlayout();
+
         void playoutLoop(int max_evaluations, double end_time, bool main=false);
 
         void reset(int game_depth);
@@ -66,7 +70,6 @@ namespace GGPZero::PuctV2 {
         float getTemperature() const;
 
         const PuctNodeChild* choose(const PuctNode* node=nullptr);
-        bool converged(const PuctNode* node) const;
         const PuctNodeChild* chooseTopVisits(const PuctNode* node);
         const PuctNodeChild* chooseTemperature(const PuctNode* node);
 
@@ -88,20 +91,24 @@ namespace GGPZero::PuctV2 {
 
         int game_depth;
         int evaluations;
-        int transpositions;
+
+        // stats
+        int stats_finals;
+        int stats_blocked;
+        int stats_tree_playouts;
+        int stats_transpositions;
+        int stats_total_depth;
+        int stats_max_depth;
 
         GGPLib::BaseState::HashMapMasked <PuctNode*>* lookup;
 
         std::vector <PuctNode*> garbage;
-
         std::vector <PuctNodeChild*> moves;
 
         // root for evaluation
         PuctNode* root;
         int number_of_nodes;
         long node_allocated_memory;
-
-        std::vector <PathElement> path;
 
         // random number generator
         K273::xoroshiro128plus32 rng;

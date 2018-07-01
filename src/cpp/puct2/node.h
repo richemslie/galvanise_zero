@@ -26,10 +26,6 @@ namespace GGPZero::PuctV2 {
         float policy_prob;
         float next_prob;
 
-        float dirichlet_noise;
-
-        Score debug_node_score;
-        Score debug_puct_score;
         GGPLib::JointMove move;
     };
 
@@ -63,6 +59,8 @@ namespace GGPZero::PuctV2 {
 
         uint16_t num_children;
         uint16_t num_children_expanded;
+
+        float puct_constant;
 
         // whether this node has a finalised scores or not (can also release children if so)
         bool is_finalised;

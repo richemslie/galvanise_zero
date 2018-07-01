@@ -30,7 +30,6 @@ Player::Player(GGPLib::StateMachineInterface* sm,
     // doesn't dupe the statemachine itself)
     this->evaluator = new PuctEvaluator(sm->dupe(), conf, this->scheduler, transformer);
     ExtraPuctConfig* extra_conf = new ExtraPuctConfig;
-    extra_conf->matchmode = true;
     this->evaluator->updateConf(conf, extra_conf);
 }
 
@@ -47,6 +46,7 @@ void Player::puctPlayerReset(int game_depth) {
 }
 
 void Player::puctApplyMove(const GGPLib::JointMove* move) {
+    K273::l_verbose("Player::puctApplyMove()");
     this->scheduler->createMainLoop();
 
     if (this->first_play) {
