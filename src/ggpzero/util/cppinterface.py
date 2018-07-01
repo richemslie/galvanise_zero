@@ -164,7 +164,7 @@ class PlayPoller(PollerBase):
 class PlayPollerV2(PlayPoller):
     clz = ggpzero_interface.Player2
 
-    def __init__(self, sm, nn, conf, batch_size=32):
+    def __init__(self, sm, nn, conf, batch_size=64):
         super().__init__(sm, nn, conf, batch_size=batch_size)
 
 
