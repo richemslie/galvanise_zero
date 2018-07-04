@@ -47,7 +47,7 @@ PuctNode* SelfPlay::selectNode() {
     const int iterations = this->conf->select_iterations;
 
     // start from initial_state if select is turned off
-    if (iterations < 0) {
+    if (iterations < 0 || this->collect_until_finalised) {
         return node;
     }
 

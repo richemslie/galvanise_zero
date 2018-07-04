@@ -40,7 +40,7 @@ namespace GGPZero {
         float pct_actually_resign = 0.15;
         float run_to_end_early_pct = 0.25;
         float run_to_end_early_score = 0.01;
-        float run_to_end_minimum_game_depth = 60;
+        float run_to_end_minimum_game_depth = 40;
     };
 
     class SelfPlay {
