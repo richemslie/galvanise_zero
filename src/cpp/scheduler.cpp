@@ -141,8 +141,20 @@ void NetworkScheduler::mainLoop() {
         bool jump_to_top = false;
 
         if (this->runnables.empty()) {
+
             // done - nothing else to do
             if (this->requestors.empty()) {
+
+                // push all yielders onto to runnables queue
+                if (!this->yielders.empty()) {
+                    for (greenlet_t* y : this->yielders) {
+                        this->runnables.emplace_back(y);
+                    }
+
+                    this->yielders.clear();
+                    continue;
+                }
+
                 break;
             }
 
