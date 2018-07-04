@@ -6,11 +6,6 @@ from ggpzero.defs.datadesc import GenerationDescription
 # DO NOT IMPORT msgs.py
 
 @register_attrs
-class PUCTEvaluatorExtraConfig(object):
-    ''' extra experimental features on puct1 evaluator '''
-
-
-@register_attrs
 class PUCTEvaluatorConfig(object):
     verbose = attribute(False)
 
@@ -50,16 +45,65 @@ class PUCTEvaluatorConfig(object):
 
 
 @register_attrs
+class PUCTEvaluatorV2Config(object):
+    verbose = attribute(False)
+
+    puct_constant_init = attribute(0.85)
+    puct_constant_min = attribute(0.75)
+    puct_constant_max = attribute(3.5)
+    puct_constant_min_root = attribute(2.5)
+    puct_constant_max_root = attribute(5.0)
+
+    # added to root child policy pct (alpha less than 0 is off)
+    dirichlet_noise_pct = attribute(0.25)
+    dirichlet_noise_alpha = attribute(-1)
+
+    # looks up method() to use.  one of (choose_top_visits | choose_temperature)
+    choose = attribute("choose_top_visits")
+
+    # debug, only if verbose is true
+    max_dump_depth = attribute(2)
+
+    random_scale = attribute(0.5)
+    temperature = attribute(1.0)
+    depth_temperature_start = attribute(5)
+    depth_temperature_increment = attribute(0.5)
+    depth_temperature_stop = attribute(10)
+    depth_temperature_max = attribute(5.0)
+
+    # popular leela-zero feature: First Play Urgency.  When the policy space is large - this might
+    # be neccessary.  If > 0, applies the prior of the parent, minus a discount to unvisited nodes
+    # < 0 is off.
+    fpu_prior_discount = attribute(-1)
+
+    scaled_visits_at = attribute(1000)
+    scaled_visits_reduce = attribute(4.0)
+    scaled_visits_finalised_reduce = attribute(100.0)
+
+    minimax_backup_ratio = attribute(0.75)
+    minimax_required_visits = attribute(200)
+
+    top_visits_best_guess_converge_ratio = attribute(0.8)
+
+    ponder_time = attribute(10.0)
+    converge_relaxed = attribute(5000)
+    converge_non_relaxed = attribute(1000)
+
+
+@register_attrs
 class PUCTPlayerConfig(object):
-    name = attribute("PUCTPlayer")
+    name = attribute("Player")
 
     verbose = attribute(False)
 
-    generation = attribute("latest")
+    # XXX these should be renamed, and values less abused (0, -1 have special meaning)
     playouts_per_iteration = attribute(800)
     playouts_per_iteration_noop = attribute(1)
 
-    evaluator_config = attribute(default=attr_factory(PUCTEvaluatorConfig))
+    generation = attribute("latest")
+
+    # one of PUCTEvaluatorConfig/PUCTEvaluatorV2Config
+    evaluator_config = attribute(default=attr_factory(PUCTEvaluatorV2Config))
 
 
 @register_attrs

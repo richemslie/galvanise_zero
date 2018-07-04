@@ -31,12 +31,13 @@ namespace GGPZero::PuctV2 {
 
     class PuctEvaluator {
     public:
-        PuctEvaluator(GGPLib::StateMachineInterface* sm, const PuctConfig* conf,
-                      NetworkScheduler* scheduler, const GGPZero::GdlBasesTransformer* transformer);
+        PuctEvaluator(GGPLib::StateMachineInterface* sm, NetworkScheduler* scheduler,
+                      const GGPZero::GdlBasesTransformer* transformer);
         virtual ~PuctEvaluator();
 
     public:
-        void updateConf(const PuctConfig* conf, const ExtraPuctConfig* extra=nullptr);
+        // called after creation
+        void updateConf(const PuctConfig* conf);
 
     private:
         // tree manangement
@@ -51,20 +52,23 @@ namespace GGPZero::PuctV2 {
         std::vector <float> getDirichletNoise(int depth);
         void setPuctConstant(PuctNode* node, int depth) const;
 
-    public:
+        bool converged(int count) const;
         PuctNodeChild* selectChild(PuctNode* node, Path& path);
 
-        void backUpMiniMax(float* new_node, const PathElement* prev, const PathElement& cur);
+        void backUpMiniMax(float* new_scores, const PathElement& cur);
         void backPropagate(float* new_scores, const Path& path);
+
         int treePlayout();
 
-        void playoutLoop(int max_evaluations, double end_time, bool main=false);
+        void playoutWorker();
+        void playoutMain(double end_time);
 
+    public:
         void reset(int game_depth);
         PuctNode* fastApplyMove(const PuctNodeChild* next);
         PuctNode* establishRoot(const GGPLib::BaseState* current_state);
 
-        const PuctNodeChild* onNextMove(int max_evaluations, double end_time=-1);
+        const PuctNodeChild* onNextMove(int max_evaluations, double end_time);
         void applyMove(const GGPLib::JointMove* move);
 
         float getTemperature() const;
@@ -78,37 +82,60 @@ namespace GGPZero::PuctV2 {
         void logDebug(const PuctNodeChild* choice_root);
 
     private:
-        // statemachine shared between evaluators - be careful with its use
+        struct PlayoutStats {
+            PlayoutStats() {
+                this->reset();
+            }
+
+            void reset() {
+                this->num_blocked = 0;
+                this->num_tree_playouts = 0;
+                this->num_evaluations = 0;
+                this->num_transpositions_attached = 0;
+
+                this->playouts_total_depth = 0;
+                this->playouts_max_depth = 0;
+                this->playouts_finals = 0;
+            }
+
+            int num_blocked;
+            int num_tree_playouts;
+            int num_evaluations;
+            int num_transpositions_attached;
+
+            int playouts_total_depth;
+            int playouts_max_depth;
+            int playouts_finals;
+        };
+
+    private:
+        const PuctConfig* conf;
+
         GGPLib::StateMachineInterface* sm;
         GGPLib::BaseState* basestate_expand_node;
-
-        const PuctConfig* conf;
-        const ExtraPuctConfig* extra;
-
         NetworkScheduler* scheduler;
 
-        std::string identifier;
-
         int game_depth;
-        int evaluations;
 
-        // stats
-        int stats_finals;
-        int stats_blocked;
-        int stats_tree_playouts;
-        int stats_transpositions;
-        int stats_total_depth;
-        int stats_max_depth;
 
+        // root of the tree
+        PuctNode* root;
+
+        // lookup table to tree
         GGPLib::BaseState::HashMapMasked <PuctNode*>* lookup;
 
+        // when releasing nodes from tree, puts them to delete afterwards
         std::vector <PuctNode*> garbage;
-        std::vector <PuctNodeChild*> moves;
 
-        // root for evaluation
-        PuctNode* root;
+        // tree info
         int number_of_nodes;
         long node_allocated_memory;
+
+        // used by workers to indicate work to do
+        bool do_playouts;
+
+        // stats collected during playouts
+        PlayoutStats stats;
 
         // random number generator
         K273::xoroshiro128plus32 rng;

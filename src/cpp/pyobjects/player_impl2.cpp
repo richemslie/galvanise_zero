@@ -131,44 +131,9 @@ static PyObject* gi_Player2(PyObject* self, PyObject* args) {
     }
 
     GGPLib::StateMachine* sm = reinterpret_cast<GGPLib::StateMachine*> (ptr);
-    PuctConfig* conf = createPuctConfig(dict);
-
-    // create a new conf, copying from conf (XXX this is temporary hack)
-    GGPZero::PuctV2::PuctConfig* conf2 = new GGPZero::PuctV2::PuctConfig;
-    conf2->verbose = conf->verbose;
-
-    conf2->puct_before_expansions = conf->puct_before_expansions;
-    conf2->puct_before_root_expansions = conf->puct_before_root_expansions;
-
-    conf2->root_expansions_preset_visits = conf->root_expansions_preset_visits;
-
-    conf2->puct_constant_before = conf->puct_constant_before;
-    conf2->puct_constant_after = conf->puct_constant_after;
-
-    conf2->dirichlet_noise_pct = conf->dirichlet_noise_pct;
-    conf2->dirichlet_noise_alpha = conf->dirichlet_noise_alpha;
-
-    if (conf->choose == GGPZero::ChooseFn::choose_top_visits) {
-        conf2->choose = GGPZero::PuctV2::ChooseFn::choose_top_visits;
-
-    } else if (conf->choose == GGPZero::ChooseFn::choose_temperature) {
-        conf2->choose = GGPZero::PuctV2::ChooseFn::choose_temperature;
-    }
-
-    conf2->max_dump_depth = conf->max_dump_depth;
-
-    conf2->random_scale = conf->random_scale;
-
-    conf2->temperature = conf->temperature;
-    conf2->depth_temperature_start = conf->depth_temperature_start;
-    conf2->depth_temperature_increment = conf->depth_temperature_increment;
-    conf2->depth_temperature_stop = conf->depth_temperature_stop;
-    conf2->depth_temperature_max = conf->depth_temperature_max;
-
-    conf2->fpu_prior_discount = conf->fpu_prior_discount;
-
+    GGPZero::PuctV2::PuctConfig* conf = createPuctConfigV2(dict);
 
     // create the c++ object
-    GGPZero::PuctV2::Player* player = new GGPZero::PuctV2::Player(sm, py_transformer->impl, conf2);
+    GGPZero::PuctV2::Player* player = new GGPZero::PuctV2::Player(sm, py_transformer->impl, conf);
     return (PyObject*) PyType_Player2_new(player);
 }

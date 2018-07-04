@@ -1,60 +1,10 @@
 /*
 
-blocked exploration - thinking aloud
-====================================
-
-* this is the biggest issue with having massive number of concurrent search/selects.  Without
-  backproping the information the tree is being directed into paths it should never go.
-
-  * especiallyin the early phases of the node
-
-  * later on once all nodes have been expanded, then it will still explore more - but much less so
-
-* rather than punt all problems to backprop, what might be an more elegant approach is to expand
-  the node with zero visits, and come up with a guess for the score.  Then it can be visited.  The
-  score unfortnately is the least of our problems... as their will be no policy until evaluation in
-  complete.
-
-  * so is blocking ideal behaviour?  Why visit a node we can't do anything but play randomly from?
-
-  * Since the number of evaluations per turn is going to be large (3-5k per second), and the
-    (meaningful) depth of the search is likely to be < 20.  Why are worried about this at all?
-
-  * I think sticking with blocking for now, isn't all that bad.
-
-* given the above, in select we will be doing much more exploration than the formula:
-
-  * blocked nodes (in progress evaluation)
-  * scores reduced with virtual visits
-
-* ok, given a carefree attidude to all the above, how best to handle this backprop such that the
-  tree isn't being unnessarily swayed.
-
-  * do we care at about extra exploration via virtual visits?  It will work itself in the end.
-
-  * if we know that any children in a node are in progress to be evaluated (TBE) where their policy
-    is greater than selected - then we can assume (at selection time) that the node is expanded
-    before its time.  What we can do in this case is no backprop whatsoever (essentially zero
-    visits).  Is this the best approach?
-
-----
-
+XXX
 * shmem?  Could get a factor of 4 speed up (maybe).  Still will have the problem of needing even
   more non evaluated nodes.  At least can use multiple GPUs - which will help with turn around
   times of the node evaluations.
-
-
-simple todos
-------------
-* add number of final nodes to stats
-* add timing stuff to stats
-* make a stats struct/class, memset it to zero (or call a method to zero it) rather long list of = 0.
-* test the puct variation.  What are good upper and lower bounds.  3.5 still feels high?
-  * can we automate this?
-  * is it game dependent?  galvanise we got away with one set of numbers.
 * (bugix - but inconsequential, I think) fix traversals > visits, when there is only one move
-
-* sort node by policy in node.cpp / PuctNodeRequest::reply()
 
 */
 
@@ -95,32 +45,24 @@ PathElement::PathElement(PuctNode* node, PuctNodeChild* choice,
 
 ///////////////////////////////////////////////////////////////////////////////
 
-PuctEvaluator::PuctEvaluator(GGPLib::StateMachineInterface* sm, const PuctConfig* conf,
-                             NetworkScheduler* scheduler, const GGPZero::GdlBasesTransformer* transformer) :
+PuctEvaluator::PuctEvaluator(GGPLib::StateMachineInterface* sm, NetworkScheduler* scheduler,
+                             const GGPZero::GdlBasesTransformer* transformer) :
+    conf(nullptr),
     sm(sm),
     basestate_expand_node(nullptr),
-    conf(conf),
     scheduler(scheduler),
-    identifier("PuctEvaluator"),
     game_depth(0),
-    evaluations(0),
     root(nullptr),
     number_of_nodes(0),
-    node_allocated_memory(0) {
+    node_allocated_memory(0),
+    do_playouts(false) {
 
     this->basestate_expand_node = this->sm->newBaseState();
-    this->updateConf(this->conf);
-
-    // XXX ZZZ tmp
-    this->stats_finals = 0;
-    this->stats_blocked = 0;
-    this->stats_tree_playouts = 0;
-    this->stats_transpositions = 0;
-    this->stats_total_depth = 0;
-    this->stats_max_depth = 0;
 
     this->lookup = GGPLib::BaseState::makeMaskedMap <PuctNode*>(transformer->createHashMask(this->basestate_expand_node));
 }
+
+///////////////////////////////////////////////////////////////////////////////
 
 PuctEvaluator::~PuctEvaluator() {
     free(this->basestate_expand_node);
@@ -128,37 +70,41 @@ PuctEvaluator::~PuctEvaluator() {
     this->reset(0);
 
     delete this->conf;
-    delete this->extra;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 
-void PuctEvaluator::updateConf(const PuctConfig* conf, const ExtraPuctConfig* extra_conf) {
-    if (extra_conf == nullptr) {
-        extra_conf = new ExtraPuctConfig;
-    }
-
+void PuctEvaluator::updateConf(const PuctConfig* conf) {
     if (conf->verbose) {
-        K273::l_verbose("config verbose: %d, dump_depth: %d, puct (%.2f), root_expansions: %d",
-                        conf->verbose, conf->max_dump_depth, conf->puct_constant_after,
-                        conf->root_expansions_preset_visits);
-
-        K273::l_verbose("dirichlet_noise (alpha: %.2f, pct: %.2f), fpu_prior_discount: %.2f, choose: %s",
-                        conf->dirichlet_noise_alpha, conf->dirichlet_noise_pct, conf->fpu_prior_discount,
+        K273::l_verbose("config verbose: %d, dump_depth: %d, choice: %s",
+                        conf->verbose, conf->max_dump_depth,
                         (conf->choose == ChooseFn::choose_top_visits) ? "choose_top_visits" : "choose_temperature");
+
+        K273::l_verbose("puct constant %.2f, %.2f/%.2f, roor: %.2f/%.2f",
+                        conf->puct_constant_init,
+                        conf->puct_constant_min,
+                        conf->puct_constant_max,
+                        conf->puct_constant_min_root,
+                        conf->puct_constant_max_root);
+
+        K273::l_verbose("dirichlet_noise (alpha: %.2f, pct: %.2f), fpu_prior_discount: %.2f",
+                        conf->dirichlet_noise_alpha, conf->dirichlet_noise_pct, conf->fpu_prior_discount);
 
         K273::l_verbose("temperature: %.2f, start(%d), stop(%d), incr(%.2f), max(%.2f) scale(%.2f)",
                         conf->temperature, conf->depth_temperature_start, conf->depth_temperature_stop,
                         conf->depth_temperature_max, conf->depth_temperature_increment, conf->random_scale);
 
-        K273::l_verbose("Extra!  scaled (at %d, reduce %.2f/%.2f). converge_ratio: %.2f",
-                        extra_conf->scaled_visits_at, extra_conf->scaled_visits_reduce,
-                        extra_conf->scaled_visits_finalised_reduce,
-                        extra_conf->top_visits_best_guess_converge_ratio);
+        K273::l_verbose("scaled (at %d, reduce %.2f/%.2f). converge_ratio: %.2f, minimax (ratio %.2f, reqd_visits %d)",
+                        conf->scaled_visits_at, conf->scaled_visits_reduce,
+                        conf->scaled_visits_finalised_reduce,
+                        conf->top_visits_best_guess_converge_ratio,
+                        conf->minimax_backup_ratio, conf->minimax_required_visits);
+
+        K273::l_verbose("ponder %.1f, relaxed %d/%d",
+                        conf->ponder_time, conf->converge_relaxed, conf->converge_non_relaxed);
     }
 
     this->conf = conf;
-    this->extra = extra_conf;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -233,6 +179,15 @@ PuctNode* PuctEvaluator::createNode(PuctNode* parent, const GGPLib::BaseState* s
     }
 
     if (new_node->is_finalised) {
+        // XXX ZZZ tmp hack to try and focus more on winning lines
+        for (int ii=0; ii<this->sm->getRoleCount(); ii++) {
+            const float s = new_node->getCurrentScore(ii);
+            if (s > 0.99) {
+                new_node->setCurrentScore(ii, s * 1.05);
+            }
+        }
+
+
         return new_node;
     }
 
@@ -244,7 +199,7 @@ PuctNode* PuctEvaluator::createNode(PuctNode* parent, const GGPLib::BaseState* s
     // goodbye kansas
     PuctNodeRequest req(new_node);
     this->scheduler->evaluate(&req);
-    this->evaluations++;
+    this->stats.num_evaluations++;
 
     return new_node;
 }
@@ -256,7 +211,7 @@ PuctNode* PuctEvaluator::expandChild(PuctNode* parent, PuctNodeChild* child) {
 
     child->to_node = this->lookupNode(this->basestate_expand_node);
     if (child->to_node != nullptr) {
-        this->stats_transpositions++;
+        this->stats.num_transpositions_attached++;
 
     } else {
         // create node
@@ -316,7 +271,7 @@ void PuctEvaluator::setPuctConstant(PuctNode* node, int depth) const {
 
     // note we have dropped concept of before
     if (node->visits < 8) {
-        node->puct_constant = this->conf->puct_constant_after;
+        node->puct_constant = this->conf->puct_constant_init;
         return;
     }
 
@@ -348,14 +303,39 @@ void PuctEvaluator::setPuctConstant(PuctNode* node, int depth) const {
 
         // constraints
         if (depth == 0) {
-            node->puct_constant = std::max(node->puct_constant, this->extra->min_puct_root);
-        } else {
-            node->puct_constant = std::max(node->puct_constant, this->extra->min_puct);
-        }
+            node->puct_constant = std::min(node->puct_constant, this->conf->puct_constant_max_root);
+            node->puct_constant = std::max(node->puct_constant, this->conf->puct_constant_min_root);
 
-        node->puct_constant = std::min(node->puct_constant, this->extra->max_puct);
+        } else {
+            node->puct_constant = std::min(node->puct_constant, this->conf->puct_constant_max);
+            node->puct_constant = std::max(node->puct_constant, this->conf->puct_constant_min);
+        }
     }
 }
+
+bool PuctEvaluator::converged(int count) const {
+    auto children = PuctNode::sortedChildren(this->root, this->sm->getRoleCount());
+
+    if (children.size() >= 2) {
+        PuctNode* n0 = children[0]->to_node;
+        PuctNode* n1 = children[1]->to_node;
+
+        if (n0 != nullptr && n1 != nullptr) {
+            const int role_index = this->root->lead_role_index;
+
+            if (n0->getCurrentScore(role_index) > n1->getCurrentScore(role_index)) {
+                if (n0->visits > n1->visits + count) {
+                    return true;
+                }
+            }
+         }
+
+        return false;
+    }
+
+    return true;
+}
+
 
 PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
 
@@ -371,6 +351,7 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
     if (node->num_children == 1) {
         PuctNodeChild* child = node->getNodeChild(this->sm->getRoleCount(), 0);
         path.emplace_back(node, child, child, node->num_children_expanded);
+        return child;
     }
 
     // this should be smart enough not to allocate memory unless added to (XXX check)
@@ -412,7 +393,8 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
     float best_child_score_actual_score = -1;;
     PuctNodeChild* best_child_score = nullptr;
 
-    PuctNodeChild* fallback = nullptr;
+    PuctNodeChild* bad_fallback = nullptr;
+    PuctNodeChild* best_fallback = nullptr;
 
     bool allow_expansions = true;
     if (node_score < 0.02 || node_score > 0.98) {
@@ -431,20 +413,29 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
         }
     }
 
+    int unselectables = 0;
     for (int ii=0; ii<node->num_children; ii++) {
         PuctNodeChild* c = node->getNodeChild(this->sm->getRoleCount(), ii);
 
         // skip unselectables
         if (c->unselectable) {
+            unselectables++;
             continue;
 
         } else if (c->to_node != nullptr &&
                    (c->to_node->num_children > 0 &&
                     c->to_node->unselectable_count == c->to_node->num_children)) {
+            unselectables++;
             continue;
         }
 
         if (c->to_node == nullptr && !allow_expansions) {
+            continue;
+        }
+
+        // anti latching behaviour (XXX why i need this at all?)
+        if (depth == 0 && c->traversals > total_traversals * 0.75) {
+            best_fallback = c;
             continue;
         }
 
@@ -469,7 +460,7 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
 
                 } else if (child_score < 0.01) {
                     // ignore this unless no other option
-                    fallback = c;
+                    bad_fallback = c;
                     continue;
 
                 } else {
@@ -498,7 +489,7 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
 
         // (more exploration) apply score discount for massive number of inflight visits
         // XXX rng - kind of expensive here?  tried using 1 and 0.25... has quite an effect on exploration.
-        const double discounted_visits = inflight_visits * (this->rng.get() / 2.0);
+        const double discounted_visits = inflight_visits * (this->rng.get() + 0.25);
         if (c->traversals > 8 && discounted_visits > 0.1) {
             child_score = (child_score * c->traversals) / (c->traversals + discounted_visits);
         }
@@ -514,10 +505,19 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
 
     // this only happens if there was nothing to select
     if (best_child == nullptr) {
-        if (fallback != nullptr) {
-            best_child = fallback;
+        if (best_fallback != nullptr) {
+            best_child = best_fallback;
+        } else if (bad_fallback != nullptr) {
+            // this is bad, very bad.  There could be a race condition where this keeps getting called
+            // ... so we insert a yield just in case.
+            if (unselectables > 0) {
+                this->scheduler->yield();
+            }
+
+            best_child = bad_fallback;
+
         } else {
-            this->stats_blocked++;
+            this->stats.num_blocked++;
         }
     }
 
@@ -530,6 +530,56 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
     }
 
     return best_child;
+}
+
+
+void PuctEvaluator::backUpMiniMax(float* new_scores, const PathElement& cur) {
+
+    // best advice is not to mess with this.  Or of doing it would be best to calcualte in select
+    // how much exploration it is.  Then based on how far off the exploration is then back prop
+    // that.  Doing anything more complicated here doesn't make any sense.
+
+    // Not that currently we store select debug on the node, we need to store those the path.
+    // Especially if going down the multiple select/backprops/
+
+    // valid and enabled?
+    if (cur.best == nullptr ||
+        cur.best->to_node == nullptr ||
+        this->conf->minimax_backup_ratio < 0.0) {
+        return;
+    }
+
+    // enough visits when children all expanded?
+    if (cur.num_children_expanded == cur.node->num_children &&
+        cur.node->visits < this->conf->minimax_required_visits) {
+        return;
+    }
+
+    // was a good choice?
+    if (cur.choice == cur.best) {
+        return;
+    }
+
+    PuctNode* best = cur.best->to_node;
+    const int role_index = cur.node->lead_role_index;
+
+    if (role_index != -1) {
+        float best_score = best->getCurrentScore(role_index);
+
+        // always the optimist
+        bool improving = new_scores[role_index] > best_score;
+
+        // if it looks like it improving, then let it go, i mean, I am all for
+        // exploration - but does it have to mess up the tree in the process?
+
+        if (!improving) {
+            for (int ii=0; ii<this->sm->getRoleCount(); ii++) {
+                double r = this->conf->minimax_backup_ratio;
+                new_scores[ii] = (r * best->getCurrentScore(ii) +
+                                  (1 - r) * new_scores[ii]);
+            }
+        }
+    }
 }
 
 
@@ -598,13 +648,16 @@ void PuctEvaluator::backPropagate(float* new_scores, const Path& path) {
             }
 
         } else {
+            // if configured, will minimax
+            this->backUpMiniMax(new_scores, cur);
+
             float scaled_visits = cur.node->visits;
 
-            const float scaled_anchor = this->extra->scaled_visits_at;
+            const float scaled_anchor = this->conf->scaled_visits_at;
             if (scaled_anchor > 0 && cur.node->visits > scaled_anchor) {
 
                 const bool parent_is_final = prev != nullptr && prev->node->is_finalised;
-                const float scale = parent_is_final ? this->extra->scaled_visits_finalised_reduce : this->extra->scaled_visits_reduce;
+                const float scale = parent_is_final ? this->conf->scaled_visits_finalised_reduce : this->conf->scaled_visits_reduce;
 
                 const float leftover = cur.node->visits - scaled_anchor;
 
@@ -683,7 +736,7 @@ int PuctEvaluator::treePlayout() {
     }
 
     if (current->is_finalised) {
-        this->stats_finals++;
+        this->stats.playouts_finals++;
     }
 
     for (int ii=0; ii<this->sm->getRoleCount(); ii++) {
@@ -692,76 +745,114 @@ int PuctEvaluator::treePlayout() {
 
     this->backPropagate(scores, path);
 
-    this->stats_tree_playouts++;
+    this->stats.num_tree_playouts++;
     return path.size();
 }
 
-void PuctEvaluator::playoutLoop(int max_evaluations, double end_time, bool main) {
-    double start_time = K273::get_time();
-    this->evaluations = 0;
-
-    double next_report_time = K273::get_time() + 2.5;
-
-    int iterations = 0;
-    while (true) {
-        if (max_evaluations == 0 && this->evaluations > max_evaluations) {
-            break;
-        }
-
-        if (this->root->is_finalised && iterations > 1000) {
-            if (main) {
-                K273::l_warning("Breaking early as finalised");
-            }
-
-            break;
-        }
-
-        if (end_time > 0 && K273::get_time() > end_time) {
+void PuctEvaluator::playoutWorker() {
+    // loops until done
+    while (this->do_playouts) {
+        if (this->root->is_finalised) {
             break;
         }
 
         int depth = this->treePlayout();
-        this->stats_max_depth = std::max(depth, this->stats_max_depth);
-        this->stats_total_depth += depth;
+        this->stats.playouts_max_depth = std::max(depth, this->stats.playouts_max_depth);
+        this->stats.playouts_total_depth += depth;
+    }
+}
 
-        if (main && next_report_time > 0 && K273::get_time() > next_report_time) {
-            next_report_time = K273::get_time() + 2.5;
+void PuctEvaluator::playoutMain(double end_time) {
+    const double start_time = K273::get_time();
+    K273::l_debug("enter playoutMain() for max %.1f seconds", end_time - start_time);
 
+    const bool pondering = this->conf->ponder_time > 0;
+
+    auto elapsed = [this, start_time](int multiplier) {
+        return K273::get_time() > (start_time + this->conf->ponder_time * multiplier);
+    };
+
+    double next_report_time = K273::get_time() + 2.5;
+    auto do_report = [&next_report_time]() {
+        double t = K273::get_time();
+        if (t > next_report_time) {
+            next_report_time = t + 2.5;
+            return true;
+        }
+
+        return false;
+    };
+
+    int iterations = 0;
+    while (true) {
+        if (this->root->is_finalised && iterations > 1000) {
+            K273::l_warning("Breaking early as finalised");
+            break;
+        }
+
+        if (end_time > 0 && K273::get_time() > end_time) {
+            K273::l_warning("Hit hard time limit");
+            break;
+        }
+
+        // pondering
+        if (pondering && iterations % 100 == 0) {
+            if (elapsed(1) && this->converged(this->conf->converge_relaxed)) {
+                K273::l_warning("Breaking since converged (relaxed)");
+                break;
+            }
+
+            if (elapsed(2) && this->converged(this->conf->converge_non_relaxed)) {
+                K273::l_warning("Breaking since converged (non-relaxed)");
+                break;
+            }
+
+            if (elapsed(3)) {
+                K273::l_warning("Breaking - but never converged :(");
+                break;
+            }
+        }
+
+        // do some work here
+        int depth = this->treePlayout();
+        this->stats.playouts_max_depth = std::max(depth, this->stats.playouts_max_depth);
+        this->stats.playouts_total_depth += depth;
+
+        iterations++;
+
+        if (do_report()) {
             const PuctNodeChild* best = this->chooseTopVisits(this->root);
             if (best->to_node != nullptr) {
                 const int our_role_index = this->root->lead_role_index;
                 const int choice = best->move.get(our_role_index);
                 K273::l_info("Evals %d/%d/%d, depth %.2f/%d, n/t: %d/%d, best: %.4f, move: %s",
-                             this->evaluations,
-                             this->stats_tree_playouts,
-                             this->stats_finals,
-                             this->stats_total_depth / float(this->stats_tree_playouts),
-                             this->stats_max_depth,
+                             this->stats.num_evaluations,
+                             this->stats.num_tree_playouts,
+                             this->stats.playouts_finals,
+                             this->stats.playouts_total_depth / float(this->stats.num_tree_playouts),
+                             this->stats.playouts_max_depth,
                              this->number_of_nodes,
-                             this->stats_transpositions,
+                             this->stats.num_transpositions_attached,
                              best->to_node->getCurrentScore(our_role_index),
                              this->sm->legalToMove(our_role_index, choice));
             }
         }
-
-        iterations++;
     }
 
-    if (main && this->conf->verbose) {
-        if (this->stats_tree_playouts) {
+    if (this->conf->verbose) {
+        if (this->stats.num_tree_playouts) {
             K273::l_info("Time taken for %d evaluations in %.3f seconds",
-                         this->evaluations, K273::get_time() - start_time);
+                         this->stats.num_evaluations, K273::get_time() - start_time);
 
             K273::l_debug("The average depth explored: %.2f, max depth: %d",
-                          this->stats_total_depth / float(this->evaluations),
-                          this->stats_max_depth);
+                          this->stats.playouts_total_depth / float(this->stats.num_tree_playouts),
+                          this->stats.playouts_max_depth);
         } else {
             K273::l_debug("Did no tree playouts.");
         }
 
-
-        if (this->stats_blocked) {
-            K273::l_warning("Number of blockages %d", this->stats_blocked);
+        if (this->stats.num_blocked) {
+            K273::l_warning("Number of blockages %d", this->stats.num_blocked);
         }
     }
 }
@@ -859,12 +950,7 @@ void PuctEvaluator::reset(int game_depth) {
         this->root = nullptr;
     }
 
-    this->stats_finals = 0;
-    this->stats_blocked = 0;
-    this->stats_tree_playouts = 0;
-    this->stats_transpositions = 0;
-    this->stats_total_depth = 0;
-    this->stats_max_depth = 0;
+    this->stats.reset();
 
     if (this->number_of_nodes) {
         K273::l_warning("Number of nodes not zero %d", this->number_of_nodes);
@@ -896,40 +982,33 @@ PuctNode* PuctEvaluator::establishRoot(const GGPLib::BaseState* current_state) {
 const PuctNodeChild* PuctEvaluator::onNextMove(int max_evaluations, double end_time) {
     ASSERT(this->root != nullptr);
 
-    if (this->conf->root_expansions_preset_visits > 0) {
-        int number_of_expansions = 0;
-        for (int ii=0; ii<this->root->num_children; ii++) {
-            PuctNodeChild* c = this->root->getNodeChild(this->sm->getRoleCount(), ii);
+    this->stats.reset();
+    this->do_playouts = true;
 
-            if (c->to_node == nullptr) {
-                this->expandChild(this->root, c);
-                c->traversals = std::max(c->traversals,
-                                         (uint32_t) this->conf->root_expansions_preset_visits);
-
-                number_of_expansions++;
-            }
-        }
-    }
-
-
-    auto f = [this, max_evaluations, end_time]() {
-        this->playoutLoop(max_evaluations, end_time);
+    int worker_count = 0;
+    auto f = [this, &worker_count]() {
+        this->playoutWorker();
+        worker_count--;
     };
 
-    this->stats_finals = 0;
-    this->stats_blocked = 0;
-    this->stats_tree_playouts = 0;
-    this->stats_transpositions = 0;
-    this->stats_total_depth = 0;
-    this->stats_max_depth = 0;
-
-    if (max_evaluations == -1 || max_evaluations > 1000) {
+    if (max_evaluations < 0 || max_evaluations > 1000) {
         for (int ii=0; ii<31; ii++) {
+            worker_count++;
             this->scheduler->addRunnable(f);
         }
     }
 
-    this->playoutLoop(max_evaluations, end_time, true);
+    if (max_evaluations != 0) {
+        this->playoutMain(end_time);
+    }
+
+    // collect workers
+    this->do_playouts = false;
+    while (worker_count > 0) {
+        this->scheduler->yield();
+    }
+
+    K273::l_verbose("All workers collected.");
 
     const PuctNodeChild* choice = this->choose();
 
@@ -990,14 +1069,14 @@ const PuctNodeChild* PuctEvaluator::chooseTopVisits(const PuctNode* node) {
     // compare top two.  This is a heuristic to cheaply check if the node hasn't yet converged and
     // chooses the one with the best score.  It isn't very accurate, the only way to get 100%
     // accuracy is to keep running for longer, until it cleanly converges.  This is a best guess for now.
-    if (this->extra->top_visits_best_guess_converge_ratio > 0 && children.size() >= 2) {
+    if (this->conf->top_visits_best_guess_converge_ratio > 0 && children.size() >= 2) {
         PuctNode* n0 = children[0]->to_node;
         PuctNode* n1 = children[1]->to_node;
 
         if (n0 != nullptr && n1 != nullptr) {
             const int role_index = node->lead_role_index;
 
-            if (children[1]->traversals > children[0]->traversals * this->extra->top_visits_best_guess_converge_ratio &&
+            if (children[1]->traversals > children[0]->traversals * this->conf->top_visits_best_guess_converge_ratio &&
                 n1->getCurrentScore(role_index) > n0->getCurrentScore(role_index)) {
                 return children[1];
             } else {

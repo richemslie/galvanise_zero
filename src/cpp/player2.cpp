@@ -28,9 +28,8 @@ Player::Player(GGPLib::StateMachineInterface* sm,
     // ... and then the evaluator...
     // dupe statemachine here, as the PuctEvaluator thinks it is sharing a statemachine (ie it
     // doesn't dupe the statemachine itself)
-    this->evaluator = new PuctEvaluator(sm->dupe(), conf, this->scheduler, transformer);
-    ExtraPuctConfig* extra_conf = new ExtraPuctConfig;
-    this->evaluator->updateConf(conf, extra_conf);
+    this->evaluator = new PuctEvaluator(sm->dupe(), this->scheduler, transformer);
+    this->evaluator->updateConf(conf);
 }
 
 
@@ -39,14 +38,16 @@ Player::~Player() {
     delete this->scheduler;
 }
 
+
 void Player::puctPlayerReset(int game_depth) {
-    K273::l_verbose("Player::puctPlayerReset()");
+    K273::l_verbose("V2 Player::puctPlayerReset()");
     this->evaluator->reset(game_depth);
     this->first_play = true;
 }
 
+
 void Player::puctApplyMove(const GGPLib::JointMove* move) {
-    K273::l_verbose("Player::puctApplyMove()");
+    K273::l_verbose("V2 Player::puctApplyMove()");
     this->scheduler->createMainLoop();
 
     if (this->first_play) {
@@ -71,7 +72,7 @@ void Player::puctPlayerMove(const GGPLib::BaseState* state, int evaluations, dou
     this->on_next_move_choice = nullptr;
     this->scheduler->createMainLoop();
 
-    K273::l_verbose("Player::puctPlayerMove() - %d", evaluations);
+    K273::l_verbose("V2 Player::puctPlayerMove() - %d", evaluations);
 
     // this should only happen as first move in the game
     if (this->first_play) {

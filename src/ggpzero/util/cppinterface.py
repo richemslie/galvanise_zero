@@ -151,7 +151,7 @@ class PlayPoller(PollerBase):
         self.c_transformer = create_c_transformer(transformer)
         self.c_player = self.clz(sm_to_ptr(sm),
                                  self.c_transformer,
-                                 conf)
+                                 attr.asdict(conf))
 
         for name in "reset apply_move move get_move".split():
             name = "player_" + name
@@ -165,6 +165,7 @@ class PlayPollerV2(PlayPoller):
     clz = ggpzero_interface.Player2
 
     def __init__(self, sm, nn, conf, batch_size=64):
+        assert isinstance(conf, confs.PUCTEvaluatorV2Config)
         super().__init__(sm, nn, conf, batch_size=batch_size)
 
 

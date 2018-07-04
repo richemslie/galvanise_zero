@@ -19,7 +19,7 @@ class PUCTPlayer(MatchPlayer):
     poller_clz = PlayPoller
 
     def __init__(self, conf):
-        assert isinstance(conf, confs.PUCTPlayerConfig)
+        assert isinstance(conf, (confs.PUCTPlayerConfig, confs.PUCTEvaluatorConfig))
 
         self.conf = conf
         self.identifier = "%s_%s_%s" % (self.conf.name,
@@ -43,7 +43,7 @@ class PUCTPlayer(MatchPlayer):
             gen = self.conf.generation
 
             self.nn = man.load_network(game_info.game, gen)
-            self.poller = self.poller_clz(self.sm, self.nn, attr.asdict(self.conf.evaluator_config))
+            self.poller = self.poller_clz(self.sm, self.nn, self.conf.evaluator_config)
 
             def get_noop_idx(actions):
                 for idx, a in enumerate(actions):

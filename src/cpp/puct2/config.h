@@ -11,13 +11,11 @@ namespace GGPZero::PuctV2 {
     struct PuctConfig {
         bool verbose;
 
-        int puct_before_expansions;
-        int puct_before_root_expansions;
-
-        int root_expansions_preset_visits;
-
-        float puct_constant_before;
-        float puct_constant_after;
+        float puct_constant_init = 0.85f;
+        float puct_constant_min = 0.75f;
+        float puct_constant_max = 3.5f;
+        float puct_constant_min_root = 2.5f;
+        float puct_constant_max_root = 5.0f;
 
         float dirichlet_noise_pct;
         float dirichlet_noise_alpha;
@@ -26,7 +24,6 @@ namespace GGPZero::PuctV2 {
         int max_dump_depth;
 
         float random_scale;
-
         float temperature;
         int depth_temperature_start;
         float depth_temperature_increment;
@@ -34,21 +31,22 @@ namespace GGPZero::PuctV2 {
         float depth_temperature_max;
 
         float fpu_prior_discount;
-    };
 
-    struct ExtraPuctConfig {
-        // int scaled_visits_at = -1;
+        // < 0, off
         int scaled_visits_at = 1000;
-        double scaled_visits_reduce = 4.0;
-        double scaled_visits_finalised_reduce = 100.0;
+        float scaled_visits_reduce = 4.0;
+        float scaled_visits_finalised_reduce = 100.0;
 
-        float max_puct = 3.5f;
-        float min_puct = 0.75;
-        float min_puct_root = 1.25;
+        // < 0, off
+        float minimax_backup_ratio = 0.75;
+        uint32_t minimax_required_visits = 200;
 
         // < 0, off
         float top_visits_best_guess_converge_ratio = 0.8;
-    };
 
+        float ponder_time = 10.0;
+        int converge_relaxed = 5000;
+        int converge_non_relaxed = 1000;
+    };
 
 }

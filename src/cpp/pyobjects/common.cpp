@@ -75,10 +75,10 @@ static PuctConfig* createPuctConfig(PyObject* dict) {
     config->dirichlet_noise_pct = asFloat("dirichlet_noise_pct");
     config->dirichlet_noise_alpha = asFloat("dirichlet_noise_alpha");
     config->max_dump_depth = asInt("max_dump_depth");
-    config->random_scale = asFloat("random_scale");
 
+    config->random_scale = asFloat("random_scale");
     config->temperature = asFloat("temperature");
-    config->depth_temperature_start = asFloat("depth_temperature_start");
+    config->depth_temperature_start = asInt("depth_temperature_start");
     config->depth_temperature_increment = asFloat("depth_temperature_increment");
     config->depth_temperature_stop = asInt("depth_temperature_stop");
     config->depth_temperature_max = asFloat("depth_temperature_max");
@@ -99,6 +99,74 @@ static PuctConfig* createPuctConfig(PyObject* dict) {
 
     return config;
 }
+
+static GGPZero::PuctV2::PuctConfig* createPuctConfigV2(PyObject* dict) {
+    GGPZero::PuctV2::PuctConfig* config = new GGPZero::PuctV2::PuctConfig;
+
+    auto asInt = [dict] (const char* name) {
+        PyObject* borrowed = PyDict_GetItemString(dict, name);
+        return PyInt_AsLong(borrowed);
+    };
+
+    auto asString = [dict] (const char* name) {
+        PyObject* borrowed = PyDict_GetItemString(dict, name);
+        return PyString_AsString(borrowed);
+    };
+
+    auto asFloat = [dict] (const char* name) {
+        PyObject* borrowed = PyDict_GetItemString(dict, name);
+        return (float) PyFloat_AsDouble(borrowed);
+    };
+
+    config->verbose = asInt("verbose");
+
+    config->puct_constant_init = asFloat("puct_constant_init");
+    config->puct_constant_min = asFloat("puct_constant_min");
+    config->puct_constant_max = asFloat("puct_constant_max");
+    config->puct_constant_min_root = asFloat("puct_constant_min_root");
+    config->puct_constant_max_root = asFloat("puct_constant_max_root");
+
+    config->dirichlet_noise_pct = asFloat("dirichlet_noise_pct");
+    config->dirichlet_noise_alpha = asFloat("dirichlet_noise_alpha");
+    config->max_dump_depth = asInt("max_dump_depth");
+
+    config->random_scale = asFloat("random_scale");
+    config->temperature = asFloat("temperature");
+    config->depth_temperature_start = asInt("depth_temperature_start");
+    config->depth_temperature_increment = asFloat("depth_temperature_increment");
+    config->depth_temperature_stop = asInt("depth_temperature_stop");
+    config->depth_temperature_max = asFloat("depth_temperature_max");
+
+    config->fpu_prior_discount = asFloat("fpu_prior_discount");
+
+    config->scaled_visits_at = asInt("scaled_visits_at");
+    config->scaled_visits_reduce = asFloat("scaled_visits_reduce");
+    config->scaled_visits_finalised_reduce = asFloat("scaled_visits_finalised_reduce");
+
+    config->minimax_backup_ratio = asFloat("minimax_backup_ratio");
+    config->minimax_required_visits = asInt("minimax_required_visits");
+
+    config->top_visits_best_guess_converge_ratio = asFloat("top_visits_best_guess_converge_ratio");
+
+    config->ponder_time = asFloat("ponder_time");
+    config->converge_relaxed = asInt("converge_relaxed");
+    config->converge_non_relaxed = asInt("converge_non_relaxed");
+
+    std::string choose_method = asString("choose");
+    if (choose_method == "choose_top_visits") {
+        config->choose = GGPZero::PuctV2::ChooseFn::choose_top_visits;
+
+    } else if (choose_method == "choose_temperature") {
+        config->choose = GGPZero::PuctV2::ChooseFn::choose_temperature;
+
+    } else {
+        K273::l_error("Choose method unknown: '%s', setting to top visits", choose_method.c_str());
+        config->choose = GGPZero::PuctV2::ChooseFn::choose_top_visits;
+    }
+
+    return config;
+}
+
 
 static SelfPlayConfig* createSelfPlayConfig(PyObject* dict) {
     SelfPlayConfig* config = new SelfPlayConfig;
