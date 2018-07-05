@@ -161,6 +161,12 @@ def pprint(obj):
     pprint(attr.asdict(obj))
 
 
+def pformat(obj):
+    assert attr.has(obj)
+    from pprint import pformat
+    return pformat(attr.asdict(obj))
+
+
 def register_attrs(clz):
     clz = attr.s(clz, slots=True)
     register_clz(clz)
