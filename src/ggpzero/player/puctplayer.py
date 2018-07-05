@@ -15,8 +15,9 @@ from ggpzero.nn.manager import get_manager
 
 
 class PUCTPlayer(MatchPlayer):
-    last_probability = -1
     poller_clz = PlayPoller
+    last_probability = -1
+    last_node_count = -1
 
     def __init__(self, conf):
         assert isinstance(conf, (confs.PUCTPlayerConfig, confs.PUCTEvaluatorConfig))
@@ -82,8 +83,9 @@ class PUCTPlayer(MatchPlayer):
         self.poller.player_move(basestate_to_ptr(current_state), max_iterations, finish_time)
         self.poller.poll_loop()
 
-        move, prob = self.poller.player_get_move(self.match.our_role_index)
+        move, prob, node_count = self.poller.player_get_move(self.match.our_role_index)
         self.last_probability = prob
+        self.last_node_count = node_count
         return move
 
 
