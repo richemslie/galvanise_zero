@@ -40,21 +40,6 @@ namespace GGPZero {
     struct ExtraPuctConfig {
         bool matchmode = false;
 
-        // do a minimax during backprop - not had much success with this.
-        // < 0 off
-
-        // float minimax_backup_ratio = 0.75;
-        float minimax_backup_ratio = -1;
-        int minimax_required_visits = 100;
-
-        // scaling backprop
-        // < 0 off
-
-        // int scaled_visits_at = 200;
-        int scaled_visits_at = -1;
-        double scaled_visits_reduce = 10.0;
-        double scaled_visits_finalised_reduce = 100.0;
-
         // finalised nodes on (only set during backprop, so this turns it on)
         bool backprop_finalised = true;
 

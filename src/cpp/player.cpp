@@ -91,9 +91,9 @@ void Player::puctPlayerMove(const GGPLib::BaseState* state, int evaluations, dou
     }
 }
 
-std::pair<int, float> Player::puctPlayerGetMove(int lead_role_index) {
+std::tuple <int, float, int> Player::puctPlayerGetMove(int lead_role_index) {
     if (this->on_next_move_choice == nullptr) {
-        return std::pair<int, float>(-1, -1);
+        return std::make_tuple(-1, -1.0f, -1);
     }
 
     float probability = -1;
@@ -102,8 +102,9 @@ std::pair<int, float> Player::puctPlayerGetMove(int lead_role_index) {
         probability = node->getCurrentScore(lead_role_index);
     }
 
-    return std::pair<int, float>(this->on_next_move_choice->move.get(lead_role_index),
-                                 probability);
+    return std::make_tuple(this->on_next_move_choice->move.get(lead_role_index),
+                           probability,
+                           this->evaluator->nodeCount());
 }
 
 const ReadyEvent* Player::poll(int predict_count, std::vector <float*>& data) {

@@ -48,12 +48,9 @@ namespace GGPZero {
         float getPuctConstant(PuctNode* node, int depth) const;
 
     public:
-        void updateNodePolicy(PuctNode* node, float* array);
         // do_predictions
-
         PuctNodeChild* selectChild(PuctNode* node, int depth);
 
-        void backUpMiniMax(float* new_node, const PathElement* prev, const PathElement& cur);
         void backPropagate(float* new_scores);
         int treePlayout();
         void playoutLoop(int max_evaluations, double end_time);
@@ -77,6 +74,10 @@ namespace GGPZero {
         void logDebug(const PuctNodeChild* choice_root);
 
         PuctNode* jumpRoot(int depth);
+
+        int nodeCount() const {
+            return this->number_of_nodes;
+        }
 
     private:
         // statemachine shared between evaluators - be careful with its use

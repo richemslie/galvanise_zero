@@ -62,6 +62,7 @@ namespace GGPZero::PuctV2 {
 
         void playoutWorker();
         void playoutMain(double end_time);
+        void logDebug(const PuctNodeChild* choice_root);
 
     public:
         void reset(int game_depth);
@@ -79,7 +80,9 @@ namespace GGPZero::PuctV2 {
 
         Children getProbabilities(PuctNode* node, float temperature, bool use_linger=true);
 
-        void logDebug(const PuctNodeChild* choice_root);
+        int nodeCount() const {
+            return this->number_of_nodes;
+        }
 
     private:
         struct PlayoutStats {

@@ -74,15 +74,6 @@ void PuctEvaluator::updateConf(const PuctConfig* conf, const ExtraPuctConfig* ex
                         conf->temperature, conf->depth_temperature_start, conf->depth_temperature_stop,
                         conf->depth_temperature_max, conf->depth_temperature_increment, conf->random_scale);
 
-
-        K273::l_verbose("Extra!  matchmode %d, minimax (ratio %.2f, reqd_visits %d), backprop_finalised %d",
-                        extra_conf->matchmode, extra_conf->minimax_backup_ratio,
-                        extra_conf->minimax_required_visits, extra_conf->backprop_finalised);
-
-        K273::l_verbose("Extra!  scaled (visits_at %d, reduce %.2f, finalised_reduce %.2f)",
-                        extra_conf->scaled_visits_at, extra_conf->scaled_visits_reduce,
-                        extra_conf->scaled_visits_finalised_reduce);
-
         K273::l_verbose("Extra!  top_visits_best_guess_converge_ratio: %.2f, cpuct_after_root_multiplier: %.2f",
                         extra_conf->top_visits_best_guess_converge_ratio,
                         extra_conf->cpuct_after_root_multiplier);
@@ -229,65 +220,6 @@ float PuctEvaluator::getPuctConstant(PuctNode* node, int depth) const {
     return constant;
 }
 
-void PuctEvaluator::backUpMiniMax(float* new_scores, const PathElement* prev,
-                                  const PathElement& cur) {
-
-    // best advice is not to mess with this.  Or of doing it would be best to calcualte in select
-    // how much exploration it is.  Then based on how far off the exploration is then back prop
-    // that.  Doing anything more complicated here doesn't make any sense.
-
-    // Not that currently we store select debug on the node, we need to store those the path.
-    // Especially if going down the multiple select/backprops/
-
-    const int role_count = this->sm->getRoleCount();
-
-    if (this->extra->minimax_backup_ratio < 0.0 || prev == nullptr) {
-        return;
-    }
-
-    const PuctNodeChild* best = nullptr;
-    if (cur.to_node->visits > this->extra->minimax_required_visits) {
-        // find the best
-        int best_visits = -1;
-
-        for (int ii=0; ii<cur.to_node->num_children; ii++) {
-            const PuctNodeChild* c = cur.to_node->getNodeChild(role_count, ii);
-            if (c->to_node != nullptr && c->to_node->visits > best_visits) {
-                best = c;
-                best_visits = c->to_node->visits;
-            }
-        }
-    }
-
-    if (best == nullptr) {
-        return;
-    }
-
-    ASSERT(best->to_node != nullptr);
-
-    if (prev->child != best && prev->to_node->visits != best->to_node->visits) {
-
-        const int role_index = cur.to_node->lead_role_index;
-
-        if (role_index != -1) {
-            float best_score = best->to_node->getCurrentScore(role_index);
-            bool improving = new_scores[role_index] > best_score;
-
-            // if it looks like it improving, then let it go, i mean, I am all for
-            // exploration - but does it have to mess up the tree in the process?
-
-            if (!improving) {
-                for (int ii=0; ii<this->sm->getRoleCount(); ii++) {
-
-                    double r = this->extra->minimax_backup_ratio;
-                    new_scores[ii] = (r * best->to_node->getCurrentScore(ii) +
-                                      (1 - r) * new_scores[ii]);
-                }
-            }
-        }
-    }
-}
-
 void PuctEvaluator::backPropagate(float* new_scores) {
     const int role_count = this->sm->getRoleCount();
     const int start_index = this->path.size() - 1;
@@ -295,8 +227,6 @@ void PuctEvaluator::backPropagate(float* new_scores) {
     bool bp_finalised_only_once = this->extra->backprop_finalised;
 
     // back propagation:
-    const PathElement* prev = nullptr;
-
     for (int index=start_index; index >= 0; index--) {
         const PathElement& cur = this->path[index];
 
@@ -352,32 +282,17 @@ void PuctEvaluator::backPropagate(float* new_scores) {
             }
 
         } else {
-            // if configured, will minimax
-            this->backUpMiniMax(new_scores, prev, cur);
-
-            float scaled_visits = cur.to_node->visits;
-
-            const float scaled_anchor = this->extra->scaled_visits_at;
-            if (scaled_anchor > 0 && cur.to_node->visits > scaled_anchor) {
-
-                const bool parent_is_final = prev != nullptr && prev->to_node->is_finalised;
-                const float scale = parent_is_final ? this->extra->scaled_visits_finalised_reduce : this->extra->scaled_visits_reduce;
-
-                const float leftover = cur.to_node->visits - scaled_anchor;
-
-                scaled_visits = scaled_anchor + leftover / scale;
-            }
+            float visits = cur.to_node->visits;
 
             for (int ii=0; ii<this->sm->getRoleCount(); ii++) {
-                float score = ((scaled_visits * cur.to_node->getCurrentScore(ii) + new_scores[ii]) /
-                               (scaled_visits + 1.0));
+                float score = ((visits * cur.to_node->getCurrentScore(ii) + new_scores[ii]) /
+                               (visits + 1.0));
 
                 cur.to_node->setCurrentScore(ii, score);
             }
         }
 
         cur.to_node->visits++;
-        prev = &cur;
     }
 }
 

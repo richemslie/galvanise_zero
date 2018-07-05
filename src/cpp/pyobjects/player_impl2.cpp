@@ -46,9 +46,10 @@ static PyObject* Player2_player_get_move(PyObject_Player2* self, PyObject* args)
         return nullptr;
     }
 
-    std::pair<int, float> res = self->impl->puctPlayerGetMove(lead_role_index);
-    return ::Py_BuildValue("if", res.first, res.second);
-    Py_RETURN_NONE;
+    int a, c;
+    float b;
+    std::tie(a, b, c) = self->impl->puctPlayerGetMove(lead_role_index);
+    return ::Py_BuildValue("ifi", a, b, c);
 }
 
 static PyObject* Player2_poll(PyObject_Player2* self, PyObject* args) {

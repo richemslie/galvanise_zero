@@ -31,7 +31,7 @@ namespace GGPZero::PuctV2 {
         void puctPlayerReset(int game_depth);
         void puctApplyMove(const GGPLib::JointMove* move);
         void puctPlayerMove(const GGPLib::BaseState* state, int iterations, double end_time);
-        std::pair<int, float> puctPlayerGetMove(int lead_role_index);
+        std::tuple <int, float, int> puctPlayerGetMove(int lead_role_index);
 
         const ReadyEvent* poll(int predict_count, std::vector <float*>& data);
 
