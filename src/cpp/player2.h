@@ -23,11 +23,14 @@ namespace GGPZero::PuctV2 {
     public:
         Player(GGPLib::StateMachineInterface* sm,
                const GGPZero::GdlBasesTransformer* transformer,
-               const PuctConfig* conf);
+               PuctConfig* conf);
         ~Player();
 
     public:
         // python side
+        void updateConfig(float think_time, int converge_relaxed,
+                          int converge_non_relaxed, bool verbose);
+
         void puctPlayerReset(int game_depth);
         void puctApplyMove(const GGPLib::JointMove* move);
         void puctPlayerMove(const GGPLib::BaseState* state, int iterations, double end_time);
@@ -37,6 +40,8 @@ namespace GGPZero::PuctV2 {
 
     private:
         const GdlBasesTransformer* transformer;
+        PuctConfig* config;
+
         PuctEvaluator* evaluator;
         NetworkScheduler* scheduler;
 

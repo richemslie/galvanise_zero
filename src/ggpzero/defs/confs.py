@@ -85,7 +85,7 @@ class PUCTEvaluatorV2Config(object):
 
     top_visits_best_guess_converge_ratio = attribute(0.8)
 
-    ponder_time = attribute(10.0)
+    think_time = attribute(10.0)
     converge_relaxed = attribute(5000)
     converge_non_relaxed = attribute(1000)
 

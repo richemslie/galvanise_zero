@@ -44,7 +44,7 @@ namespace GGPZero::PuctV2 {
         // < 0, off
         float top_visits_best_guess_converge_ratio = 0.8;
 
-        float ponder_time = 10.0;
+        float think_time = 10.0;
         int converge_relaxed = 5000;
         int converge_non_relaxed = 1000;
     };

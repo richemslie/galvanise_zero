@@ -148,7 +148,7 @@ static GGPZero::PuctV2::PuctConfig* createPuctConfigV2(PyObject* dict) {
 
     config->top_visits_best_guess_converge_ratio = asFloat("top_visits_best_guess_converge_ratio");
 
-    config->ponder_time = asFloat("ponder_time");
+    config->think_time = asFloat("think_time");
     config->converge_relaxed = asInt("converge_relaxed");
     config->converge_non_relaxed = asInt("converge_non_relaxed");
 

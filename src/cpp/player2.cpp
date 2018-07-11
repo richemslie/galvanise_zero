@@ -14,8 +14,9 @@ using namespace GGPZero::PuctV2;
 
 Player::Player(GGPLib::StateMachineInterface* sm,
                const GdlBasesTransformer* transformer,
-               const PuctConfig* conf) :
+               PuctConfig* conf) :
     transformer(transformer),
+    config(conf),
     evaluator(nullptr),
     scheduler(nullptr),
     first_play(false),
@@ -38,6 +39,14 @@ Player::~Player() {
     delete this->scheduler;
 }
 
+void Player::updateConfig(float think_time, int converge_relaxed,
+                          int converge_non_relaxed, bool verbose) {
+    this->config->think_time = think_time;
+    this->config->converge_relaxed = converge_relaxed;
+    this->config->converge_non_relaxed = converge_non_relaxed;
+    this->config->verbose = verbose;
+    this->evaluator->updateConf(this->config);
+}
 
 void Player::puctPlayerReset(int game_depth) {
     K273::l_verbose("V2 Player::puctPlayerReset()");
@@ -47,7 +56,6 @@ void Player::puctPlayerReset(int game_depth) {
 
 
 void Player::puctApplyMove(const GGPLib::JointMove* move) {
-    K273::l_verbose("V2 Player::puctApplyMove()");
     this->scheduler->createMainLoop();
 
     if (this->first_play) {

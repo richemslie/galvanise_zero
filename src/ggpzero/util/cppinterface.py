@@ -168,6 +168,8 @@ class PlayPollerV2(PlayPoller):
         assert isinstance(conf, confs.PUCTEvaluatorV2Config)
         super().__init__(sm, nn, conf, batch_size=batch_size)
 
+        setattr(self, "update_config", getattr(self.c_player, "player_update_config"))
+
 
 class Supervisor(PollerBase):
     def __init__(self, sm, nn, batch_size=1024, sleep_between_poll=-1, workers=None):
