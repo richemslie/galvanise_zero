@@ -132,7 +132,7 @@ void NetworkScheduler::yield() {
 }
 
 void NetworkScheduler::mainLoop() {
-    K273::l_verbose("entering Scheduler::mainLoop()");
+    //K273::l_verbose("entering Scheduler::mainLoop()");
 
     // this is the main_loop greenlet - just to prove this point:
     ASSERT(greenlet_current() == this->main_loop);
@@ -203,7 +203,7 @@ void NetworkScheduler::mainLoop() {
         greenlet_switch_to(g);
     }
 
-    K273::l_verbose("requestors.size on exiting runScheduler():  %zu", this->requestors.size());
+    //K273::l_verbose("requestors.size on exiting runScheduler():  %zu", this->requestors.size());
 }
 
 void NetworkScheduler::poll(const PredictDoneEvent* predict_done_event,
