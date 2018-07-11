@@ -4,7 +4,6 @@ import numpy as np
 
 from ggplib.util import log
 
-
 from ggpzero.util.keras import SGD, Adam, keras_metrics
 
 
@@ -37,6 +36,7 @@ class NeuralNetwork(object):
             log.verbose(l)
 
     def predict_n(self, states, prev_states=None):
+        ' this is for testing purposes. We use C++ normally to access network '
         # prev_states -> list of list of states
 
         to_channels = self.gdl_bases_transformer.state_to_channels
@@ -59,6 +59,7 @@ class NeuralNetwork(object):
         return result
 
     def predict_1(self, state, prev_states=None):
+        ' this is for testing purposes. We use C++ normally to access network '
         if prev_states:
             return self.predict_n([state], [prev_states])[0]
         else:
@@ -108,19 +109,6 @@ class NeuralNetwork(object):
         self.keras_model.compile(loss=loss, optimizer=optimizer,
                                  loss_weights=loss_weights,
                                  metrics=["acc", top_3_acc])
-
-    def fit(self, input_channels, outputs, validation_input_channels,
-            validation_outputs, batch_size, callbacks, **kwds):
-
-        self.keras_model.fit(input_channels,
-                             outputs,
-                             verbose=0,
-                             batch_size=batch_size,
-                             epochs=1,
-                             validation_data=[validation_input_channels,
-                                              validation_outputs],
-                             callbacks=callbacks,
-                             **kwds)
 
     def get_model(self):
         assert self.keras_model is not None

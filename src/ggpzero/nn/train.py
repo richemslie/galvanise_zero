@@ -302,8 +302,6 @@ class TrainManager(object):
                                                   ignore_after_step=ignore_after_step,
                                                   validation_split=conf.validation_split)
 
-
-
         # first get validation data, then we can forget about it as it doesn't need reshuffled
         validation_size = int(conf.max_epoch_size * (1 - conf.validation_split))
         validation_indices = indexer.validation_epoch(validation_size)
@@ -333,7 +331,6 @@ class TrainManager(object):
             if i > 0:
                 value_weight = self.update_value_weighting(value_weight)
 
-            # add a method wrapper to nn (or remove fit() XXX)?
             fitter = self.nn.get_model().fit_generator
             fitter(self.cache.generate(training_indices, conf.batch_size),
                    len(training_indices) / conf.batch_size,

@@ -3,6 +3,7 @@ import sys
 from ggpzero.defs import confs, templates
 
 from ggpzero.nn.manager import get_manager
+from ggpzero.nn import train
 
 
 def get_train_config(game, gen_prefix, next_step, starting_step):
@@ -21,7 +22,7 @@ def get_train_config(game, gen_prefix, next_step, starting_step):
     config.overwrite_existing = True
     config.use_previous = False
     config.validation_split = 0.90000
-    config.resample_buckets = [(15, 1.0), (50, 0.8), (-1, 0.5)]
+    config.resample_buckets = []
     config.max_epoch_size = 1048576
 
     return config
@@ -39,12 +40,12 @@ def get_nn_model(game, transformer, size="small"):
     # config.value_hidden_size = 128
 
     # abuse these for v2
-    config.cnn_filter_size = 64
+    config.cnn_filter_size = 80
     config.residual_layers = -1
     config.value_hidden_size = 0
 
     config.dropout_rate_policy = 0.25
-    config.dropout_rate_value = 0.25
+    config.dropout_rate_value = 0.5
 
     config.role_count = 2
     config.leaky_relu = False
@@ -53,12 +54,7 @@ def get_nn_model(game, transformer, size="small"):
 
 
 def do_training(game, gen_prefix, next_step, starting_step, num_previous_states,
-                gen_prefix_next, use_old_training_method=False):
-
-    if use_old_training_method:
-        from ggpzero.nn import train_bak as train
-    else:
-        from ggpzero.nn import train
+                gen_prefix_next):
 
     man = get_manager()
 
@@ -88,14 +84,13 @@ if __name__ == "__main__":
 
         # modify these >>>
         game = "reversi_10x10"
+        gen_prefix = "x2"
 
         #game = "breakthrough"
-        gen_prefix = "h5"
 
-        next_step = 107
-        starting_step = 20
+        next_step = 174
+        starting_step = 25
         num_previous_states = 1
-        use_old_training_method = False
 
         do_training(game, gen_prefix, next_step, starting_step, num_previous_states, gen_prefix_next)
 
