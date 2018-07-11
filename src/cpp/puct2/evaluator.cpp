@@ -99,6 +99,9 @@ void PuctEvaluator::updateConf(const PuctConfig* conf) {
 
         K273::l_verbose("think %.1f, relaxed %d/%d",
                         conf->think_time, conf->converge_relaxed, conf->converge_non_relaxed);
+
+        K273::l_verbose("expand_threshold_visits %d, #expansions_end_game %d",
+                        conf->expand_threshold_visits, conf->number_of_expansions_end_game);
     }
 
     this->conf = conf;
@@ -337,9 +340,6 @@ bool PuctEvaluator::converged(int count) const {
 
 
 PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
-    const int XX_expand_threshold_visits = 42;
-    const int XX_number_of_expansions_end_game = 2;
-
     ASSERT(!node->isTerminal());
     ASSERT(node->num_children > 0);
 
@@ -398,7 +398,7 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
 
     bool allow_expansions = true;
     if (depth > 0) {
-        if (node->visits < XX_expand_threshold_visits ||
+        if (node->visits < this->conf->expand_threshold_visits ||
             (node_score < 0.02 || node_score > 0.98)) {
             // count non final expansions
             int non_final_expansions = 0;
@@ -411,7 +411,7 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
                 }
             }
 
-            if (non_final_expansions >= XX_number_of_expansions_end_game) {
+            if (non_final_expansions >= this->conf->number_of_expansions_end_game) {
                 allow_expansions = false;
             }
         }

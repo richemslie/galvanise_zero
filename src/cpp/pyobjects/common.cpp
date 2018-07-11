@@ -152,6 +152,9 @@ static GGPZero::PuctV2::PuctConfig* createPuctConfigV2(PyObject* dict) {
     config->converge_relaxed = asInt("converge_relaxed");
     config->converge_non_relaxed = asInt("converge_non_relaxed");
 
+    config->converge_relaxed = asInt("expand_threshold_visits");
+    config->converge_relaxed = asInt("number_of_expansions_end_game");
+
     std::string choose_method = asString("choose");
     if (choose_method == "choose_top_visits") {
         config->choose = GGPZero::PuctV2::ChooseFn::choose_top_visits;

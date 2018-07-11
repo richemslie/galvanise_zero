@@ -89,6 +89,9 @@ class PUCTEvaluatorV2Config(object):
     converge_relaxed = attribute(5000)
     converge_non_relaxed = attribute(1000)
 
+    expand_threshold_visits = attribute(42)
+    number_of_expansions_end_game = attribute(2)
+
 
 @register_attrs
 class PUCTPlayerConfig(object):
