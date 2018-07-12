@@ -50,6 +50,10 @@ namespace GGPZero::PuctV2 {
 
         uint32_t expand_threshold_visits = 42;
         int number_of_expansions_end_game = 2;
+
+        int batch_size = 32;
+
+        int policy_dilution_visits = -1;
     };
 
 }

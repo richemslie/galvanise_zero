@@ -164,9 +164,9 @@ class PlayPoller(PollerBase):
 class PlayPollerV2(PlayPoller):
     clz = ggpzero_interface.Player2
 
-    def __init__(self, sm, nn, conf, batch_size=64):
+    def __init__(self, sm, nn, conf):
         assert isinstance(conf, confs.PUCTEvaluatorV2Config)
-        super().__init__(sm, nn, conf, batch_size=batch_size)
+        super().__init__(sm, nn, conf, batch_size=conf.batch_size)
 
         setattr(self, "update_config", getattr(self.c_player, "player_update_config"))
 

@@ -67,8 +67,9 @@ void PuctEvaluator::updateConf(const PuctConfig* conf, const ExtraPuctConfig* ex
         K273::l_verbose("dirichlet_noise (alpha: %.2f, pct: %.2f), fpu_prior_discount: %.2f",
                         conf->dirichlet_noise_alpha, conf->dirichlet_noise_pct, conf->fpu_prior_discount);
 
-        K273::l_verbose("choose: %s",
-                        (conf->choose == ChooseFn::choose_top_visits) ? "choose_top_visits" : "choose_temperature");
+        K273::l_verbose("choose: %s, policy_dilution_visits:%d",
+                        (conf->choose == ChooseFn::choose_top_visits) ? "choose_top_visits" : "choose_temperature",
+                        conf->policy_dilution_visits);
 
         K273::l_verbose("temperature: %.2f, start(%d), stop(%d), incr(%.2f), max(%.2f) scale(%.2f)",
                         conf->temperature, conf->depth_temperature_start, conf->depth_temperature_stop,
@@ -78,10 +79,8 @@ void PuctEvaluator::updateConf(const PuctConfig* conf, const ExtraPuctConfig* ex
                         extra_conf->top_visits_best_guess_converge_ratio,
                         extra_conf->cpuct_after_root_multiplier);
 
-        K273::l_verbose("Extra!  bypass_evaluation_single_node: %d, scaled",
-                        extra_conf->bypass_evaluation_single_node);
-
-        K273::l_verbose("Extra!  evaluation_multipler (terminal %.2f, convergence %.2f)",
+        K273::l_verbose("Extra!  backprop_finalised: %d, evaluation_multipler (terminal %.2f, convergence %.2f)",
+                        extra_conf->backprop_finalised,
                         extra_conf->evaluation_multipler_on_terminal,
                         extra_conf->evaluation_multipler_to_convergence);
     }
@@ -313,15 +312,6 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, int depth) {
     PuctNodeChild* best_child = nullptr;
     float best_score = -1;
 
-/*
-  XXXXXXXXXZZZZZZZZXXXXXXXXXXX TODO:
-   if node is finalised
-    * if won:
-      * minimize distance to end
-    * ELSE (not winning, so could be draws or losing):
-      * maximize distance to end if losing
-*/
-
     // prior... (alpha go zero said 0 but there score ranges from [-1,1]
     float prior_score = 0.0;
     if (!do_dirichlet_noise && this->conf->fpu_prior_discount > 0) {
@@ -341,19 +331,6 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, int depth) {
         prior_score -= fpu_reduction;
     }
 
-
-    // add in an adjustment for caluclating prior_score,
-    float score_adjustment = 0;
-
-    // very, very simple.  Moves the score so that PUCT exploration is normalised.
-    if (this->extra->adjust_score_puct_normalisation) {
-        if (node->getCurrentScore(node->lead_role_index) < 0.1) {
-            score_adjustment = 0.1 - node->getCurrentScore(node->lead_role_index);
-        } else if (node->getCurrentScore(node->lead_role_index) > 0.9) {
-            score_adjustment = 0.9 - node->getCurrentScore(node->lead_role_index);
-        }
-    }
-
     for (int ii=0; ii<node->num_children; ii++) {
         PuctNodeChild* c = node->getNodeChild(this->sm->getRoleCount(), ii);
 
@@ -362,6 +339,12 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, int depth) {
         float node_score = prior_score;
 
         float child_pct = c->policy_prob;
+
+        if (this->conf->policy_dilution_visits > 0) {
+            const double xprob = 1.0 / (double) node->num_children;
+            const double coef = std::min(1.0, this->conf->policy_dilution_visits / (double) node->visits);
+            child_pct = coef * c->policy_prob + (1.0 - coef) * xprob;
+        }
 
         if (c->to_node != nullptr) {
             PuctNode* cn = c->to_node;
@@ -394,10 +377,10 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, int depth) {
         float puct_score = puct_constant * child_pct * (sqrt_node_visits / cv);
 
         // end product
-        float score = node_score + score_adjustment + puct_score;
+        float score = node_score + puct_score;
 
         // use for debug/display
-        c->debug_node_score = node_score + score_adjustment;
+        c->debug_node_score = node_score;
         c->debug_puct_score = puct_score;
 
         if (score > best_score) {
@@ -442,11 +425,11 @@ int PuctEvaluator::treePlayout() {
 
         // if does not exist, then create it (will incur a nn prediction)
         if (child->to_node == nullptr) {
-            this->expandChild(current, child, this->extra->bypass_evaluation_single_node);
+            this->expandChild(current, child, true);
             current = child->to_node;
 
             // special case if number of children is 1, we just bypass it and inherit next value
-            if (!current->is_finalised && current->num_children == 1 && this->extra->bypass_evaluation_single_node) {
+            if (!current->is_finalised && current->num_children == 1) {
                 tree_playout_depth++;
                 continue;
             }

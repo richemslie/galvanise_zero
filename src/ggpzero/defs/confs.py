@@ -43,6 +43,8 @@ class PUCTEvaluatorConfig(object):
     # < 0 is off.
     fpu_prior_discount = attribute(-1)
 
+    # dilute the policy probability after n visits (-1 off)
+    policy_dilution_visits = attribute(-1)
 
 @register_attrs
 class PUCTEvaluatorV2Config(object):
@@ -92,6 +94,11 @@ class PUCTEvaluatorV2Config(object):
     expand_threshold_visits = attribute(42)
     number_of_expansions_end_game = attribute(2)
 
+    # batches to GPU.  number of greenlets to run, along with virtual lossesa
+    batch_size = attribute(32)
+
+    # dilute the policy probability after n visits (-1 off)
+    policy_dilution_visits = attribute(-1)
 
 @register_attrs
 class PUCTPlayerConfig(object):

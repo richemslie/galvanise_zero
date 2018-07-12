@@ -97,8 +97,9 @@ void PuctEvaluator::updateConf(const PuctConfig* conf) {
                         conf->top_visits_best_guess_converge_ratio,
                         conf->minimax_backup_ratio, conf->minimax_required_visits);
 
-        K273::l_verbose("think %.1f, relaxed %d/%d",
-                        conf->think_time, conf->converge_relaxed, conf->converge_non_relaxed);
+        K273::l_verbose("think %.1f, relaxed %d/%d, policy_dilution_visits=%d, batch_size=%d",
+                        conf->think_time, conf->converge_relaxed, conf->converge_non_relaxed,
+                        conf->policy_dilution_visits, conf->batch_size);
 
         K273::l_verbose("expand_threshold_visits %d, #expansions_end_game %d",
                         conf->expand_threshold_visits, conf->number_of_expansions_end_game);
@@ -229,44 +230,6 @@ PuctNode* PuctEvaluator::expandChild(PuctNode* parent, PuctNodeChild* child) {
 ///////////////////////////////////////////////////////////////////////////////
 // selection - move to new class, should have no side effects.  in/out path:
 
-std::vector <float> PuctEvaluator::getDirichletNoise(int depth) {
-    // set dirichlet noise on root?
-
-    std::vector <float> res;
-
-    if (depth != 0) {
-        return res;
-    }
-
-    if (this->conf->dirichlet_noise_alpha < 0) {
-        return res;
-    }
-
-    // XXX check with l0 that is still ok.
-    std::gamma_distribution <float> gamma(this->conf->dirichlet_noise_alpha, 1.0f);
-
-    float total_noise = 0.0f;
-    for (int ii=0; ii<this->root->num_children; ii++) {
-        float noise = gamma(this->rng);
-
-        total_noise += noise;
-        res.emplace_back(noise);
-    }
-
-    // fail if we didn't produce any noise
-    if (total_noise < std::numeric_limits<float>::min()) {
-        res.clear();
-        return res;
-    }
-
-    // normalize:
-    for (int ii=0; ii<this->root->num_children; ii++) {
-       res[ii] /= total_noise;
-    }
-
-    return res;
-}
-
 void PuctEvaluator::setPuctConstant(PuctNode* node, int depth) const {
     const float node_score = node->getCurrentScore(node->lead_role_index);
 
@@ -355,20 +318,13 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
         return child;
     }
 
-    // this should be smart enough not to allocate memory unless added to (XXX check)
-    std::vector <float> dirichlet_noise = this->getDirichletNoise(depth);
-    bool do_dirichlet_noise = !dirichlet_noise.empty();
-
     const float node_score = node->getCurrentScore(node->lead_role_index);
-    if (node_score > 0.95) {
-        do_dirichlet_noise = false;
-    }
 
     // prior... (alpha go zero said 0 but there score ranges from [-1,1])
     // original value from network / or terminal value
     float prior_score = node->getFinalScore(node->lead_role_index);
     int total_traversals = 0;
-    if (!do_dirichlet_noise && this->conf->fpu_prior_discount > 0) {
+    if (this->conf->fpu_prior_discount > 0) {
         float total_policy_visited = 0.0;
         for (int ii=0; ii<node->num_children; ii++) {
             PuctNodeChild* c = node->getNodeChild(this->sm->getRoleCount(), ii);
@@ -443,9 +399,14 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
             continue;
         }
 
-        // we use doubles throughtout, for more precision
+       // we use doubles throughtout, for more precision
         double child_score = prior_score;
         double child_pct = c->policy_prob;
+        if (this->conf->policy_dilution_visits > 0) {
+            const double xprob = 1.0 / (double) node->num_children;
+            const double coef = std::min(1.0, this->conf->policy_dilution_visits / (double) node->visits);
+            child_pct = coef * c->policy_prob + (1.0 - coef) * xprob;
+        }
 
         if (c->to_node != nullptr) {
             PuctNode* cn = c->to_node;
@@ -480,11 +441,6 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
             }
         }
 
-        if (do_dirichlet_noise) {
-            double noise_pct = this->conf->dirichlet_noise_pct;
-            child_pct = (1.0f - noise_pct) * child_pct + noise_pct * dirichlet_noise[ii];
-        }
-
         // add inflight_visits to exploration score
         const double inflight_visits = c->to_node != nullptr ? c->to_node->inflight_visits : 0;
         const double denominator = c->traversals + inflight_visits + 1;
@@ -516,6 +472,7 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
             // ... so we insert a yield just in case.
             if (unselectables > 0) {
                 this->scheduler->yield();
+                return nullptr;
             }
 
             best_child = bad_fallback;
@@ -809,14 +766,14 @@ void PuctEvaluator::playoutMain(double end_time) {
         // hacked up so can run in reasonable times during ICGA
         if (use_think_time && iterations % 20 == 0 && K273::get_time() > (start_time + 2.0)) {
             const float our_score = this->root->getCurrentScore(our_role_index);
-            if (our_score > 0.998) {
+            if (our_score > 0.985 || our_score < 0.015) {
                 if (this->converged(2)) {
                     K273::l_warning("Done done (simple converge)");
                     break;
                 }
             }
 
-            if (our_score > 0.95) {
+            if (our_score > 0.95 || our_score < 0.05) {
                 if (elapsed(0.25) && this->converged(this->conf->converge_non_relaxed)) {
                     K273::l_warning("End game converged (relaxed)");
                     break;
@@ -838,12 +795,12 @@ void PuctEvaluator::playoutMain(double end_time) {
                 break;
             }
 
-            if (elapsed(1.75) && this->converged(this->conf->converge_non_relaxed)) {
+            if (elapsed(1.33) && this->converged(this->conf->converge_non_relaxed)) {
                 K273::l_warning("Breaking since converged (non-relaxed)");
                 break;
             }
 
-            if (elapsed(2.0)) {
+            if (elapsed(1.75)) {
                 K273::l_warning("Breaking - but never converged :(");
                 break;
             }
@@ -1031,10 +988,17 @@ const PuctNodeChild* PuctEvaluator::onNextMove(int max_evaluations, double end_t
         worker_count--;
     };
 
-    if (max_evaluations < 0 || max_evaluations > 1000) {
-        for (int ii=0; ii<31; ii++) {
-            worker_count++;
-            this->scheduler->addRunnable(f);
+    if (this->conf->batch_size > 1) {
+
+        // seems to be going into a infinte loop sometimes without this.  Not sure why? XXX
+        if (this->root != nullptr && !this->root->is_finalised) {
+
+            if (max_evaluations < 0 || max_evaluations > 1000) {
+                for (int ii=0; ii<this->conf->batch_size - 1; ii++) {
+                    worker_count++;
+                    this->scheduler->addRunnable(f);
+                }
+            }
         }
     }
 

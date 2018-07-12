@@ -84,6 +84,7 @@ static PuctConfig* createPuctConfig(PyObject* dict) {
     config->depth_temperature_max = asFloat("depth_temperature_max");
 
     config->fpu_prior_discount = asFloat("fpu_prior_discount");
+    config->policy_dilution_visits = asInt("policy_dilution_visits");
 
     std::string choose_method = asString("choose");
     if (choose_method == "choose_top_visits") {
@@ -152,8 +153,11 @@ static GGPZero::PuctV2::PuctConfig* createPuctConfigV2(PyObject* dict) {
     config->converge_relaxed = asInt("converge_relaxed");
     config->converge_non_relaxed = asInt("converge_non_relaxed");
 
-    config->converge_relaxed = asInt("expand_threshold_visits");
-    config->converge_relaxed = asInt("number_of_expansions_end_game");
+    config->expand_threshold_visits = asInt("expand_threshold_visits");
+    config->number_of_expansions_end_game = asInt("number_of_expansions_end_game");
+
+    config->batch_size = asInt("batch_size");
+    config->policy_dilution_visits = asInt("policy_dilution_visits");
 
     std::string choose_method = asString("choose");
     if (choose_method == "choose_top_visits") {

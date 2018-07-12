@@ -61,6 +61,7 @@ class PUCTPlayer(MatchPlayer):
         self.poller.poll_loop()
 
     def on_next_move(self, finish_time):
+        log.info("PUCTPlayer.on_next_move(), %s" % self.get_name())
         current_state = self.match.get_current_state()
         self.sm.update_bases(current_state)
 
@@ -91,6 +92,9 @@ class PUCTPlayer(MatchPlayer):
 
 class PUCTPlayerV2(PUCTPlayer):
     poller_clz = PlayPollerV2
+
+    def update_config(self, *args, **kwds):
+        self.poller.update_config(*args, **kwds)
 
 
 ###############################################################################
