@@ -295,8 +295,12 @@ void PuctNode::dumpNode(const PuctNode* node,
     }
 }
 
+
 /* sorts children first by visits, then by policy_prob */
-Children PuctNode::sortedChildren(const PuctNode* node, int role_count, bool next_probability) {
+Children PuctNode::sortedChildren(const PuctNode* node,
+                                  int role_count,
+                                  bool next_probability) {
+
     Children children;
     for (int ii=0; ii<node->num_children; ii++) {
         const PuctNodeChild* child = node->getNodeChild(role_count, ii);
@@ -316,6 +320,36 @@ Children PuctNode::sortedChildren(const PuctNode* node, int role_count, bool nex
         }
 
         return visits_a > visits_b;
+    };
+
+    std::sort(children.begin(), children.end(), f);
+    return children;
+}
+
+/* sorts children first by traversals, then by policy_prob */
+Children PuctNode::sortedChildrenTraversals(const PuctNode* node,
+                                            int role_count,
+                                            bool next_probability) {
+
+    Children children;
+    for (int ii=0; ii<node->num_children; ii++) {
+        const PuctNodeChild* child = node->getNodeChild(role_count, ii);
+        children.push_back(child);
+    }
+
+    auto f = [next_probability](const PuctNodeChild* a, const PuctNodeChild* b) {
+        int traversals_a = a->traversals;
+        int traversals_b = b->traversals;
+
+        if (traversals_a == traversals_b) {
+            if (next_probability) {
+                return a->next_prob > b->next_prob;
+            } else {
+                return a->policy_prob > b->policy_prob;
+            }
+        }
+
+        return traversals_a > traversals_b;
     };
 
     std::sort(children.begin(), children.end(), f);
@@ -380,14 +414,11 @@ void PuctNodeRequest::reply(const ModelResult& result,
 
     for (int ri=0; ri<role_count; ri++) {
         float s = result.getReward(ri);
-        if (s > 1.0) {
-            s = 1.0f;
 
-        } else if (s < 0.0) {
-            s = 0.0f;
-        }
-
+        // store the result as is, we don't use it for anything
         node->setFinalScore(ri, s);
-        node->setCurrentScore(ri, s);
+
+        // clamp and set current score
+        node->setCurrentScore(ri, node->getFinalScore(ri, true));
     }
 }

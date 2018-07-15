@@ -115,10 +115,15 @@ namespace GGPZero::PuctV2 {
             *(scores + role_index) = score;
         }
 
-        Score getFinalScore(int role_index) const {
+        Score getFinalScore(int role_index, bool clamp=false) const {
             /* score as per predicted by NN value head, or the terminal scores */
             const Score* scores = this->getConstIncr <Score>(this->final_score_ptr_incr);
-            return *(scores + role_index);
+            Score s = *(scores + role_index);
+            if (clamp) {
+                s = std::max(0.0f, std::min(1.0f, s));
+            }
+
+            return s;
         }
 
         void setFinalScore(int role_index, Score score) {
@@ -160,6 +165,11 @@ namespace GGPZero::PuctV2 {
         static Children sortedChildren(const PuctNode* node,
                                        int role_count,
                                        bool next_probability=false);
+
+        static Children sortedChildrenTraversals(const PuctNode* node,
+                                                 int role_count,
+                                                 bool next_probability=false);
+
     };
 
 
