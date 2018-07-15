@@ -322,7 +322,8 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
 
     // prior... (alpha go zero said 0 but there score ranges from [-1,1])
     // original value from network / or terminal value
-    float prior_score = node->getFinalScore(node->lead_role_index);
+    float prior_score = node->getFinalScore(node->lead_role_index, true);
+
     int total_traversals = 0;
     if (this->conf->fpu_prior_discount > 0) {
         float total_policy_visited = 0.0;
@@ -472,7 +473,6 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
             // ... so we insert a yield just in case.
             if (unselectables > 0) {
                 this->scheduler->yield();
-                return nullptr;
             }
 
             best_child = bad_fallback;
@@ -710,6 +710,41 @@ int PuctEvaluator::treePlayout() {
     return path.size();
 }
 
+void PuctEvaluator::normaliseRootNode() {
+    if (this->conf->root_node_normalisation_limit < 0) {
+        return;
+    }
+
+    ASSERT(this->conf->root_node_normalisation_limit > 0);
+
+    if (this->root == nullptr || (int) this->root->visits <= this->conf->root_node_normalisation_limit) {
+        return;
+    }
+
+    double scale = this->conf->root_node_normalisation_limit / (double) this->root->visits;
+
+    // not worth it, cause more rounding issues than anything else
+    if (scale > 0.95) {
+        return;
+    }
+
+
+    uint32_t total_reduction = 0;
+    for (int ii=0; ii<this->root->num_children; ii++) {
+        PuctNodeChild* c = this->root->getNodeChild(this->sm->getRoleCount(), ii);
+
+        uint32_t new_traversals = (c->traversals * scale) + 1;
+        if (new_traversals < c->traversals) {
+            total_reduction += c->traversals - new_traversals;
+            c->traversals = new_traversals;
+        }
+    }
+
+    K273::l_info("Reducing traversals on root by %d", total_reduction);
+    ASSERT(this->root->visits > total_reduction);
+    this->root->visits -= total_reduction;
+}
+
 void PuctEvaluator::playoutWorker() {
     // loops until done
     while (this->do_playouts) {
@@ -765,30 +800,30 @@ void PuctEvaluator::playoutMain(double end_time) {
         // use think time:
         // hacked up so can run in reasonable times during ICGA
         if (use_think_time && iterations % 20 == 0 && K273::get_time() > (start_time + 2.0)) {
-            const float our_score = this->root->getCurrentScore(our_role_index);
-            if (our_score > 0.985 || our_score < 0.015) {
-                if (this->converged(2)) {
-                    K273::l_warning("Done done (simple converge)");
-                    break;
-                }
-            }
+            //const float our_score = this->root->getCurrentScore(our_role_index);
+            //if (our_score > 0.99 || our_score < 0.010) {
+            //    if (this->converged(2)) {
+            //        K273::l_warning("Done done (simple converge)");
+            //        break;
+            //    }
+            //}
 
-            if (our_score > 0.95 || our_score < 0.05) {
-                if (elapsed(0.25) && this->converged(this->conf->converge_non_relaxed)) {
-                    K273::l_warning("End game converged (relaxed)");
-                    break;
-                }
+            // if (our_score > 0.97 || our_score < 0.03) {
+            //     if (elapsed(0.25) && this->converged(this->conf->converge_non_relaxed)) {
+            //         K273::l_warning("End game converged (relaxed)");
+            //         break;
+            //     }
 
-                if (elapsed(0.33) && this->converged(2)) {
-                    K273::l_warning("End game done (simple converge)");
-                    break;
-                }
+            //     if (elapsed(0.33) && this->converged(2)) {
+            //         K273::l_warning("End game done (simple converge)");
+            //         break;
+            //     }
 
-                if (elapsed(0.5)) {
-                    K273::l_warning("End game done (no converge)");
-                    break;
-                }
-            }
+            //     if (elapsed(0.5)) {
+            //         K273::l_warning("End game done (no converge)");
+            //         break;
+            //     }
+            // }
 
             if (elapsed(1.0) && this->converged(this->conf->converge_relaxed)) {
                 K273::l_warning("Breaking since converged (relaxed)");
@@ -924,8 +959,13 @@ void PuctEvaluator::applyMove(const GGPLib::JointMove* move) {
         }
     }
 
+    std::string move_str = PuctNode::moveString(*move, this->sm);
+
     if (!found) {
-        K273::l_warning("PuctEvaluator::applyMove(): Did not find move %d / %d", move->get(0), move->get(1));
+        K273::l_warning("PuctEvaluator::applyMove(): Did not find move %s",
+                        move_str.c_str());
+    } else {
+        K273::l_info("PuctEvaluator::applyMove(): %s", move_str.c_str());
     }
 
     ASSERT(this->root != nullptr);
@@ -982,6 +1022,9 @@ const PuctNodeChild* PuctEvaluator::onNextMove(int max_evaluations, double end_t
     this->stats.reset();
     this->do_playouts = true;
 
+    this->normaliseRootNode();
+
+    // this will be spawned as a coroutine (see addRunnable() below)
     int worker_count = 0;
     auto f = [this, &worker_count]() {
         this->playoutWorker();
@@ -990,7 +1033,6 @@ const PuctNodeChild* PuctEvaluator::onNextMove(int max_evaluations, double end_t
 
     if (this->conf->batch_size > 1) {
 
-        // seems to be going into a infinte loop sometimes without this.  Not sure why? XXX
         if (this->root != nullptr && !this->root->is_finalised) {
 
             if (max_evaluations < 0 || max_evaluations > 1000) {
@@ -1069,7 +1111,7 @@ const PuctNodeChild* PuctEvaluator::chooseTopVisits(const PuctNode* node) {
 
     const int role_index = node->lead_role_index;
 
-    auto children = PuctNode::sortedChildren(node, this->sm->getRoleCount());
+    auto children = PuctNode::sortedChildrenTraversals(node, this->sm->getRoleCount());
 
     // look for finalised first
     if (node->is_finalised && node->getCurrentScore(role_index) > 1.0) {

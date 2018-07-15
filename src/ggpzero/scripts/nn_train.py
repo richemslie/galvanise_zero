@@ -83,14 +83,14 @@ if __name__ == "__main__":
         gen_prefix_next = sys.argv[1]
 
         # modify these >>>
-        game = "reversi_10x10"
-        gen_prefix = "x2"
+        game = "reversi"
+        gen_prefix = "h6"
 
         #game = "breakthrough"
 
-        next_step = 174
-        starting_step = 25
-        num_previous_states = 1
+        next_step = 160
+        starting_step = 20
+        num_previous_states = 0
 
         do_training(game, gen_prefix, next_step, starting_step, num_previous_states, gen_prefix_next)
 

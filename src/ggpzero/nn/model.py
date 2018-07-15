@@ -176,7 +176,7 @@ def get_network_model(conf):
         incr_size = 0
 
         # XXX hard coding layers
-        for i, c in enumerate([1, 1, 1, 1, 1, 2, 2, 2, 3, 3, 2, 2, 3, 1, 1, 1, 1, 1]):
+        for i, c in enumerate([1, 1, 1, 1, 1, 1, 2, 2, 2, 3, 2, 2, 2, 1, 1, 1, 1, 1, 1]):
             if i > 0 and i % 3 == 0:
                 filter_size += incr_size
 
@@ -267,11 +267,11 @@ def get_network_model(conf):
             flat = klayers.Dropout(conf.dropout_rate_value)(flat)
 
         hidden = klayers.Dense(256, name="value_hidden")(flat)
-        hidden = klayers.BatchNormalization(axis=get_bn_axis(), name="value_hidden_bn")(hidden)
-        hidden = klayers.Activation('relu')(hidden)
+        #hidden = klayers.BatchNormalization(axis=get_bn_axis(), name="value_hidden_bn")(hidden)
+        hidden = klayers.Activation('relu', name="value_hidden_act")(hidden)
 
         value_head = klayers.Dense(conf.role_count,
-                                   activation="sigmoid", name="value")(hidden)
+                                   name="value")(hidden)
 
     elif value_v2:
         assert conf.input_columns == conf.input_rows

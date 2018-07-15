@@ -54,6 +54,9 @@ namespace GGPZero::PuctV2 {
         int batch_size = 32;
 
         int policy_dilution_visits = -1;
+
+        // -1 is off
+        int root_node_normalisation_limit = 1000;
     };
 
 }

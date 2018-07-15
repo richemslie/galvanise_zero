@@ -305,3 +305,15 @@ class GdlBasesTransformer(object):
     def value_to_array(self, values):
         assert len(values) == self.role_count
         return np.array(values, dtype='float32')
+
+
+class GdlBasesTransformer_Draws(object):
+    def value_to_array(self, values):
+        assert len(values) == 2
+        if abs(values[0] - 0.5) < 0.01:
+            assert abs(values[1] - 0.5) < 0.01
+            new_values = [0.0, 0.0, 1.0]
+        else:
+            new_values = [values[0], values[1], 0.0]
+
+        return np.array(values, dtype='float32')
