@@ -324,13 +324,6 @@ void SelfPlay::addSamples(const std::vector <float>& final_scores,
 
     // update current samples (remember we can have multiple per game)
     for (auto sample : this->game_samples) {
-        // if (this->has_resigned && !is_resign0_false_positive && !is_resign1_false_positive) {
-        //     if (sample->resultant_puct_score[sample->lead_role_index] < 0.01) {
-        //         // dont add sample, wins go through though
-        //         continue;
-        //     }
-        // }
-
         sample->final_score = final_scores;
         sample->game_length = game_depth;
         sample->match_identifier = this->identifier + K273::fmtString("_%d", this->match_count);
