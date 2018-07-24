@@ -93,80 +93,11 @@ class PUCTPlayer(MatchPlayer):
 class PUCTPlayerV2(PUCTPlayer):
     poller_clz = PlayPollerV2
 
+    def __init__(self, conf):
+        super().__init__(conf)
+
+        # overwrite identifier
+        self.identifier = "%s_%s" % (self.conf.name, conf.generation)
+
     def update_config(self, *args, **kwds):
         self.poller.update_config(*args, **kwds)
-
-
-###############################################################################
-
-def get_default_conf(gen, **kwds):
-    eval_config = confs.PUCTEvaluatorConfig(verbose=True,
-                                            choose="choose_top_visits",
-
-                                            dirichlet_noise_alpha=0.03,
-                                            dirichlet_noise_pct=0.1,
-
-                                            puct_before_expansions=3,
-                                            puct_before_root_expansions=10,
-                                            puct_constant_before=2.0,
-                                            puct_constant_after=0.85,
-
-                                            temperature=1.00,
-                                            depth_temperature_max=2.0,
-                                            depth_temperature_start=1,
-                                            depth_temperature_increment=0.25,
-                                            depth_temperature_stop=1,
-                                            random_scale=1.0,
-
-                                            fpu_prior_discount=0.25,
-                                            max_dump_depth=3)
-
-    config = confs.PUCTPlayerConfig(name="puct",
-                                    verbose=True,
-                                    generation=gen,
-                                    playouts_per_iteration=100,
-                                    playouts_per_iteration_noop=0,
-                                    evaluator_config=eval_config)
-
-    for k, v in kwds.items():
-        actually_set = False
-        if attrutil.has(eval_config, k):
-            setattr(eval_config, k, v)
-            actually_set = True
-
-        if attrutil.has(config, k):
-            setattr(config, k, v)
-            actually_set = True
-
-        if not actually_set:
-            print '*** Attribute not found:', k
-
-    return config
-
-
-def main():
-    from ggpzero.util.keras import init
-
-    init()
-
-    args = sys.argv[1:]
-    port = int(args[0])
-
-    generation = args[1]
-    conf = get_default_conf(generation)
-
-    if len(args) >= 2:
-        playouts_multiplier = int(args[2])
-        if playouts_multiplier == 0:
-            conf.playouts_per_iteration = 0
-        else:
-            conf.playouts_per_iteration *= playouts_multiplier
-
-    player = PUCTPlayer(conf=conf)
-
-    from ggplib.play import play_runner
-    play_runner(player, port)
-
-
-if __name__ == "__main__":
-    main()
