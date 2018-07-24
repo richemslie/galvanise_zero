@@ -299,10 +299,6 @@ class Games(object):
     def chess_150(self):
         return self._chess_like("chess_150", 151)
 
-    def chess_200(self):
-        assert False, "check steps"
-        return self._chess_like("chess_200", 200)
-
     def skirmishNew(self):
         assert False, "check steps"
         return self._chess_like("skirmishNew", 100)
@@ -352,3 +348,15 @@ class Games(object):
                         "a b c d e f g h".split(),
                         "1 2 3 4 5 6 7 8".split(),
                         [cell, capturing_piece, last_piece], [interim_status, control])
+
+    def connect6(self):
+        # 4 control channels (black/white place twice per turn)
+        controls = [simple_control("control", "black_turn0"),
+                    simple_control("control", "black_turn1"),
+                    simple_control("control", "white_turn0"),
+                    simple_control("control", "white_turn1")]
+        cell = simple_board_channels("cell", ["black", "white"])
+        return GameDesc("connect6",
+                        "1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19".split(),
+                        "1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19".split(),
+                        [cell], controls)

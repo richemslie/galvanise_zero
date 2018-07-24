@@ -43,7 +43,7 @@ namespace GGPZero {
         bool matchmode = false;
 
         // finalised nodes on (only set during backprop, so this turns it on)
-        bool backprop_finalised = false;
+        bool backprop_finalised = true;
 
         // < 0, off
         float top_visits_best_guess_converge_ratio = 0.8;

@@ -39,7 +39,7 @@ def test_game_descriptions():
     names = [name for name in dir(game_descs) if name[0] != "_"]
 
     names = ["breakthroughSmall", "breakthrough", "englishDraughts"]
-    names = ["gomoku_11x11"]
+    names = ["connect6"]
 
     for name in names:
         print
@@ -69,7 +69,7 @@ def test_game_descriptions():
 
         for i in range(25):
             print "move made", i
-            print sm.basestate_to_str(basestate)
+            print game_info.model.basestate_to_str(basestate)
             print transformer.state_to_channels(basestate.to_list())
 
             sm.update_bases(basestate)
