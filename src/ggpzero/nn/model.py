@@ -1,6 +1,6 @@
 from ggpzero.defs import confs
 
-from ggpzero.util.keras import is_channels_first, keras_models, keras_regularizers
+from ggpzero.util.keras import is_channels_first, keras_models, keras_regularizers, get_antirectifier
 from ggpzero.util.keras import keras_layers as klayers
 
 
@@ -9,11 +9,12 @@ def get_bn_axis():
 
 
 def act(x, activation, name):
-    if activation == "leakyrelu":
-        x = klayers.LeakyReLU(alpha=0.03, name=name)(x)
+    if activation == "crelu":
+        return get_antirectifier(name)(x)
+    elif activation == "leakyrelu":
+        return klayers.LeakyReLU(alpha=0.03, name=name)(x)
     else:
-        x = klayers.Activation(activation, name=name)(x)
-    return x
+        return klayers.Activation(activation, name=name)(x)
 
 
 def bn(x, name):
@@ -27,13 +28,18 @@ def conv2d_block(*args, **kwds):
     activation = kwds.pop("activation")
     name = kwds.pop('name')
 
+    do_bn = kwds.pop('do_bn', True)
+
     def block(x):
         x = klayers.Conv2D(*args,
                            name=name + '_conv2d',
+                           use_bias=False,
                            **kwds)(x)
 
-        x = bn(x, name + '_bn')
-        return act(x, activation, name + '_act')
+        if do_bn:
+            x = bn(x, name + '_bn')
+
+        return act(x, activation, name + '_' + activation)
 
     return block
 
@@ -148,7 +154,7 @@ def residual_block_v2(filter_size, prev_filter_size, kernel_size, num_convs,
 def get_network_model(conf):
     assert isinstance(conf, confs.NNModelConfig)
 
-    activation = 'leakyrelu' if conf.leaky_relu else 'elu'
+    activation = 'leakyrelu' if conf.leaky_relu else 'relu'
 
     # inputs:
     if is_channels_first():
@@ -176,7 +182,8 @@ def get_network_model(conf):
         incr_size = 0
 
         # XXX hard coding layers
-        for i, c in enumerate([1, 1, 1, 1, 1, 1, 2, 2, 2, 3, 2, 2, 2, 1, 1, 1, 1, 1, 1]):
+        # for i, c in enumerate([1, 1, 1, 1, 1, 1, 2, 2, 2, 3, 2, 2, 2, 1, 1, 1, 1, 1, 1]):
+        for i, c in enumerate([1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1]):
             if i > 0 and i % 3 == 0:
                 filter_size += incr_size
 
@@ -216,8 +223,8 @@ def get_network_model(conf):
         # XXX 2, should be based on size of policy...
         to_flatten = conv2d_block(2, 1,
                                   name='to_flatten_policy_head_%s' % idx,
-                                  padding='valid',
-                                  activation=activation)(layer)
+                                  activation=activation,
+                                  padding='valid')(layer)
 
         flat = klayers.Flatten()(to_flatten)
 
@@ -252,13 +259,15 @@ def get_network_model(conf):
 
         to_flatten1 = conv2d_block(32, 1,
                                    name='reward_flatten1',
-                                   padding='valid',
-                                   activation=activation)(average_layer)
+                                   activation=activation,
+                                   do_bn=False,
+                                   padding='valid')(average_layer)
 
         to_flatten2 = conv2d_block(1, 1,
                                    name='reward_flatten2',
-                                   padding='valid',
-                                   activation=activation)(layer)
+                                   activation=activation,
+                                   do_bn=False,
+                                   padding='valid')(layer)
 
         flat = klayers.concatenate([klayers.Flatten()(to_flatten1),
                                     klayers.Flatten()(to_flatten2)])
@@ -267,8 +276,7 @@ def get_network_model(conf):
             flat = klayers.Dropout(conf.dropout_rate_value)(flat)
 
         hidden = klayers.Dense(256, name="value_hidden")(flat)
-        #hidden = klayers.BatchNormalization(axis=get_bn_axis(), name="value_hidden_bn")(hidden)
-        hidden = klayers.Activation('relu', name="value_hidden_act")(hidden)
+        hidden = act(hidden, 'crelu', name="value_hidden_act")
 
         value_head = klayers.Dense(conf.role_count,
                                    name="value")(hidden)
