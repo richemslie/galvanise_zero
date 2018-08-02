@@ -24,6 +24,26 @@ def is_channels_first():
     return K.image_data_format() == "channels_first"
 
 
+def antirectifier(inputs):
+    inputs -= K.mean(inputs, axis=1, keepdims=True)
+    inputs = K.l2_normalize(inputs, axis=1)
+    pos = K.relu(inputs)
+    neg = K.relu(-inputs)
+    return K.concatenate([pos, neg], axis=1)
+
+
+def antirectifier_output_shape(input_shape):
+    shape = list(input_shape)
+    assert len(shape) == 2  # only valid for 2D tensors
+    shape[-1] *= 2
+    return tuple(shape)
+
+
+def get_antirectifier(name):
+    # output_shape=antirectifier_output_shape
+    return keras_layers.Lambda(antirectifier, name=name)
+
+
 def constrain_resources_tf():
     ' constrain resource as tensorflow likes to assimilate your machine rendering it useless '
 
