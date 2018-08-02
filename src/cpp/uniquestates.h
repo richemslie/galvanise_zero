@@ -1,5 +1,7 @@
 #pragma once
 
+#include "gdltransformer.h"
+
 #include <statemachine/basestate.h>
 #include <statemachine/statemachine.h>
 
@@ -9,8 +11,13 @@
 namespace GGPZero {
     class UniqueStates {
     public:
-        UniqueStates(const GGPLib::StateMachineInterface* sm) :
-            sm(sm->dupe()) {
+        UniqueStates(const GGPLib::StateMachineInterface* sm,
+                     const GGPZero::GdlBasesTransformer* transformer,
+                     int max_num_dupes=1) :
+            sm(sm->dupe()),
+            max_num_dupes(max_num_dupes) {
+
+            this->lookup = GGPLib::BaseState::makeMaskedMap <int>(transformer->createHashMask(this->sm->newBaseState()));
         }
 
         ~UniqueStates() {
@@ -21,8 +28,12 @@ namespace GGPZero {
         void add(const GGPLib::BaseState* bs) {
             std::lock_guard <std::mutex> lk(this->mut);
 
-            GGPLib::BaseState::HashSet::const_iterator it = this->unique_states.find(bs);
-            if (it != this->unique_states.end()) {
+            auto it = this->lookup->find(bs);
+            if (it != this->lookup->end()) {
+                if (it->second < max_num_dupes) {
+                    it->second += 1;
+                }
+
                 return;
             }
 
@@ -31,13 +42,20 @@ namespace GGPZero {
             new_bs->assign(bs);
             this->states_allocated.push_back(new_bs);
 
-            this->unique_states.insert(new_bs);
+            this->lookup->emplace(new_bs, 1);
         }
 
-        bool isUnique(GGPLib::BaseState* bs) {
+        bool isUnique(GGPLib::BaseState* bs, int depth) {
             std::lock_guard <std::mutex> lk(this->mut);
-            GGPLib::BaseState::HashSet::const_iterator it = this->unique_states.find(bs);
-            return it == this->unique_states.end();
+            const auto it = this->lookup->find(bs);
+            if (it != this->lookup->end()) {
+                int allowed_dupes = std::max(2, (this->max_num_dupes - 5 * depth));
+                if (it->second >= allowed_dupes) {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         void clear() {
@@ -47,14 +65,16 @@ namespace GGPZero {
                 ::free(bs);
             }
 
-            this->unique_states.clear();
+            this->lookup->clear();
             this->states_allocated.clear();
         }
 
     private:
         const GGPLib::StateMachineInterface* sm;
-        GGPLib::BaseState::HashSet unique_states;
+        const int max_num_dupes;
+
         std::mutex mut;
+        GGPLib::BaseState::HashMapMasked <int>* lookup;
         std::vector <GGPLib::BaseState*> states_allocated;
     };
 }
