@@ -171,7 +171,7 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
         const PuctNodeChild* choice = nullptr;
 
         // not atomic, but good enough
-        if (man.isUnique(node->getBaseState())) {
+        if (man.isUnique(node->getBaseState(), node->game_depth)) {
             man.add(node->getBaseState());
 
             // run the simulations
