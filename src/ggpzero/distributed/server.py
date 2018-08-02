@@ -247,22 +247,19 @@ class ServerBroker(Broker):
             # need to check it isn't a duplicate and drop it
             if state in self.unique_states_set:
                 dupe_count += 1
-
             else:
                 self.unique_states_set.add(state)
                 self.unique_states.append(state)
-                self.accumulated_samples.append(sample)
 
-                assert len(self.unique_states_set) == len(self.accumulated_samples)
+            self.accumulated_samples.append(sample)
 
-        return dupe_count
+        if dupe_count:
+            log.warning("seen %s duplicate state(s)" % dupe_count)
 
     def on_sample_response(self, worker, msg):
         info = self.workers[worker]
         if len(msg.samples) > 0:
-            dupe_count = self.add_new_samples(msg.samples)
-            if dupe_count:
-                log.warning("dropping %s inflight duplicate state(s)" % dupe_count)
+            self.add_new_samples(msg.samples)
 
             if msg.duplicates_seen:
                 log.info("worker saw %s duplicates" % msg.duplicates_seen)
@@ -389,7 +386,6 @@ class ServerBroker(Broker):
 
         self.checkpoint()
 
-        assert len(self.accumulated_samples) == len(self.unique_states)
         assert len(self.unique_states) == len(self.unique_states_set)
 
         # store the server config
