@@ -59,6 +59,10 @@ namespace GGPZero {
             this->number_actual_resigns++;
         }
 
+        void incrAbortsGameLength() {
+            this->number_aborts_game_length++;
+        }
+
     public:
         void startSelfPlayers(const SelfPlayConfig* config);
 
@@ -98,7 +102,6 @@ namespace GGPZero {
         ReadyEvent ready_event;
         PredictDoneEvent predict_done_event;
 
-
         // stats
         int saw_dupes;
         int no_samples_taken;
@@ -106,5 +109,6 @@ namespace GGPZero {
         int false_positive_resigns1;
         int number_early_run_to_ends;
         int number_actual_resigns;
+        int number_aborts_game_length;
     };
 }

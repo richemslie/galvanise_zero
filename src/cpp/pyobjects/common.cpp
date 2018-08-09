@@ -146,6 +146,7 @@ static GGPZero::PuctV2::PuctConfig* createPuctConfigV2(PyObject* dict) {
 
     config->minimax_backup_ratio = asFloat("minimax_backup_ratio");
     config->minimax_required_visits = asInt("minimax_required_visits");
+    config->minimax_threshold_visits = asInt("minimax_threshold_visits");
 
     config->top_visits_best_guess_converge_ratio = asFloat("top_visits_best_guess_converge_ratio");
 
@@ -211,6 +212,15 @@ static SelfPlayConfig* createSelfPlayConfig(PyObject* dict) {
     config->score_puct_config = ::createPuctConfig(asDict("score_puct_config"));
     config->score_iterations = asInt("score_iterations");
     config->sample_to_end_pct = asFloat("sample_to_end_pct");
+
+    config->abort_max_length = asInt("abort_max_length");
+    config->number_repeat_states_draw = asInt("number_repeat_states_draw");
+    config->repeat_states_score = asFloat("repeat_states_score");
+
+    config->pct_actually_resign = asFloat("pct_actually_resign");
+    config->run_to_end_early_pct = asFloat("run_to_end_early_pct");
+    config->run_to_end_early_score = asFloat("run_to_end_early_score");
+    config->run_to_end_minimum_game_depth = asInt("run_to_end_minimum_game_depth");
 
     return config;
 }

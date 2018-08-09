@@ -40,6 +40,7 @@ namespace GGPZero::PuctV2 {
         // < 0, off
         float minimax_backup_ratio = 0.75;
         uint32_t minimax_required_visits = 200;
+        uint32_t minimax_threshold_visits = 200;
 
         // < 0, off
         float top_visits_best_guess_converge_ratio = 0.8;

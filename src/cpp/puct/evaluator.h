@@ -30,11 +30,16 @@ namespace GGPZero {
     class PuctEvaluator {
     public:
         PuctEvaluator(GGPLib::StateMachineInterface* sm, const PuctConfig* conf,
-                      NetworkScheduler* scheduler);
+                      NetworkScheduler* scheduler,
+                      const GGPZero::GdlBasesTransformer* transformer);
         virtual ~PuctEvaluator();
 
     public:
         void updateConf(const PuctConfig* conf, const ExtraPuctConfig* extra=nullptr);
+
+        // special config for self play only
+        void setRepeatStateDraw(int number_repeat_states_draw,
+                                float repeat_states_score);
 
     private:
         void addNode(PuctNode* new_node);
@@ -42,6 +47,8 @@ namespace GGPZero {
 
         void expandChild(PuctNode* parent, PuctNodeChild* child, bool expansion_time=false);
         PuctNode* createNode(PuctNode* parent, const GGPLib::BaseState* state, bool expansion_time=false);
+
+        void checkDrawStates(const PuctNode* node, PuctNode* next);
 
         // set dirichlet noise on node
         bool setDirichletNoise(int depth);
@@ -86,6 +93,11 @@ namespace GGPZero {
 
         const PuctConfig* conf;
         const ExtraPuctConfig* extra;
+
+        // introduce a different way of doing things
+        int number_repeat_states_draw;
+        float repeat_states_score;
+        GGPLib::BaseState::EqualsMasked* masked_bs_equals;
 
         NetworkScheduler* scheduler;
 

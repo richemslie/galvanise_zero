@@ -29,18 +29,20 @@ SelfPlay::SelfPlay(SelfPlayManager* manager, const SelfPlayConfig* conf, PuctEva
     role_count(role_count),
     identifier(identifier),
     match_count(0) {
-
-    this->extra = new SelfPlayExtraConfig;
 }
 
 
 SelfPlay::~SelfPlay() {
-    delete this->extra;
 }
 
 PuctNode* SelfPlay::selectNode() {
     // reset the puct evaluator and establish root
     this->pe->reset(0);
+
+    if (this->conf->number_repeat_states_draw != -1) {
+        pe->setRepeatStateDraw(-1, -1);
+    }
+
     PuctNode* node = this->pe->establishRoot(this->initial_state);
 
     this->pe->updateConf(this->conf->select_puct_config);
@@ -61,6 +63,10 @@ PuctNode* SelfPlay::selectNode() {
         const PuctNodeChild* choice = this->pe->onNextMove(iterations);
         node = this->pe->fastApplyMove(choice);
         game_depth++;
+
+        if (this->conf->abort_max_length > 0 && game_depth > this->conf->abort_max_length) {
+            break;
+        }
     }
 
     ASSERT(node->game_depth == game_depth);
@@ -151,11 +157,27 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
 
     // sampling:
     this->pe->updateConf(this->conf->sample_puct_config);
+
+    if (this->conf->number_repeat_states_draw != -1) {
+        pe->setRepeatStateDraw(this->conf->number_repeat_states_draw,
+                               this->conf->repeat_states_score);
+    }
+
     const int iterations = this->conf->sample_iterations;
 
     auto& man = *this->manager->getUniqueStates();
 
     while (true) {
+
+        if (this->conf->abort_max_length > 0 &&
+            node->game_depth > this->conf->abort_max_length) {
+
+            K273::l_verbose("Exiting collectSamples - abort_max_length exceeded %d/%d",
+                            node->game_depth, this->conf->abort_max_length);
+
+            break;
+        }
+
         const int sample_count = this->game_samples.size();
         if (sample_count >= this->conf->max_number_of_samples) {
             if (this->collect_until_finalised) {
@@ -216,7 +238,7 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
         // note, that this is done every turn, so over n time steps, more likely to actually resign
         if (this->has_resigned) {
             if (this->game_samples.size() > 1) {
-                if (this->rng.get() < this->extra->pct_actually_resign) {
+                if (this->rng.get() < this->conf->pct_actually_resign) {
                     this->manager->incrActualResigns();
                     break;
                 }
@@ -231,7 +253,7 @@ int SelfPlay::runToEnd(PuctNode* node, std::vector <float>& final_scores) {
     this->pe->updateConf(this->conf->score_puct_config);
     const int iterations = this->conf->score_iterations;
 
-    const bool run_to_end_can_resign = this->rng.get() < this->extra->run_to_end_early_pct;
+    const bool run_to_end_can_resign = this->rng.get() < this->conf->run_to_end_early_pct;
 
     // simply run the game to end
     while (true) {
@@ -248,10 +270,10 @@ int SelfPlay::runToEnd(PuctNode* node, std::vector <float>& final_scores) {
 
         if (this->has_resigned &&
             run_to_end_can_resign &&
-            node->game_depth > this->extra->run_to_end_minimum_game_depth) {
+            node->game_depth > this->conf->run_to_end_minimum_game_depth) {
 
             const float lead_score = node->getCurrentScore(node->lead_role_index);
-            if (lead_score < this->extra->run_to_end_early_score) {
+            if (lead_score < this->conf->run_to_end_early_score) {
                 this->manager->incrEarlyRunToEnds();
 
                 for (int ri=0; ri<this->role_count; ri++) {
@@ -264,6 +286,11 @@ int SelfPlay::runToEnd(PuctNode* node, std::vector <float>& final_scores) {
 
                 return node->game_depth;
             }
+        }
+
+        if (this->conf->abort_max_length > 0 &&
+            node->game_depth > this->conf->abort_max_length) {
+            return -1;
         }
     }
 
@@ -387,6 +414,11 @@ void SelfPlay::playOnce() {
     // final stage, scoring:
     std::vector <float> final_scores;
     const int game_depth = this->runToEnd(node, final_scores);
+
+    if (game_depth == -1) {
+        this->manager->incrAbortsGameLength();
+        return;
+    }
 
     this->addSamples(final_scores, starting_sample_depth, game_depth);
 }

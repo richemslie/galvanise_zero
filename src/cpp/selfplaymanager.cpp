@@ -31,7 +31,8 @@ SelfPlayManager::SelfPlayManager(GGPLib::StateMachineInterface* sm,
     false_positive_resigns0(0),
     false_positive_resigns1(0),
     number_early_run_to_ends(0),
-    number_actual_resigns(0) {
+    number_actual_resigns(0),
+    number_aborts_game_length(0) {
 
     this->scheduler = new NetworkScheduler(this->transformer,
                                            this->sm->getRoleCount(),
@@ -130,7 +131,9 @@ void SelfPlayManager::startSelfPlayers(const SelfPlayConfig* config) {
         // the statemachine is shared between all puctevaluators of this mananger.  Just be careful.
         PuctEvaluator* pe = new PuctEvaluator(this->sm,
                                               config->select_puct_config,
-                                              this->scheduler);
+                                              this->scheduler,
+                                              this->transformer);
+
         std::string self_play_identifier = this->identifier + K273::fmtString("_%d", ii);
         SelfPlay* sp = new SelfPlay(this, config, pe, this->sm->getInitialState(),
                                     this->sm->getRoleCount(), self_play_identifier);
@@ -185,5 +188,11 @@ void SelfPlayManager::reportAndResetStats() {
     if (this->number_actual_resigns) {
         K273::l_info("Number of actual resigns %d", this->number_actual_resigns);
         this->number_actual_resigns = 0;
+    }
+
+    if (this->number_aborts_game_length) {
+        K273::l_info("Number of aborts (game length exceeded) %d",
+                     this->number_aborts_game_length);
+        this->number_aborts_game_length = 0;
     }
 }

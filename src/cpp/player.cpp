@@ -28,7 +28,7 @@ Player::Player(GGPLib::StateMachineInterface* sm,
     // ... and then the evaluator...
     // dupe statemachine here, as the PuctEvaluator thinks it is sharing a statemachine (ie it
     // doesn't dupe the statemachine itself)
-    this->evaluator = new PuctEvaluator(sm->dupe(), conf, this->scheduler);
+    this->evaluator = new PuctEvaluator(sm->dupe(), conf, this->scheduler, transformer);
     ExtraPuctConfig* extra_conf = new ExtraPuctConfig;
     extra_conf->matchmode = true;
     this->evaluator->updateConf(conf, extra_conf);

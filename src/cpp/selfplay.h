@@ -34,13 +34,15 @@ namespace GGPZero {
         float resign1_false_positive_retry_percentage;
 
         float sample_to_end_pct;
-    };
 
-    struct SelfPlayExtraConfig {
-        float pct_actually_resign = 0.15;
-        float run_to_end_early_pct = 0.2;
-        float run_to_end_early_score = 0.01;
-        float run_to_end_minimum_game_depth = 60;
+        int abort_max_length;
+        int number_repeat_states_draw;
+        float repeat_states_score;
+
+        float pct_actually_resign;
+        float run_to_end_early_pct;
+        float run_to_end_early_score;
+        int run_to_end_minimum_game_depth;
     };
 
     class SelfPlay {
@@ -70,7 +72,6 @@ namespace GGPZero {
     private:
         SelfPlayManager* manager;
         const SelfPlayConfig* conf;
-        const SelfPlayExtraConfig* extra;
 
         // only one evaluator - allow to swap in/out config
         PuctEvaluator* pe;

@@ -3,6 +3,7 @@
 #include "puct/node.h"
 
 #include "scheduler.h"
+#include "gdltransformer.h"
 
 #include <k273/util.h>
 #include <k273/logging.h>
@@ -23,10 +24,14 @@ using namespace GGPZero;
 ///////////////////////////////////////////////////////////////////////////////
 
 PuctEvaluator::PuctEvaluator(GGPLib::StateMachineInterface* sm,
-                             const PuctConfig* conf, NetworkScheduler* scheduler) :
+                             const PuctConfig* conf, NetworkScheduler* scheduler,
+                             const GGPZero::GdlBasesTransformer* transformer) :
     sm(sm),
     basestate_expand_node(nullptr),
     conf(conf),
+    extra(nullptr),
+    number_repeat_states_draw(-1),
+    repeat_states_score(-1.0f),
     scheduler(scheduler),
     identifier("PuctEvaluator"),
     game_depth(0),
@@ -37,6 +42,8 @@ PuctEvaluator::PuctEvaluator(GGPLib::StateMachineInterface* sm,
     node_allocated_memory(0) {
 
     this->basestate_expand_node = this->sm->newBaseState();
+    this->masked_bs_equals = new GGPLib::BaseState::EqualsMasked(transformer->createHashMask(this->sm->newBaseState()));
+
     this->updateConf(this->conf);
 }
 
@@ -87,6 +94,12 @@ void PuctEvaluator::updateConf(const PuctConfig* conf, const ExtraPuctConfig* ex
 
     this->conf = conf;
     this->extra = extra_conf;
+}
+
+void PuctEvaluator::setRepeatStateDraw(int number_repeat_states_draw,
+                                       float repeat_states_score) {
+    this->number_repeat_states_draw = number_repeat_states_draw;
+    this->repeat_states_score = repeat_states_score;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -143,6 +156,32 @@ PuctNode* PuctEvaluator::createNode(PuctNode* parent, const GGPLib::BaseState* s
     }
 
     return new_node;
+}
+
+void PuctEvaluator::checkDrawStates(const PuctNode* node, PuctNode* next) {
+    bool repeated = false;
+    for (int ii=0; ii<this->number_repeat_states_draw; ii++) {
+        if (node == nullptr) {
+            break;
+        }
+
+        if ((*this->masked_bs_equals)(node->getBaseState(),
+                                      next->getBaseState())) {
+            repeated = true;
+            break;
+        }
+
+        node = node->parent;
+    }
+
+    if (repeated) {
+        for (int ii=0; ii<this->sm->getRoleCount(); ii++) {
+            next->setCurrentScore(ii, this->repeat_states_score);
+        }
+
+        next->is_finalised = true;
+        //K273::l_verbose("setting node to finalised for repeated state @ depth %d", next->game_depth);
+    }
 }
 
 bool PuctEvaluator::setDirichletNoise(int depth) {
@@ -426,6 +465,11 @@ int PuctEvaluator::treePlayout() {
         // if does not exist, then create it (will incur a nn prediction)
         if (child->to_node == nullptr) {
             this->expandChild(current, child, true);
+
+            if (this->number_repeat_states_draw > 0) {
+                this->checkDrawStates(current, child->to_node);
+            }
+
             current = child->to_node;
 
             // special case if number of children is 1, we just bypass it and inherit next value
