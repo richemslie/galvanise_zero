@@ -51,6 +51,38 @@ class BoardChannels(object):
 
 
 @register_attrs
+class ApplySymmetry(object):
+    base_term = attribute("cell")
+
+    # these are index to the term identifying the coordinates
+    x_term_idx = attribute(1)
+    y_term_idx = attribute(2)
+
+
+@register_attrs
+class Symmetries(object):
+    ''' defines the bases which symmetries can be applied  '''
+
+    # list of ApplySymmetry
+    apply_bases = attribute(attr_factory(list))
+
+    # list of terms
+    skip_bases = attribute(attr_factory(list))
+
+    # list of ApplySymmetry
+    apply_actions = attribute(attr_factory(list))
+
+    # list of terms
+    skip_actions = attribute(attr_factory(list))
+
+    # do horizontal reflection
+    do_reflection = attribute(False)
+
+    # do x4 90 rotations
+    do_rotations = attribute(False)
+
+
+@register_attrs
 class GameDesc(object):
     game = attribute("checkers")
 
@@ -274,9 +306,10 @@ class Games(object):
                         "6 5 4 3 2 1".split(),
                         [cell], [control])
 
-    def _chess_like(self, game, steps):
+    def _chess_like(self, game, steps=None):
         control = binary_control("control", "white", "black")
-        step = step_control("step", 1, steps)
+        if steps is not None:
+            step = step_control("step", 1, steps)
 
         has_moveds = []
         for s in "kingHasMoved hRookHasMoved aRookHasMoved".split():
@@ -287,17 +320,21 @@ class Games(object):
         cell = BoardChannels("cell", 1, 2, [BoardTerm(3, "white black".split()),
                                             BoardTerm(4, "king rook pawn knight queen bishop".split())])
 
+        controls = [control] + has_moveds
+        if steps is not None:
+            controls.append(step)
+
         return GameDesc(game,
                         "a b c d e f g h".split(),
                         "1 2 3 4 5 6 7 8".split(),
-                        [cell], [control, step] + has_moveds)
+                        [cell], controls)
 
     def speedChess(self):
         assert False, "check steps"
         return self._chess_like("speedChess", 150)
 
-    def chess_150(self):
-        return self._chess_like("chess_150", 151)
+    def chess_200(self):
+        return self._chess_like("chess_200")
 
     def skirmishNew(self):
         assert False, "check steps"
@@ -360,3 +397,15 @@ class Games(object):
                         "1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19".split(),
                         "1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19".split(),
                         [cell], controls)
+
+
+class GameSymmetries(object):
+    ''' class is only here to create a namespace '''
+
+    def connect6(self):
+        Symmetries(skip_bases=["control"],
+                   apply_bases=[ApplySymmetry("cell", 1, 2)],
+                   skip_actions=["noop"],
+                   apply_actions=[ApplySymmetry("place", 1, 2)],
+                   do_rotations=True,
+                   do_reflection=True)

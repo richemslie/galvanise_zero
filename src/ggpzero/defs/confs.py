@@ -84,6 +84,7 @@ class PUCTEvaluatorV2Config(object):
 
     minimax_backup_ratio = attribute(0.75)
     minimax_required_visits = attribute(200)
+    minimax_threshold_visits = attribute(200)
 
     top_visits_best_guess_converge_ratio = attribute(0.8)
 
@@ -144,6 +145,23 @@ class SelfPlayConfig(object):
     resign0_false_positive_retry_percentage = attribute(0.5)
     resign1_score_probability = attribute(0.975)
     resign1_false_positive_retry_percentage = attribute(0.1)
+
+    # aborts play if play depth exceeds this max_length (-1 off)
+    abort_max_length = attribute(-1)
+
+    # lookback to see if states are draw
+    number_repeat_states_draw = attribute(-1)
+
+    # score to back prop, to try and avoid repeat states
+    repeat_states_score = attribute(0.45)
+
+    # chance of really resigning.  Will exit collecting.
+    pct_actually_resign = attribute(0.4)
+
+    # run to end (or scoring) - pct -> chance to actually run, score to exit on
+    run_to_end_early_pct = attribute(0.2)
+    run_to_end_early_score = attribute(0.01)
+    run_to_end_minimum_game_depth = attribute(30)
 
 
 @register_attrs
