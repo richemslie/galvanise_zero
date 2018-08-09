@@ -29,6 +29,11 @@ class PUCTPlayer(MatchPlayer):
         super().__init__(self.identifier)
         self.sm = None
 
+    def cleanup(self):
+        log.info("PUCTPlayer.cleanup() called")
+        if self.poller is not None:
+            self.poller.player_reset(0)
+
     def on_meta_gaming(self, finish_time):
         if self.conf.verbose:
             log.info("PUCTPlayer, match id: %s" % self.match.match_id)
