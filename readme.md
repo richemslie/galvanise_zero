@@ -45,6 +45,8 @@ like to challenge it to a game of
  * Hex 13x13
  * Hex 11x11
  * Amazons 10x10
+ * Amazons Cross
+ * Connect 6
 
-Breakthrough and Reversi have retired from any further competitions on LG.  It is still possible to
+Reversi games have retired from any further competitions on LG.  It is still possible to
 play these games via an invite.
