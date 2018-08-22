@@ -59,7 +59,7 @@ PuctEvaluator::PuctEvaluator(GGPLib::StateMachineInterface* sm, NetworkScheduler
 
     this->basestate_expand_node = this->sm->newBaseState();
 
-    this->lookup = GGPLib::BaseState::makeMaskedMap <PuctNode*>(transformer->createHashMask(this->basestate_expand_node));
+    this->lookup = GGPLib::BaseState::makeMaskedMap <PuctNode*>(transformer->createHashMask(this->sm->newBaseState()));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -91,11 +91,13 @@ void PuctEvaluator::updateConf(const PuctConfig* conf) {
                         conf->temperature, conf->depth_temperature_start, conf->depth_temperature_stop,
                         conf->depth_temperature_max, conf->depth_temperature_increment, conf->random_scale);
 
-        K273::l_verbose("scaled (at %d, reduce %.2f/%.2f). converge_ratio: %.2f, minimax (ratio %.2f, reqd_visits %d)",
+        K273::l_verbose("scaled (at %d, reduce %.2f/%.2f). converge_ratio: %.2f, minimax (ratio %.2f, reqd/thres %d/%d)",
                         conf->scaled_visits_at, conf->scaled_visits_reduce,
                         conf->scaled_visits_finalised_reduce,
                         conf->top_visits_best_guess_converge_ratio,
-                        conf->minimax_backup_ratio, conf->minimax_required_visits);
+                        conf->minimax_backup_ratio,
+                        conf->minimax_required_visits,
+                        conf->minimax_threshold_visits);
 
         K273::l_verbose("think %.1f, relaxed %d/%d, policy_dilution_visits=%d, batch_size=%d",
                         conf->think_time, conf->converge_relaxed, conf->converge_non_relaxed,
@@ -181,14 +183,14 @@ PuctNode* PuctEvaluator::createNode(PuctNode* parent, const GGPLib::BaseState* s
     }
 
     if (new_node->is_finalised) {
-        // XXX ZZZ tmp hack to try and focus more on winning lines
+        // XXX tmp hack to try and focus more on winning lines
+        // (XXX actually a very good hack... maybe make it less hacky somehow)
         for (int ii=0; ii<this->sm->getRoleCount(); ii++) {
             const float s = new_node->getCurrentScore(ii);
             if (s > 0.99) {
                 new_node->setCurrentScore(ii, s * 1.05);
             }
         }
-
 
         return new_node;
     }
@@ -301,7 +303,6 @@ bool PuctEvaluator::converged(int count) const {
     return true;
 }
 
-
 PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
     ASSERT(!node->isTerminal());
     ASSERT(node->num_children > 0);
@@ -400,14 +401,18 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
             continue;
         }
 
-       // we use doubles throughtout, for more precision
+        // we use doubles throughtout, for more precision
         double child_score = prior_score;
-        double child_pct = c->policy_prob;
-        if (this->conf->policy_dilution_visits > 0) {
-            const double xprob = 1.0 / (double) node->num_children;
-            const double coef = std::min(1.0, this->conf->policy_dilution_visits / (double) node->visits);
-            child_pct = coef * c->policy_prob + (1.0 - coef) * xprob;
-        }
+        const int traversals = c->traversals + 1;
+
+        // add inflight_visits to exploration score
+        const double inflight_visits = c->to_node != nullptr ? c->to_node->inflight_visits : 0;
+
+        // standard PUCT as per AG0 paper
+        double exploration_score = c->policy_prob * sqrt_node_visits / (traversals + inflight_visits);
+
+        // always base exploration_score on constant (which self tunes)
+        exploration_score *= node->puct_constant;
 
         if (c->to_node != nullptr) {
             PuctNode* cn = c->to_node;
@@ -431,7 +436,7 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
 
                 } else {
                     // no more exploration for you
-                    child_pct = 0.0;
+                    exploration_score = 0.0;
                 }
             }
 
@@ -441,12 +446,6 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
                 best_child_score = c;
             }
         }
-
-        // add inflight_visits to exploration score
-        const double inflight_visits = c->to_node != nullptr ? c->to_node->inflight_visits : 0;
-        const double denominator = c->traversals + inflight_visits + 1;
-
-        const double exploration_score = node->puct_constant * child_pct * (sqrt_node_visits / denominator);
 
         // (more exploration) apply score discount for massive number of inflight visits
         // XXX rng - kind of expensive here?  tried using 1 and 0.25... has quite an effect on exploration.
@@ -496,12 +495,10 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
 
 void PuctEvaluator::backUpMiniMax(float* new_scores, const PathElement& cur) {
 
-    // best advice is not to mess with this.  Or of doing it would be best to calcualte in select
-    // how much exploration it is.  Then based on how far off the exploration is then back prop
-    // that.  Doing anything more complicated here doesn't make any sense.
-
-    // Not that currently we store select debug on the node, we need to store those the path.
-    // Especially if going down the multiple select/backprops/
+    const int role_index = cur.node->lead_role_index;
+    if (role_index == -1) {
+        return;
+    }
 
     // valid and enabled?
     if (cur.best == nullptr ||
@@ -510,39 +507,37 @@ void PuctEvaluator::backUpMiniMax(float* new_scores, const PathElement& cur) {
         return;
     }
 
-    // enough visits when children all expanded?
-    if (cur.num_children_expanded == cur.node->num_children &&
-        cur.node->visits < this->conf->minimax_required_visits) {
-        return;
-    }
-
     // was a good choice?
     if (cur.choice == cur.best) {
         return;
     }
 
+    ASSERT(this->conf->minimax_required_visits > 0 &&
+           this->conf->minimax_threshold_visits > this->conf->minimax_required_visits);
+
+    // nothing to do in this case
+    if (cur.node->visits > this->conf->minimax_threshold_visits) {
+        return;
+    }
+
     PuctNode* best = cur.best->to_node;
-    const int role_index = cur.node->lead_role_index;
+    double ratio = this->conf->minimax_backup_ratio;
 
-    if (role_index != -1) {
-        float best_score = best->getCurrentScore(role_index);
+    // scale the ratio towards zero as it visits approaches this->conf->minimax_required_visits.
+    if (cur.num_children_expanded == cur.node->num_children &&
+        cur.node->visits > this->conf->minimax_required_visits) {
+        double dem = this->conf->minimax_threshold_visits - this->conf->minimax_required_visits;
+        ratio -= ratio * ((cur.node->visits - this->conf->minimax_required_visits) / dem);
 
-        // always the optimist
-        bool improving = new_scores[role_index] > best_score;
+        // clamp to make sure no rounding issues
+        ratio = std::max(std::min(1.0, ratio), 0.0);
+    }
 
-        // if it looks like it improving, then let it go, i mean, I am all for
-        // exploration - but does it have to mess up the tree in the process?
-
-        if (!improving) {
-            for (int ii=0; ii<this->sm->getRoleCount(); ii++) {
-                double r = this->conf->minimax_backup_ratio;
-                new_scores[ii] = (r * best->getCurrentScore(ii) +
-                                  (1 - r) * new_scores[ii]);
-            }
-        }
+    for (int ii=0; ii<this->sm->getRoleCount(); ii++) {
+        new_scores[ii] = (ratio * best->getCurrentScore(ii) +
+                          (1.0 - ratio) * new_scores[ii]);
     }
 }
-
 
 void PuctEvaluator::backPropagate(float* new_scores, const Path& path) {
     const int role_count = this->sm->getRoleCount();
@@ -800,13 +795,14 @@ void PuctEvaluator::playoutMain(double end_time) {
         // use think time:
         // hacked up so can run in reasonable times during ICGA
         if (use_think_time && iterations % 20 == 0 && K273::get_time() > (start_time + 2.0)) {
-            //const float our_score = this->root->getCurrentScore(our_role_index);
-            //if (our_score > 0.99 || our_score < 0.010) {
+
+            // const float our_score = this->root->getCurrentScore(our_role_index);
+            // if (our_score > 0.99 || our_score < 0.010) {
             //    if (this->converged(2)) {
             //        K273::l_warning("Done done (simple converge)");
             //        break;
             //    }
-            //}
+            // }
 
             // if (our_score > 0.97 || our_score < 0.03) {
             //     if (elapsed(0.25) && this->converged(this->conf->converge_non_relaxed)) {
@@ -1022,7 +1018,7 @@ const PuctNodeChild* PuctEvaluator::onNextMove(int max_evaluations, double end_t
     this->stats.reset();
     this->do_playouts = true;
 
-    this->normaliseRootNode();
+    //this->normaliseRootNode();
 
     // this will be spawned as a coroutine (see addRunnable() below)
     int worker_count = 0;

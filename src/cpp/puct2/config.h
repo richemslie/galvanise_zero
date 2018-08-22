@@ -54,6 +54,7 @@ namespace GGPZero::PuctV2 {
 
         int batch_size = 32;
 
+        // XXX not used currently
         int policy_dilution_visits = -1;
 
         // -1 is off

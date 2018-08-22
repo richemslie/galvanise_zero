@@ -251,25 +251,41 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
 
 int SelfPlay::runToEnd(PuctNode* node, std::vector <float>& final_scores) {
     this->pe->updateConf(this->conf->score_puct_config);
+
     const int iterations = this->conf->score_iterations;
+    const bool run_to_end_can_resign = (this->has_resigned &&
+                                        this->rng.get() < this->conf->run_to_end_early_pct);
 
-    const bool run_to_end_can_resign = this->rng.get() < this->conf->run_to_end_early_pct;
-
-    // simply run the game to end
-    while (true) {
-        if (node->is_finalised) {
-            break;
+    auto done = [this] (const PuctNode* node) {
+        if (node->isTerminal()) {
+            return true;
         }
 
+        if (this->conf->abort_max_length > 0) {
+            if (node->game_depth > this->conf->abort_max_length) {
+                return true;
+            }
+
+        } else {
+            if (node->is_finalised) {
+                return true;
+            }
+        }
+
+        return false;
+    };
+
+    // simply run the game to end
+    while (!done(node)) {
         const PuctNodeChild* choice = this->pe->onNextMove(iterations);
         node = this->pe->fastApplyMove(choice);
 
-        if (node->is_finalised) {
+        // XXX do we need this?  node should still be ok.   XXX check & remove.
+        if (node->isTerminal()) {
             break;
         }
 
-        if (this->has_resigned &&
-            run_to_end_can_resign &&
+        if (run_to_end_can_resign &&
             node->game_depth > this->conf->run_to_end_minimum_game_depth) {
 
             const float lead_score = node->getCurrentScore(node->lead_role_index);
@@ -287,11 +303,11 @@ int SelfPlay::runToEnd(PuctNode* node, std::vector <float>& final_scores) {
                 return node->game_depth;
             }
         }
+    }
 
-        if (this->conf->abort_max_length > 0 &&
-            node->game_depth > this->conf->abort_max_length) {
-            return -1;
-        }
+    if (this->conf->abort_max_length > 0 &&
+        node->game_depth > this->conf->abort_max_length) {
+        return -1;
     }
 
     for (int ri=0; ri<this->role_count; ri++) {

@@ -47,9 +47,9 @@ namespace GGPZero {
 
         // < 0, off
         float top_visits_best_guess_converge_ratio = 0.8;
-        float cpuct_after_root_multiplier = 2.0;
+        float cpuct_after_root_multiplier = 1.0;
 
-        double evaluation_multipler_on_terminal = 1.0;
+        double evaluation_multipler_on_terminal = 1.5;
         double evaluation_multipler_to_convergence = 1.5;
     };
 
