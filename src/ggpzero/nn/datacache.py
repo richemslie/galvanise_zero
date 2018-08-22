@@ -132,7 +132,6 @@ class Buckets(object):
 
 
 class ChunkIndexer(object):
-
     def __init__(self, buckets, step_summaries):
         self.buckets = buckets
         self.step_summaries = step_summaries
@@ -184,7 +183,7 @@ class ChunkIndexer(object):
             indices = indices[:max_size]
         return indices
 
-    def get_indices(self, max_size=None, validation=False):
+    def get_indices(self, max_size=None, validation=False, include_all=None):
         '''
         same bucket algorithm as old way, but with indexing:
 
@@ -214,19 +213,36 @@ class ChunkIndexer(object):
 
         # do we have more data than needed for epoch?
         sizes = bucket_sizes
-        total_size = sum(sizes)
+        print "sizes1", sizes
 
         if max_size is not None or max_size > 0:
-            if total_size > max_size:
-                scale = max_size / float(total_size)
+            if sum(sizes) > max_size:
+                if include_all is not None:
+                    assert include_all > 0
+                    include_sizes = sizes[:include_all]
+                    remaining_sizes = sizes[include_all:]
+                else:
+                    include_sizes = []
+                    remaining_sizes = sizes
 
-                # round up, but then we remove from last level
-                new_sizes = [int(math.ceil(s * scale)) for s in sizes]
-                if sum(new_sizes) > max_size:
-                    new_sizes[-1] -= sum(new_sizes) - max_size
-                sizes = new_sizes
+                include_total_size = sum(include_sizes)
+                remaining_total_size = sum(remaining_sizes)
+                assert include_total_size + remaining_total_size == sum(sizes)
+
+                if max_size > include_total_size:
+                    max_remaining_size = max_size - include_total_size
+
+                    scale = max_remaining_size / float(remaining_total_size)
+                    remaining_sizes = [int(math.ceil(s * scale)) for s in remaining_sizes]
+
+                    if sum(remaining_sizes) > max_remaining_size:
+                        remaining_sizes[-1] -= sum(remaining_sizes) + - max_remaining_size
+
+                sizes = include_sizes + remaining_sizes
 
             assert sum(sizes) <= max_size
+
+        print "sizes2", sizes
 
         all_indices = []
         for ii, s in enumerate(sizes):
@@ -235,8 +251,8 @@ class ChunkIndexer(object):
         random.shuffle(all_indices)
         return all_indices
 
-    def training_epoch(self, epoch_size=None):
-        return self.get_indices(max_size=epoch_size, validation=False)
+    def training_epoch(self, epoch_size=None, include_all=None):
+        return self.get_indices(max_size=epoch_size, include_all=None, validation=False)
 
     def validation_epoch(self, epoch_size=None):
         # XXX maybe add a trim mode - so always taking most recent data???  Maybe better to just
