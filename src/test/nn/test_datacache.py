@@ -50,22 +50,41 @@ def test_summary():
 
 def test_chunking():
     game = "breakthroughSmall"
-    cache = setup_and_get_cache(game, 1, "h3")
+    cache = setup_and_get_cache(game, 1, "t1")
     cache.sync()
 
-    buckets_def = [(5, 0.8), (10, 0.5), (-1, 0.1)]
+    buckets_def = [(1, 1.0), (3, 0.75), (6, 0.5), (-1, 0.1)]
     buckets = datacache.Buckets(buckets_def)
 
     # max_training_count=None, max_validation_count=None
     indexer = cache.create_chunk_indexer(buckets)
 
+    # gen0
     first = len(cache.summary.step_summaries) - 1
+    # gen most recent
+    last = 0
+
+    print 'here!'
     print indexer.create_indices_for_level(first, validation=False, max_size=42)
     print indexer.create_indices_for_level(first, validation=True, max_size=42)
 
-    for s in cache.db[indexer.create_indices_for_level(first, validation=True, max_size=10)]:
-        print s
+    z = indexer.get_indices(max_size=100000)
+    #z.sort()
+    #print z
 
-    print len(indexer.training_epoch(100000))
-    print len(indexer.training_epoch(50000))
-    print len(indexer.training_epoch(5000))
+
+def test_include_size():
+    game = "breakthroughSmall"
+    cache = setup_and_get_cache(game, 1, "t1")
+    cache.sync()
+
+    buckets_def = [(1, 1.00), (3, 0.75), (6, 0.5), (-1, 0.1)]
+    buckets = datacache.Buckets(buckets_def)
+
+    # max_training_count=None, max_validation_count=None
+    indexer = cache.create_chunk_indexer(buckets)
+
+    z = indexer.get_indices(max_size=40000)
+    z = indexer.get_indices(max_size=40000, include_all=2)
+    #z.sort()
+    #print z

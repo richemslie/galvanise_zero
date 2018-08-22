@@ -326,7 +326,7 @@ class TrainManager(object):
                 break
 
             # resample the samples!
-            training_indices = indexer.training_epoch(conf.max_epoch_size)
+            training_indices = indexer.training_epoch(conf.max_epoch_size, include_all=1)
 
             if i > 0:
                 value_weight = self.update_value_weighting(value_weight)
