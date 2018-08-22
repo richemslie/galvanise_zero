@@ -15,6 +15,7 @@ from ggpzero.nn.manager import get_manager
 
 
 class PUCTPlayer(MatchPlayer):
+    poller = None
     poller_clz = PlayPoller
     last_probability = -1
     last_node_count = -1
