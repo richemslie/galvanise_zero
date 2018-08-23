@@ -51,12 +51,31 @@ class BoardChannels(object):
 
 
 @register_attrs
+class GameDesc(object):
+    game = attribute("checkers")
+
+    # x_cords = "a b c d e f g h".split()
+    x_cords = attribute(attr_factory(list))
+
+    # y_cords = "1 2 3 4 5 6 7 8".split()
+    y_cords = attribute(attr_factory(list))
+
+    # list of BoardChannels (length kind of needs to be >= 1, or not much using convs)
+    board_channels = attribute(attr_factory(list))
+
+    # list of list of ControlChannels
+    control_channels = attribute(attr_factory(list))
+
+
+###############################################################################
+
+@register_attrs
 class ApplySymmetry(object):
     base_term = attribute("cell")
 
     # these are index to the term identifying the coordinates
-    x_term_idx = attribute(1)
-    y_term_idx = attribute(2)
+    x_terms_idx = attribute(attr_factory(list))
+    y_terms_idx = attribute(attr_factory(list))
 
 
 @register_attrs
@@ -78,25 +97,11 @@ class Symmetries(object):
     # do horizontal reflection
     do_reflection = attribute(False)
 
-    # do x4 90 rotations
-    do_rotations = attribute(False)
+    # rotate x4
+    do_rotations_90 = attribute(False)
 
-
-@register_attrs
-class GameDesc(object):
-    game = attribute("checkers")
-
-    # x_cords = "a b c d e f g h".split()
-    x_cords = attribute(attr_factory(list))
-
-    # y_cords = "1 2 3 4 5 6 7 8".split()
-    y_cords = attribute(attr_factory(list))
-
-    # list of BoardChannels (length kind of needs to be >= 1, or not much using convs)
-    board_channels = attribute(attr_factory(list))
-
-    # list of list of ControlChannels
-    control_channels = attribute(attr_factory(list))
+    # rotate x2
+    do_rotations_180 = attribute(False)
 
 
 ###############################################################################
@@ -402,10 +407,25 @@ class Games(object):
 class GameSymmetries(object):
     ''' class is only here to create a namespace '''
 
+    def breakthroughSmall(self):
+        return Symmetries(skip_bases=["control"],
+                          apply_bases=[ApplySymmetry("cell", 1, 2)],
+                          skip_actions=["noop"],
+                          apply_actions=[ApplySymmetry("move", [1, 3], [2, 4])],
+                          do_reflection=True)
+
+    def reversi(self):
+        return Symmetries(skip_bases=["control"],
+                          apply_bases=[ApplySymmetry("cell", 1, 2)],
+                          skip_actions=["noop"],
+                          apply_actions=[ApplySymmetry("place", 1, 2)],
+                          do_rotations_90=True,
+                          do_reflection=True)
+
     def connect6(self):
-        Symmetries(skip_bases=["control"],
-                   apply_bases=[ApplySymmetry("cell", 1, 2)],
-                   skip_actions=["noop"],
-                   apply_actions=[ApplySymmetry("place", 1, 2)],
-                   do_rotations=True,
-                   do_reflection=True)
+        return Symmetries(skip_bases=["control"],
+                          apply_bases=[ApplySymmetry("cell", 1, 2)],
+                          skip_actions=["noop"],
+                          apply_actions=[ApplySymmetry("place", 1, 2)],
+                          do_rotations_90=True,
+                          do_reflection=True)

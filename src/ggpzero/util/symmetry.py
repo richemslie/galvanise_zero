@@ -14,7 +14,7 @@ def reflect_horizontal(x, y, x_cords, y_cords):
 
 
 def rotate_90(x, y, x_cords, y_cords):
-    ' clockwise '
+    ' anti-clockwise '
     assert len(x_cords) == len(y_cords)
     x_idx = x_cords.index(x)
     y_idx = y_cords.index(y)
@@ -40,7 +40,7 @@ def symbolize(txt, pos):
     return symbols
 
 
-class Translater(object):
+class Translator(object):
     def __init__(self, game_info, x_cords, y_cords):
         self.game_info = game_info
         self.x_cords = x_cords
@@ -54,19 +54,30 @@ class Translater(object):
         # map base root term -> dict
         #      * maps from non-root terms -> index into model.bases
         self.base_root_term_to_mapping = {}
-        self.skip_base_root_terms = set()
 
+        # store all the action lists to lookup (similar to base_root_term_to_mapping)
         self.action_list = []
         for ri in range(len(self.game_info.model.roles)):
             self.action_list.append([symbolize(a, 2) for a in self.game_info.model.actions[ri]])
 
+        # the indexes into actio for x/y
         self.action_root_term_indexes = {}
+
+        # these are simply skipped from translating
+        self.skip_base_root_terms = set()
         self.skip_action_root_term = set()
 
-    def add_basetype(self, root_term, x_term_idx, y_term_idx):
-        # create a dict for this root_term.  the dict will a be a mapping from x, y -> position on model
+    def add_basetype(self, root_term, x_terms_idx, y_terms_idx):
         assert root_term not in self.base_root_term_indexes
-        self.base_root_term_indexes[root_term] = x_term_idx, y_term_idx
+
+        if not isinstance(x_terms_idx, list):
+            x_terms_idx = [x_terms_idx]
+
+        if not isinstance(y_terms_idx, list):
+            y_terms_idx = [y_terms_idx]
+
+        # create a dict for this root_term.  the dict will a be a mapping from x, y -> position on model
+        self.base_root_term_indexes[root_term] = x_terms_idx, y_terms_idx
 
         mapping = self.base_root_term_to_mapping[root_term] = {}
 
@@ -76,10 +87,16 @@ class Translater(object):
 
             mapping[terms[1:]] = model_bases_indx
 
-        print mapping
+    def add_action_type(self, root_term, x_terms_idx, y_terms_idx):
+        assert root_term not in self.action_root_term_indexes
 
-    def add_action_type(self, root_term, x_term_idx, y_term_idx):
-        self.action_root_term_indexes[root_term] = x_term_idx, y_term_idx
+        if not isinstance(x_terms_idx, list):
+            x_terms_idx = [x_terms_idx]
+
+        if not isinstance(y_terms_idx, list):
+            y_terms_idx = [y_terms_idx]
+
+        self.action_root_term_indexes[root_term] = x_terms_idx, y_terms_idx
 
     def add_skip_base(self, root_term):
         self.skip_base_root_terms.add(root_term)
@@ -87,18 +104,21 @@ class Translater(object):
     def add_skip_action(self, root_term):
         self.skip_action_root_term.add(root_term)
 
-    def translate_terms(self, terms, x_term_idx, y_term_idx, do_reflection, rot_count):
-        x, y = terms[x_term_idx], terms[y_term_idx]
-
-        if do_reflection:
-            x, y = reflect_vertical(x, y, self.x_cords, self.y_cords)
-
-        for _ in range(rot_count):
-            x, y = rotate_90(x, y, self.x_cords, self.y_cords)
-
+    def translate_terms(self, terms, x_terms_idx, y_terms_idx, do_reflection, rot_count):
+        assert len(x_terms_idx) == len(y_terms_idx)
         new_terms = list(terms)
-        new_terms[x_term_idx] = Term(x)
-        new_terms[y_term_idx] = Term(y)
+        for x_term_idx, y_term_idx in zip(x_terms_idx, y_terms_idx):
+            x, y = terms[x_term_idx], terms[y_term_idx]
+
+            if do_reflection:
+                x, y = reflect_vertical(x, y, self.x_cords, self.y_cords)
+
+            for _ in range(rot_count):
+                x, y = rotate_90(x, y, self.x_cords, self.y_cords)
+
+            new_terms[x_term_idx] = Term(x)
+            new_terms[y_term_idx] = Term(y)
+
         return ListTerm(new_terms)
 
     def translate_basestate(self, basestate, do_reflection, rot_count):
@@ -136,74 +156,62 @@ class Translater(object):
             return legal
 
         # convert the action
-        x_term_idx, y_term_idx = self.action_root_term_indexes[terms[0]]
-        new_terms = self.translate_terms(terms, x_term_idx, y_term_idx, do_reflection, rot_count)
+        x_terms_idx, y_terms_idx = self.action_root_term_indexes[terms[0]]
+        new_terms = self.translate_terms(terms, x_terms_idx, y_terms_idx, do_reflection, rot_count)
 
-        print terms, new_terms
+        # XXX why not a lookup like bases??? XXX ZZZ XXX TODO
         for legal_idx, other in enumerate(self.action_list[role_index]):
             if new_terms == other:
                 return legal_idx
 
         assert False, "Did not find translation"
 
-    def translate_policies(self, policies, do_reflection, rot_count):
-        new_policies = []
-        for role_index, policy in enumerate(policies):
-            role_policy = []
 
-            # get the action from the model
-            for legal, p in policy:
-                translated_legal = self.translate_action(role_index, legal, do_reflection, rot_count)
-                role_policy.append(translated_legal, p)
+class Prescription(object):
+    def __init__(self, game_symmetries_desc):
+        self.prescription = []
 
-            new_policies.append(role_policy)
+        # can't have both
+        assert not (game_symmetries_desc.do_rotations_90 and
+                    game_symmetries_desc.do_rotations_180)
 
 
-def augment_samples(sample, game_info, game_desc, game_symmetries):
+        # define a prescription of what rotation/reflections to do
+        if (game_symmetries_desc.do_rotations_90 or
+            game_symmetries_desc.do_rotations_180):
+            rotations = (0, 2) if game_symmetries_desc.do_rotations_180 else (0, 1, 2, 3)
+            self.prescription += [(False, r) for r in rotations]
+
+            if game_symmetries_desc.do_reflection:
+                self.prescription += [(True, r) for r in rotations]
+
+        elif game_symmetries_desc.do_reflection:
+            self.prescription += [(False, 0), (True, 0)]
+
+        else:
+            # nothing
+            self.prescription += [(False, 0)]
+
+    def __iter__(self):
+        for reflect, rotate in self.prescription:
+            yield reflect, rotate
+
+
+def create_translator(game_info, game_desc, game_symmetries):
     # create the translator
-    t = Translater(game_info, game_desc.x_cords, game_desc.y_cords)
+    t = translator = Translator(game_info, game_desc.x_cords, game_desc.y_cords)
+
     for ab in game_symmetries.apply_bases:
-        t.add_basetype(ab.base_term, ab.x_term_idx, ab.y_term_idx)
+        t.add_basetype(ab.base_term, ab.x_terms_idx, ab.y_terms_idx)
 
     for ac in game_symmetries.apply_actions:
-        t.add_action_type(ac.base_term, ac.x_term_idx, ac.y_term_idx)
+        t.add_action_type(ac.base_term, ac.x_terms_idx, ac.y_terms_idx)
 
     for term in game_symmetries.skip_bases:
-        t.skip_bases(term)
+        t.add_skip_base(term)
 
     for term in game_symmetries.skip_actions:
-        t.skip_actions(term)
+        t.add_skip_action(term)
 
-    # define a prescription of what rotation/reflections to do
-    if game_symmetries.do_rotations:
-        prescription = [(False, 1), (False, 2), (False, 3)]
+    return translator
 
-        if game_symmetries.do_reflection:
-            prescription += [(True, 0), (True, 1), (True, 2), (True, 3)]
-    else:
-        assert game_symmetries.do_reflection
-        prescription = [(True, 0)]
-
-    for do_reflection, rot_count in prescription:
-
-        # translate states/policies
-        state = t.translate_basestate(tuple(sample.state), do_reflection, rot_count)
-        prev_states = [t.translate_basestate(tuple(s), do_reflection, rot_count) for s in sample.prev_states]
-        policies = t.translate_policies(sample.policies)
-
-        match_identifier = sample.match_identifier + "_+%d_+%d" % (do_reflection, rot_count)
-
-        yield Sample(state=state,
-                     prev_states=prev_states,
-                     policies=policies,
-                     match_identifier=match_identifier,
-
-                     # rest the same as sample
-                     final_score=sample.final_score[:],
-                     depth=sample.depth,
-                     game_length=sample.game_length,
-                     has_resigned=sample.has_resigned,
-                     resign_false_positive=sample.resign_false_positive,
-                     starting_sample_depth=sample.starting_sample_depth,
-                     resultant_puct_score=sample.resultant_puct_score[:],
-                     resultant_puct_visits=sample.resultant_puct_visits)

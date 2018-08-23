@@ -307,6 +307,10 @@ class GdlBasesTransformer(object):
         return np.array(values, dtype='float32')
 
 
+    def get_symmetries_desc(self):
+        return getattr(gamedesc.GameSymmetries(), self.game, None)()
+
+
 class GdlBasesTransformer_Draws(object):
     def value_to_array(self, values):
         assert len(values) == 2

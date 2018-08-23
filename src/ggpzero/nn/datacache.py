@@ -61,7 +61,7 @@ import numpy as np
 from ggplib.util import log
 
 # ggpzero imports
-from ggpzero.util import attrutil
+from ggpzero.util import attrutil, symmetry
 
 from ggpzero.defs import datadesc
 from ggpzero.nn.manager import get_manager
@@ -357,9 +357,10 @@ class StatsAccumulator(object):
 
 
 class DataCache(object):
-    def __init__(self, transformer, gen_prefix):
+    def __init__(self, transformer, gen_prefix, do_augment_data=False):
         self.transformer = transformer
         self.gen_prefix = gen_prefix
+        self.do_augment_data = do_augment_data
 
         man = get_manager()
         self.data_path = man.samples_path(self.transformer.game, gen_prefix)
@@ -494,6 +495,77 @@ class DataCache(object):
                 continue
             yield step, file_path, md5sum
 
+    def augment_data(self, samples):
+        if not self.do_augment_data:
+            return samples
+
+        game_symmetries = self.transformer.get_symmetries_desc()
+        if game_symmetries is None:
+            return samples
+
+        t = symmetry.create_translator(self.transformer.game_info,
+                                       self.transformer.game_desc,
+                                       game_symmetries)
+        prescription = symmetry.Prescription(self.transformer.get_symmetries_desc())
+
+        def translate_policies(policies, do_reflection, rot_count):
+            new_policies = []
+            for role_index, policy in enumerate(policies):
+                role_policy = []
+
+                # get the action from the model
+                for legal, p in policy:
+                    translated_legal = t.translate_action(role_index, legal, do_reflection, rot_count)
+                    role_policy.append((translated_legal, p))
+
+                new_policies.append(role_policy)
+            return new_policies
+
+        result_samples = []
+
+        def decode_state2(encoded):
+            state = decode_state(encoded)
+            return state[:len(t.base_symbols)]
+
+        # go through each samples
+        for sample in samples:
+            seen = set()
+            for do_reflection, rot_count in prescription:
+
+                # translate states/policies
+                state = t.translate_basestate(decode_state2(sample.state), do_reflection, rot_count)
+
+                # dont do duplicates
+                state = tuple(state)
+                if state in seen:
+                    continue
+                seen.add(state)
+
+                prev_states = [t.translate_basestate(decode_state2(s), do_reflection, rot_count)
+                               for s in sample.prev_states]
+                policies = translate_policies(sample.policies, do_reflection, rot_count)
+
+                match_identifier = sample.match_identifier + "_+%d_+%d" % (do_reflection, rot_count)
+
+                new_sample = datadesc.Sample(state=state,
+                                             prev_states=prev_states,
+                                             policies=policies,
+                                             match_identifier=match_identifier,
+
+                                             # rest the same as sample
+                                             final_score=sample.final_score[:],
+                                             depth=sample.depth,
+                                             game_length=sample.game_length,
+                                             has_resigned=sample.has_resigned,
+                                             resign_false_positive=sample.resign_false_positive,
+                                             starting_sample_depth=sample.starting_sample_depth,
+                                             resultant_puct_score=sample.resultant_puct_score[:],
+                                             resultant_puct_visits=sample.resultant_puct_visits)
+
+                result_samples.append(new_sample)
+
+        return result_samples
+
     def sync(self):
         # check summary matches current set of files
         if not self.check_summary() or not self.verify_db():
@@ -519,18 +591,31 @@ class DataCache(object):
                                                                      data.with_generation,
                                                                      data.num_samples))
 
-            indx = self.db.size
-            self.db.resize(indx + data.num_samples)
+            samples = self.augment_data(data.samples)
+            num_samples = len(samples)
 
-            stats = StatsAccumulator(data.num_samples)
+            log.debug("After augmenting data, #samples %d" % num_samples)
+
+            indx = self.db.size
+            self.db.resize(indx + num_samples)
+
+            stats = StatsAccumulator(num_samples)
             t = self.transformer
-            for sample in data.samples:
+            for sample in samples:
                 t.check_sample(sample)
                 stats.add(sample)
 
                 # add channels
-                state = decode_state(sample.state)
-                prev_states = [decode_state(s) for s in sample.prev_states]
+
+                # only decode if not already decoded (as in the case of augmentation)
+                state = sample.state
+                if not isinstance(state, (tuple, list)):
+                    state = decode_state(state)
+
+                prev_states = sample.prev_states
+                if prev_states and not isinstance(prev_states[0], (tuple, list)):
+                    prev_states = [decode_state(s) for s in prev_states]
+
                 cols = [t.state_to_channels(state, prev_states)]
 
                 for ri, policy in enumerate(sample.policies):
@@ -550,7 +635,7 @@ class DataCache(object):
             step_sum = datadesc.StepSummary(step=step,
                                             filename=file_path,
                                             with_generation=data.with_generation,
-                                            num_samples=data.num_samples,
+                                            num_samples=num_samples,
                                             md5sum=md5sum,
                                             stats_unique_matches=stats.unique_matches,
                                             stats_draw_ratio=stats.draw_ratio,

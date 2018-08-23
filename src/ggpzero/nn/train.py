@@ -192,10 +192,11 @@ class TrainingController(keras_callbacks.Callback):
 ###############################################################################
 
 class TrainManager(object):
-    def __init__(self, train_config, transformer):
+    def __init__(self, train_config, transformer, do_data_augmentation=False):
         # take a copy of the initial train_config
         assert isinstance(train_config, confs.TrainNNConfig)
         self.transformer = transformer
+        self.do_data_augmentation = do_data_augmentation
 
         # lookup via game_name (this gets statemachine & statemachine model)
         self.game_info = lookup.by_name(train_config.game)
@@ -289,7 +290,8 @@ class TrainManager(object):
         # abbreviate, easier on the eyes
         conf = self.train_config
 
-        self.cache = datacache.DataCache(self.transformer, conf.generation_prefix)
+        self.cache = datacache.DataCache(self.transformer, conf.generation_prefix,
+                                         do_augment_data=self.do_data_augmentation)
         self.cache.sync()
 
         train_at_step = conf.next_step - 1
