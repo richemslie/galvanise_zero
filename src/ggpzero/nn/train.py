@@ -286,7 +286,7 @@ class TrainManager(object):
                             value_weight=value_weight)
         return value_weight
 
-    def do_epochs(self):
+    def do_epochs(self, num_epochs_include_all=-1):
         # abbreviate, easier on the eyes
         conf = self.train_config
 
@@ -328,7 +328,10 @@ class TrainManager(object):
                 break
 
             # resample the samples!
-            training_indices = indexer.training_epoch(conf.max_epoch_size, include_all=1)
+            if i < num_epochs_include_all:
+                training_indices = indexer.training_epoch(conf.max_epoch_size, include_all=1)
+            else:
+                training_indices = indexer.training_epoch(conf.max_epoch_size)
 
             if i > 0:
                 value_weight = self.update_value_weighting(value_weight)

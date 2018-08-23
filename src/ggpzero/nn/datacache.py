@@ -252,7 +252,7 @@ class ChunkIndexer(object):
         return all_indices
 
     def training_epoch(self, epoch_size=None, include_all=None):
-        return self.get_indices(max_size=epoch_size, include_all=None, validation=False)
+        return self.get_indices(max_size=epoch_size, include_all=include_all, validation=False)
 
     def validation_epoch(self, epoch_size=None):
         # XXX maybe add a trim mode - so always taking most recent data???  Maybe better to just

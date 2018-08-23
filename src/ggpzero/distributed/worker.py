@@ -225,7 +225,7 @@ class Worker(Broker):
         self.trainer.update_config(train_config)
         self.trainer.get_network(network_model, generation_description)
 
-        self.trainer.do_epochs()
+        self.trainer.do_epochs(num_epochs_include_all=2)
         self.trainer.save()
 
 

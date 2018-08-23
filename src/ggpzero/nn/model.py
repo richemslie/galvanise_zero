@@ -183,7 +183,7 @@ def get_network_model(conf):
 
         # XXX hard coding layers
         # for i, c in enumerate([1, 1, 1, 1, 1, 1, 2, 2, 2, 3, 2, 2, 2, 1, 1, 1, 1, 1, 1]):
-        for i, c in enumerate([1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1]):
+        for i, c in enumerate([1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1]):
             if i > 0 and i % 3 == 0:
                 filter_size += incr_size
 
@@ -192,7 +192,7 @@ def get_network_model(conf):
                                       conf.cnn_kernel_size,
                                       c,
                                       prefix="ResLayer_%s_" % i,
-                                      dropout=0.35,
+                                      dropout=0.3,
                                       activation=activation)(layer)
             prev_filter_size = filter_size
 
