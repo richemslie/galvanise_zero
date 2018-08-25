@@ -1,5 +1,6 @@
 import random
 from pprint import pprint
+from functools import partial
 
 from ggplib.db import lookup
 from ggpzero.util import symmetry as sym
@@ -107,24 +108,38 @@ def advance_state(sm, basestate):
     return base_state
 
 
-def dump_moves(sm, basestate):
+def all_moves(sm, basestate):
     sm.update_bases(basestate)
 
     def f(ri, ls, i):
         return sm.legal_to_move(ri, ls.get_legal(i))
 
+    result = []
     for ri, role in enumerate(sm.get_roles()):
-        print "role %s:" % role
         ls = sm.get_legal_state(ri)
         moves = [f(ri, ls, ii) for ii in range(ls.get_count())]
-        pprint(moves)
+        result.append((role, set(moves)))
+
+    return result
+
+
+def translate_moves(sm, basestate, translator, do_reflection, rot_count):
+    sm.update_bases(basestate)
+    moves = []
+    for ri, role in enumerate(sm.get_roles()):
+        ls = sm.get_legal_state(ri)
+        translated_moves = []
+        for indx in range(ls.get_count()):
+            legal = translator.translate_action(ri, ls.get_legal(indx), do_reflection, rot_count)
+
+            translated_moves.append(sm.legal_to_move(ri, legal))
+
+        moves.append((role, set(translated_moves)))
+
+    return moves
 
 
 def test_translator_reversi2():
-    ''' 1. print board
-        2. randomly advance board
-        3. print board with various translations
-    '''
     from gzero_games.battle.reversi import pretty_board
 
     info = lookup.by_name("reversi")
@@ -146,7 +161,8 @@ def test_translator_reversi2():
 
     # print board & moves
     pretty_board(8, sm)
-    dump_moves(sm, basestate)
+    for role, moves in all_moves(sm, basestate):
+        print role, moves
 
     basestate_list = t.translate_basestate(basestate.to_list(), True, 0)
     basestate.from_list(basestate_list)
@@ -154,7 +170,8 @@ def test_translator_reversi2():
 
     # print board & moves
     pretty_board(8, sm)
-    dump_moves(sm, basestate)
+    for role, moves in all_moves(sm, basestate):
+        print role, moves
 
     for i in range(4):
         basestate_list = t.translate_basestate(basestate.to_list(), 0, 1)
@@ -163,127 +180,85 @@ def test_translator_reversi2():
 
         # print board & moves
         pretty_board(8, sm)
-        dump_moves(sm, basestate)
+        for role, moves in all_moves(sm, basestate):
+            print role, moves
 
 
-def test_translator_reversi3():
-    ''' 1. print board
-        2. randomly advance board
-        3. print board with various translations
-    '''
-    from gzero_games.battle.reversi import pretty_board
+def game_test(game, pretty_board, advance_state_count):
+    # game stuff
+    info = lookup.by_name(game)
+    transformer = get_manager().get_transformer(game)
 
-    info = lookup.by_name("reversi")
-    transformer = get_manager().get_transformer("reversi")
-
+    # the translator
     t = sym.create_translator(info, transformer.game_desc, transformer.get_symmetries_desc())
 
+    # start with a statemachine - and advance 5 moves
     sm = info.get_sm()
     sm.reset()
 
-    pretty_board(8, sm)
     basestate = sm.get_initial_state()
-    for i in range(30):
+    for i in range(advance_state_count):
         basestate = advance_state(sm, basestate)
         sm.update_bases(basestate)
 
     # print board & moves
-    pretty_board(8, sm)
-    dump_moves(sm, basestate)
-
-    prescription = sym.Prescription(transformer.get_symmetries_desc())
-    translated_basestate = sm.new_base_state()
-
-    for do_reflection, rot_count in prescription:
-        print do_reflection, rot_count
-
-        basestate_list = t.translate_basestate(basestate.to_list(), do_reflection, rot_count)
-        translated_basestate.from_list(basestate_list)
-        sm.update_bases(translated_basestate)
-
-        # print board & moves
-        pretty_board(8, sm)
-        dump_moves(sm, translated_basestate)
-
-
-def test_translator_bt():
-    ''' 1. print board
-        2. randomly advance board
-        3. print board with various translations
-    '''
-    from gzero_games.battle.bt import pretty_board
-
-    info = lookup.by_name("breakthroughSmall")
-    transformer = get_manager().get_transformer("breakthroughSmall")
-
-    t = sym.create_translator(info, transformer.game_desc, transformer.get_symmetries_desc())
-
-    sm = info.get_sm()
-    sm.reset()
-
-    pretty_board(6, sm)
-    basestate = sm.get_initial_state()
-    for i in range(14):
-        basestate = advance_state(sm, basestate)
-        sm.update_bases(basestate)
-
-    # print board & moves
-    pretty_board(6, sm)
-    dump_moves(sm, basestate)
-
-    prescription = sym.Prescription(transformer.get_symmetries_desc())
-    translated_basestate = sm.new_base_state()
-
-    for do_reflection, rot_count in prescription:
-        print do_reflection, rot_count
-
-        basestate_list = t.translate_basestate(basestate.to_list(), do_reflection, rot_count)
-        translated_basestate.from_list(basestate_list)
-        sm.update_bases(translated_basestate)
-
-        # print board & moves
-        pretty_board(6, sm)
-        dump_moves(sm, translated_basestate)
-
-
-def test_translator_c6():
-    ''' 1. print board
-        2. randomly advance board
-        3. print board with various translations
-    '''
-    # for printing
-    from gzero_games.battle.connect6 import MatchInfo
-    match_info = MatchInfo()
-    pretty_board = match_info.print_board
-
-    info = lookup.by_name("connect6")
-    transformer = get_manager().get_transformer("connect6")
-
-    t = sym.create_translator(info, transformer.game_desc, transformer.get_symmetries_desc())
-
-    sm = info.get_sm()
-    sm.reset()
-
-    pretty_board(sm)
-    basestate = sm.get_initial_state()
-    for i in range(14):
-        basestate = advance_state(sm, basestate)
-        sm.update_bases(basestate)
-
-    # print board & moves
+    print "original board:"
     pretty_board(sm)
 
     prescription = sym.Prescription(transformer.get_symmetries_desc())
     translated_basestate = sm.new_base_state()
 
+    # do all reflections / rotations in prescription
     for do_reflection, rot_count in prescription:
-        print do_reflection, rot_count
+        print "reflection", do_reflection, "rotations", rot_count
 
+        # translate state/moves
         basestate_list = t.translate_basestate(basestate.to_list(), do_reflection, rot_count)
+        translated_moves = translate_moves(sm, basestate, t, do_reflection, rot_count)
+
         translated_basestate.from_list(basestate_list)
+        assert all_moves(sm, translated_basestate) == translated_moves
         sm.update_bases(translated_basestate)
 
         # print board & moves
         pretty_board(sm)
+        for role, moves in all_moves(sm, translated_basestate):
+            print role, moves
 
+
+def test_game_reversi():
+    from gzero_games.battle.reversi import pretty_board
+    game_test("reversi", partial(pretty_board, 8), 5)
+    game_test("reversi", partial(pretty_board, 8), 15)
+
+
+def test_game_bts():
+    from gzero_games.battle.bt import pretty_board
+    game_test("breakthroughSmall", partial(pretty_board, 6), 2)
+    game_test("breakthroughSmall", partial(pretty_board, 6), 8)
+
+
+def test_game_c6():
+    from gzero_games.battle.connect6 import MatchInfo
+    match_info = MatchInfo()
+    game_test("connect6", match_info.print_board, 3)
+    game_test("connect6", match_info.print_board, 10)
+
+
+def test_game_hex11():
+    from gzero_games.battle.hex import MatchInfo
+    match_info = MatchInfo(11)
+
+    game_test("hexLG11", match_info.print_board, 3)
+    game_test("hexLG11", match_info.print_board, 10)
+    game_test("hexLG11", match_info.print_board, 16)
+
+
+def test_game_hex13():
+    from gzero_games.battle.hex import MatchInfo
+    match_info = MatchInfo(13)
+
+    game_test("hexLG13", match_info.print_board, 3)
+    game_test("hexLG13", match_info.print_board, 10)
+    game_test("hexLG13", match_info.print_board, 16)
 

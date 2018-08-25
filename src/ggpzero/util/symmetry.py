@@ -1,7 +1,5 @@
 from ggplib.util.symbols import SymbolFactory, ListTerm, Term
 
-from ggpzero.defs.datadesc import Sample
-
 
 def reflect_vertical(x, y, x_cords, y_cords):
     x_idx = x_cords.index(x)
@@ -67,6 +65,10 @@ class Translator(object):
         self.skip_base_root_terms = set()
         self.skip_action_root_term = set()
 
+        # caches - only to speed things up a bit
+        self.translate_basestate_cache = {}
+        self.translate_action_cache = {}
+
     def add_basetype(self, root_term, x_terms_idx, y_terms_idx):
         assert root_term not in self.base_root_term_indexes
 
@@ -121,13 +123,31 @@ class Translator(object):
 
         return ListTerm(new_terms)
 
+    def translate_basestate_helper(self, terms, do_reflection, rot_count):
+        key = tuple(terms), do_reflection, rot_count
+        try:
+            return self.translate_basestate_cache[key]
+
+        except KeyError:
+            pass
+
+        x_term_idx, y_term_idx = self.base_root_term_indexes[terms[0]]
+        new_terms = self.translate_terms(terms, x_term_idx, y_term_idx, do_reflection, rot_count)
+
+        # set value on new basestate
+        base_term, extra_terms = new_terms[0], new_terms[1:]
+        new_bs_indx = self.base_root_term_to_mapping[base_term][extra_terms]
+        self.translate_basestate_cache[key] = new_bs_indx
+        return new_bs_indx
+
     def translate_basestate(self, basestate, do_reflection, rot_count):
         # takes tuple/list, return new list (including self)
         assert isinstance(basestate, (tuple, list))
         assert len(basestate) == len(self.base_symbols)
 
         new_basestate = [0 for _ in range(len(basestate))]
-        for indx, (value, terms) in enumerate(zip(basestate, self.base_symbols)):
+        for indx, terms in enumerate(self.base_symbols):
+            value = basestate[indx]
             if not value:
                 continue
 
@@ -138,30 +158,34 @@ class Translator(object):
             if terms[0] not in self.base_root_term_indexes:
                 raise Exception("Not supported base %s" % str(terms))
 
-            x_term_idx, y_term_idx = self.base_root_term_indexes[terms[0]]
-            new_terms = self.translate_terms(terms, x_term_idx, y_term_idx, do_reflection, rot_count)
-
-            # set value on new basestate
-            base_term, extra_terms = new_terms[0], new_terms[1:]
-            new_bs_indx = self.base_root_term_to_mapping[base_term][extra_terms]
+            new_bs_indx = self.translate_basestate_helper(terms, do_reflection, rot_count)
             new_basestate[new_bs_indx] = 1
 
         return new_basestate
 
     def translate_action(self, role_index, legal, do_reflection, rot_count):
+
+        key = role_index, legal, do_reflection, rot_count
+        try:
+            return self.translate_action_cache[key]
+
+        except KeyError:
+            pass
+
         terms = self.action_list[role_index][legal]
 
         root_term = terms[0]
         if root_term in self.skip_action_root_term:
+            self.translate_action_cache[key] = legal
             return legal
 
         # convert the action
         x_terms_idx, y_terms_idx = self.action_root_term_indexes[terms[0]]
         new_terms = self.translate_terms(terms, x_terms_idx, y_terms_idx, do_reflection, rot_count)
 
-        # XXX why not a lookup like bases??? XXX ZZZ XXX TODO
         for legal_idx, other in enumerate(self.action_list[role_index]):
             if new_terms == other:
+                self.translate_action_cache[key] = legal_idx
                 return legal_idx
 
         assert False, "Did not find translation"
@@ -174,7 +198,6 @@ class Prescription(object):
         # can't have both
         assert not (game_symmetries_desc.do_rotations_90 and
                     game_symmetries_desc.do_rotations_180)
-
 
         # define a prescription of what rotation/reflections to do
         if (game_symmetries_desc.do_rotations_90 or
@@ -214,4 +237,3 @@ def create_translator(game_info, game_desc, game_symmetries):
         t.add_skip_action(term)
 
     return translator
-

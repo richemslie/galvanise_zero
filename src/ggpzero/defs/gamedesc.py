@@ -418,7 +418,7 @@ class GameSymmetries(object):
         return Symmetries(skip_bases=["control"],
                           apply_bases=[ApplySymmetry("cell", 1, 2)],
                           skip_actions=["noop"],
-                          apply_actions=[ApplySymmetry("place", 1, 2)],
+                          apply_actions=[ApplySymmetry("move", 1, 2)],
                           do_rotations_90=True,
                           do_reflection=True)
 
@@ -429,3 +429,16 @@ class GameSymmetries(object):
                           apply_actions=[ApplySymmetry("place", 1, 2)],
                           do_rotations_90=True,
                           do_reflection=True)
+
+
+    def _hex(self):
+        return Symmetries(skip_bases=["control", "step", "owner", "canSwap"],
+                          apply_bases=[ApplySymmetry("cell", 1, 2),
+                                       ApplySymmetry("connected", 2, 3)],
+                          skip_actions=["noop", "swap"],
+                          apply_actions=[ApplySymmetry("place", 1, 2)],
+                          do_rotations_90=False,
+                          do_rotations_180=True,
+                          do_reflection=True)
+    hexLG11 = _hex
+    hexLG13 = _hex
