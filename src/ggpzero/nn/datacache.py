@@ -261,8 +261,8 @@ class ChunkIndexer(object):
 
 
 class StatsAccumulator(object):
-    def __init__(self, num_samples):
-        self.num_samples = num_samples
+    def __init__(self):
+        self.num_samples = 0
 
         self.unique_matches_set = set()
         self.total_draws = 0
@@ -331,6 +331,7 @@ class StatsAccumulator(object):
         return str([(p, total / float(self.num_samples)) for p, total in self.total_puct_score_dist])
 
     def add(self, sample):
+        self.num_samples += 1
         self.total_draws += 1 if abs(sample.final_score[0] - 0.5) < 0.01 else 0
         self.bare_policies += 1 if all(len(p) == 1 for p in sample.policies) else 0
         self.match_depths.setdefault(sample.match_identifier, []).append(sample.depth)
@@ -455,7 +456,13 @@ class DataCache(object):
 
             if self.summary.total_samples != self.db.size:
                 m = "db and summary file different sizes summary = %s != %s"
-                raise Check(m % (self.summary.total_samples, self.db.size))
+                if self.db.size > self.summary.total_samples:
+                    print m
+                    print "resizing"
+                    self.db.resize(self.summary.total_samples)
+
+                else:
+                    raise Check(m % (self.summary.total_samples, self.db.size))
 
         except Exception as exc:
             log.error("error accessing db directory: %s" % exc)
@@ -496,12 +503,11 @@ class DataCache(object):
             yield step, file_path, md5sum
 
     def augment_data(self, samples):
-        if not self.do_augment_data:
-            return samples
-
         game_symmetries = self.transformer.get_symmetries_desc()
-        if game_symmetries is None:
-            return samples
+        if not self.do_augment_data or game_symmetries is None:
+            for sample in samples:
+                yield sample
+            return
 
         t = symmetry.create_translator(self.transformer.game_info,
                                        self.transformer.game_desc,
@@ -520,8 +526,6 @@ class DataCache(object):
 
                 new_policies.append(role_policy)
             return new_policies
-
-        result_samples = []
 
         def decode_state2(encoded):
             state = decode_state(encoded)
@@ -547,24 +551,20 @@ class DataCache(object):
 
                 match_identifier = sample.match_identifier + "_+%d_+%d" % (do_reflection, rot_count)
 
-                new_sample = datadesc.Sample(state=state,
-                                             prev_states=prev_states,
-                                             policies=policies,
-                                             match_identifier=match_identifier,
+                yield datadesc.Sample(state=state,
+                                      prev_states=prev_states,
+                                      policies=policies,
+                                      match_identifier=match_identifier,
 
-                                             # rest the same as sample
-                                             final_score=sample.final_score[:],
-                                             depth=sample.depth,
-                                             game_length=sample.game_length,
-                                             has_resigned=sample.has_resigned,
-                                             resign_false_positive=sample.resign_false_positive,
-                                             starting_sample_depth=sample.starting_sample_depth,
-                                             resultant_puct_score=sample.resultant_puct_score[:],
-                                             resultant_puct_visits=sample.resultant_puct_visits)
-
-                result_samples.append(new_sample)
-
-        return result_samples
+                                      # rest the same as sample
+                                      final_score=sample.final_score[:],
+                                      depth=sample.depth,
+                                      game_length=sample.game_length,
+                                      has_resigned=sample.has_resigned,
+                                      resign_false_positive=sample.resign_false_positive,
+                                      starting_sample_depth=sample.starting_sample_depth,
+                                      resultant_puct_score=sample.resultant_puct_score[:],
+                                      resultant_puct_visits=sample.resultant_puct_visits)
 
     def sync(self):
         # check summary matches current set of files
@@ -591,17 +591,10 @@ class DataCache(object):
                                                                      data.with_generation,
                                                                      data.num_samples))
 
-            samples = self.augment_data(data.samples)
-            num_samples = len(samples)
-
-            log.debug("After augmenting data, #samples %d" % num_samples)
-
             indx = self.db.size
-            self.db.resize(indx + num_samples)
-
-            stats = StatsAccumulator(num_samples)
+            stats = StatsAccumulator()
             t = self.transformer
-            for sample in samples:
+            for sample in self.augment_data(data.samples):
                 t.check_sample(sample)
                 stats.add(sample)
 
@@ -623,19 +616,20 @@ class DataCache(object):
 
                 cols.append(t.value_to_array(sample.final_score))
 
-                # XXX this seems not an efficient way to do things
+                # is this an efficient way to do things?
+                self.db.resize(indx + 1)
                 for ii, name in enumerate(self.db.names):
                     self.db[name][indx] = cols[ii]
                 indx += 1
 
             self.db.flush()
-            log.debug("Added samples to db")
+            log.debug("Added %d samples to db" % stats.num_samples)
 
             # add to the summary and save it
             step_sum = datadesc.StepSummary(step=step,
                                             filename=file_path,
                                             with_generation=data.with_generation,
-                                            num_samples=num_samples,
+                                            num_samples=stats.num_samples,
                                             md5sum=md5sum,
                                             stats_unique_matches=stats.unique_matches,
                                             stats_draw_ratio=stats.draw_ratio,

@@ -308,7 +308,10 @@ class GdlBasesTransformer(object):
 
 
     def get_symmetries_desc(self):
-        return getattr(gamedesc.GameSymmetries(), self.game, None)()
+        gds = gamedesc.GameSymmetries()
+        if hasattr(gds, self.game):
+            return getattr(gds, self.game)()
+        return None
 
 
 class GdlBasesTransformer_Draws(object):
