@@ -197,6 +197,8 @@ class ChunkIndexer(object):
 
         shuffle.
         '''
+        # XXX add config options
+        include_pct = 0.6
 
         levels = self.validation_levels if validation else self.train_levels
         sizes = [end - start for start, end in levels]
@@ -219,15 +221,15 @@ class ChunkIndexer(object):
             if sum(sizes) > max_size:
                 if include_all is not None:
                     assert include_all > 0
-                    include_sizes = sizes[:include_all]
+                    include_sizes = [int(include_pct * s) for s in sizes[:include_all]]
                     remaining_sizes = sizes[include_all:]
+
                 else:
                     include_sizes = []
                     remaining_sizes = sizes
 
                 include_total_size = sum(include_sizes)
                 remaining_total_size = sum(remaining_sizes)
-                assert include_total_size + remaining_total_size == sum(sizes)
 
                 if max_size > include_total_size:
                     max_remaining_size = max_size - include_total_size
