@@ -371,6 +371,10 @@ class DataCache(object):
         self.save_summary_file()
         bcolz.set_nthreads(4)
 
+    @property
+    def total_samples(self):
+        return self.summary.total_samples
+
     def get_summary(self, create=False):
         if create or not os.path.exists(self.summary_path):
             summary = datadesc.GenDataSummary(game=self.transformer.game,
@@ -532,12 +536,25 @@ class DataCache(object):
             return state[:len(t.base_symbols)]
 
         # go through each samples
+        count = 0
         for sample in samples:
+            if count % 100 == 0:
+                log.verbose("processed samples %s" % count)
+            count += 1
+
             seen = set()
+            decoded_state = decode_state2(sample.state)
+            decoded_prev_states = [decode_state2(s) for s in sample.prev_states]
+
             for do_reflection, rot_count in prescription:
+                # XXX first prescription must be do_reflection == False and rot_count == 0
+
+                # only do 50% of translations...
+                if len(seen) and random.random() > 0.5:
+                    continue
 
                 # translate states/policies
-                state = t.translate_basestate(decode_state2(sample.state), do_reflection, rot_count)
+                state = t.translate_basestate_faster(decoded_state, do_reflection, rot_count)
 
                 # dont do duplicates
                 state = tuple(state)
@@ -545,11 +562,11 @@ class DataCache(object):
                     continue
                 seen.add(state)
 
-                prev_states = [t.translate_basestate(decode_state2(s), do_reflection, rot_count)
-                               for s in sample.prev_states]
+                prev_states = [t.translate_basestate_faster(s, do_reflection, rot_count)
+                               for s in decoded_prev_states]
                 policies = translate_policies(sample.policies, do_reflection, rot_count)
 
-                match_identifier = sample.match_identifier + "_+%d_+%d" % (do_reflection, rot_count)
+                match_identifier = "%s_+%d_+%d" % (sample.match_identifier, do_reflection, rot_count)
 
                 yield datadesc.Sample(state=state,
                                       prev_states=prev_states,
@@ -594,6 +611,7 @@ class DataCache(object):
             indx = self.db.size
             stats = StatsAccumulator()
             t = self.transformer
+
             for sample in self.augment_data(data.samples):
                 t.check_sample(sample)
                 stats.add(sample)

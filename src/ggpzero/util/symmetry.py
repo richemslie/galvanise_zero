@@ -69,6 +69,9 @@ class Translator(object):
         self.translate_basestate_cache = {}
         self.translate_action_cache = {}
 
+        # set first time in translate_basestate_faster
+        self.base_translate_symbols_indices = None
+
     def add_basetype(self, root_term, x_terms_idx, y_terms_idx):
         assert root_term not in self.base_root_term_indexes
 
@@ -140,15 +143,46 @@ class Translator(object):
         self.translate_basestate_cache[key] = new_bs_indx
         return new_bs_indx
 
+    def translate_basestate_faster(self, basestate, do_reflection, rot_count):
+        # all skips copied... phew
+        new_basestate = list(basestate)
+
+        if not do_reflection and rot_count == 0:
+            return new_basestate
+
+        if self.base_translate_symbols_indices is None:
+            self.base_translate_symbols_indices = []
+            for indx, terms in enumerate(self.base_symbols):
+                if terms[0] in self.skip_base_root_terms:
+                    continue
+
+                if terms[0] not in self.base_root_term_indexes:
+                    raise Exception("Not supported base %s" % str(terms))
+
+                self.base_translate_symbols_indices.append(indx)
+
+        set_these = []
+        for indx in self.base_translate_symbols_indices:
+            if new_basestate[indx]:
+                terms = self.base_symbols[indx]
+                new_bs_indx = self.translate_basestate_helper(terms, do_reflection, rot_count)
+                set_these.append(new_bs_indx)
+                new_basestate[indx] = 0
+
+        for indx in set_these:
+            new_basestate[indx] = 1
+
+        return new_basestate
+
     def translate_basestate(self, basestate, do_reflection, rot_count):
         # takes tuple/list, return new list (including self)
         assert isinstance(basestate, (tuple, list))
         assert len(basestate) == len(self.base_symbols)
 
         new_basestate = [0 for _ in range(len(basestate))]
+
         for indx, terms in enumerate(self.base_symbols):
-            value = basestate[indx]
-            if not value:
+            if not basestate[indx]:
                 continue
 
             if terms[0] in self.skip_base_root_terms:
@@ -164,7 +198,6 @@ class Translator(object):
         return new_basestate
 
     def translate_action(self, role_index, legal, do_reflection, rot_count):
-
         key = role_index, legal, do_reflection, rot_count
         try:
             return self.translate_action_cache[key]
