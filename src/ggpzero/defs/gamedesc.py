@@ -403,6 +403,20 @@ class Games(object):
                         "1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19".split(),
                         [cell], controls)
 
+    def baduk_9x9(self):
+        control = binary_control("control", "white", "black")
+        simple_controls = [simple_control("passed", "black"),
+                           simple_control("passed", "white"),
+                           simple_control("ko_set")]
+
+        cell = BoardChannels("cell", 2, 3, [BoardTerm(1, "white black".split())])
+        ko_point = BoardChannels("ko_point", 1, 2)
+        ko_captured = BoardChannels("ko_captured", 1, 2)
+        return GameDesc("baduk_9x9",
+                        "a b c d e f g h i".split(),
+                        "1 2 3 4 5 6 7 8 9".split(),
+                        [cell, ko_point, ko_captured], simple_controls + [control])
+
 
 class GameSymmetries(object):
     ''' class is only here to create a namespace '''

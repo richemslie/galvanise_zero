@@ -540,8 +540,6 @@ class DataCache(object):
         # go through each samples
         count = 0
         for sample in samples:
-            if count % 100 == 0:
-                log.verbose("processed samples %s" % count)
             count += 1
 
             seen = set()
