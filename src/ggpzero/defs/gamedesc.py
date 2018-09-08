@@ -444,7 +444,6 @@ class GameSymmetries(object):
                           do_rotations_90=True,
                           do_reflection=True)
 
-
     def _hex(self):
         return Symmetries(skip_bases=["control", "step", "owner", "canSwap"],
                           apply_bases=[ApplySymmetry("cell", 1, 2),
@@ -456,3 +455,13 @@ class GameSymmetries(object):
                           do_reflection=True)
     hexLG11 = _hex
     hexLG13 = _hex
+
+    def baduk_9x9(self):
+        return Symmetries(skip_bases=["control", "passed"],
+                          apply_bases=[ApplySymmetry("cell", 2, 3),
+                                       ApplySymmetry("ko_point", 1, 2),
+                                       ApplySymmetry("ko_captured", 1, 2)],
+                          skip_actions=["noop", "pass"],
+                          apply_actions=[ApplySymmetry("place", 1, 2)],
+                          do_rotations_90=True,
+                          do_reflection=True)
