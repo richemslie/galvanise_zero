@@ -43,7 +43,7 @@ namespace GGPZero::PuctV2 {
         // tree manangement
         void removeNode(PuctNode*);
         void releaseNodes(PuctNode*);
-        PuctNode* lookupNode(const GGPLib::BaseState* bs);
+        PuctNode* lookupNode(const GGPLib::BaseState* bs, int depth);
         PuctNode* createNode(PuctNode* parent, const GGPLib::BaseState* state);
         PuctNode* expandChild(PuctNode* parent, PuctNodeChild* child);
 
@@ -120,7 +120,6 @@ namespace GGPZero::PuctV2 {
         NetworkScheduler* scheduler;
 
         int game_depth;
-
 
         // root of the tree
         PuctNode* root;

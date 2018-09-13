@@ -1,13 +1,4 @@
-/*
-
-XXX
-* shmem?  Could get a factor of 4 speed up (maybe).  Still will have the problem of needing even
-  more non evaluated nodes.  At least can use multiple GPUs - which will help with turn around
-  times of the node evaluations.
-* (bugix - but inconsequential, I think) fix traversals > visits, when there is only one move
-
-*/
-
+/* does transpostions work with chess still? */
 
 #include "puct2/evaluator.h"
 #include "puct2/node.h"
@@ -150,10 +141,17 @@ void PuctEvaluator::releaseNodes(PuctNode* current) {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-PuctNode* PuctEvaluator::lookupNode(const GGPLib::BaseState* bs) {
+PuctNode* PuctEvaluator::lookupNode(const GGPLib::BaseState* bs, int depth) {
     auto found = this->lookup->find(bs);
     if (found != this->lookup->end()) {
         PuctNode* result = found->second;
+
+        // this is generally bad, as it may end up in a cycle... so no transposition in this case
+        if (result->game_depth != depth) {
+            //K273::l_warning("Lookup may form a cycle - skipping");
+            return nullptr;
+        }
+
         result->ref_count++;
         return result;
     }
@@ -213,7 +211,9 @@ PuctNode* PuctEvaluator::expandChild(PuctNode* parent, PuctNodeChild* child) {
     this->sm->updateBases(parent->getBaseState());
     this->sm->nextState(&child->move, this->basestate_expand_node);
 
-    child->to_node = this->lookupNode(this->basestate_expand_node);
+    int next_depth = parent->game_depth + 1;
+    child->to_node = this->lookupNode(this->basestate_expand_node, next_depth);
+
     if (child->to_node != nullptr) {
         this->stats.num_transpositions_attached++;
 
@@ -357,7 +357,7 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
     bool allow_expansions = true;
     if (depth > 0) {
         if (node->visits < this->conf->expand_threshold_visits ||
-            (node_score < 0.02 || node_score > 0.98)) {
+            node_score > 0.98) {
             // count non final expansions
             int non_final_expansions = 0;
             for (int ii=0; ii<node->num_children; ii++) {
@@ -392,12 +392,6 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
         }
 
         if (c->to_node == nullptr && !allow_expansions) {
-            continue;
-        }
-
-        // anti latching behaviour (XXX why i need this at all?)
-        if (depth == 0 && c->traversals > total_traversals * 0.75) {
-            best_fallback = c;
             continue;
         }
 
@@ -445,12 +439,18 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
                 best_child_score_actual_score = child_score;
                 best_child_score = c;
             }
+
+            // anti latching behaviour (XXX why do we need this at all?)
+            if (allow_expansions && c->traversals > total_traversals * 0.7) {
+                best_fallback = c;
+                continue;
+            }
         }
 
         // (more exploration) apply score discount for massive number of inflight visits
         // XXX rng - kind of expensive here?  tried using 1 and 0.25... has quite an effect on exploration.
-        const double discounted_visits = inflight_visits * (this->rng.get() + 0.25);
-        if (c->traversals > 8 && discounted_visits > 0.1) {
+        const double discounted_visits = inflight_visits * (this->rng.get() + 0.5);
+        if (c->traversals > 4 && discounted_visits > 0.1) {
             child_score = (child_score * c->traversals) / (c->traversals + discounted_visits);
         }
 
@@ -683,8 +683,6 @@ int PuctEvaluator::treePlayout() {
                 path.emplace_back(current, nullptr, nullptr, current->num_children_expanded);
                 break;
             }
-
-            // continue
         }
 
         current->inflight_visits++;
@@ -755,7 +753,9 @@ void PuctEvaluator::playoutWorker() {
 
 void PuctEvaluator::playoutMain(double end_time) {
     const double start_time = K273::get_time();
-    K273::l_debug("enter playoutMain() for max %.1f seconds", end_time - start_time);
+    if (this->conf->verbose) {
+        K273::l_debug("enter playoutMain() for max %.1f seconds", end_time - start_time);
+    }
 
     const bool use_think_time = this->conf->think_time > 0;
 
@@ -778,61 +778,67 @@ void PuctEvaluator::playoutMain(double end_time) {
         return false;
     };
 
+    auto report = [&do_report](std::string s){
+        if (do_report()) {
+            K273::l_warning(s);
+        }
+    };
+
     int iterations = 0;
     while (true) {
         const int our_role_index = this->root->lead_role_index;
 
         if (this->root->is_finalised && iterations > 1000) {
-            K273::l_warning("Breaking early as finalised");
+            report("Breaking early as finalised");
             break;
         }
 
         if (end_time > 0 && K273::get_time() > end_time) {
-            K273::l_warning("Hit hard time limit");
+            report("Hit hard time limit");
             break;
         }
 
         // use think time:
         // hacked up so can run in reasonable times during ICGA
-        if (use_think_time && iterations % 20 == 0 && K273::get_time() > (start_time + 2.0)) {
+        if (use_think_time && iterations % 20 == 0 && K273::get_time() > (start_time + 0.25)) {
 
-            // const float our_score = this->root->getCurrentScore(our_role_index);
+            const float our_score = this->root->getCurrentScore(our_role_index);
             // if (our_score > 0.99 || our_score < 0.010) {
             //    if (this->converged(2)) {
-            //        K273::l_warning("Done done (simple converge)");
+            //        report("Done done (simple converge)");
             //        break;
             //    }
             // }
 
-            // if (our_score > 0.97 || our_score < 0.03) {
-            //     if (elapsed(0.25) && this->converged(this->conf->converge_non_relaxed)) {
-            //         K273::l_warning("End game converged (relaxed)");
-            //         break;
-            //     }
+            if (our_score > 0.98 || our_score < 0.03) {
+                if (elapsed(0.25) && this->converged(this->conf->converge_non_relaxed)) {
+                    report("End game converged (relaxed)");
+                    break;
+                }
 
-            //     if (elapsed(0.33) && this->converged(2)) {
-            //         K273::l_warning("End game done (simple converge)");
-            //         break;
-            //     }
+                if (elapsed(0.33) && this->converged(2)) {
+                    report("End game done (simple converge)");
+                    break;
+                }
 
-            //     if (elapsed(0.5)) {
-            //         K273::l_warning("End game done (no converge)");
-            //         break;
-            //     }
-            // }
+                if (elapsed(0.5)) {
+                    report("End game done (no converge)");
+                    break;
+                }
+            }
 
             if (elapsed(1.0) && this->converged(this->conf->converge_relaxed)) {
-                K273::l_warning("Breaking since converged (relaxed)");
+                report("Breaking since converged (relaxed)");
                 break;
             }
 
             if (elapsed(1.33) && this->converged(this->conf->converge_non_relaxed)) {
-                K273::l_warning("Breaking since converged (non-relaxed)");
+                report("Breaking since converged (non-relaxed)");
                 break;
             }
 
             if (elapsed(1.75)) {
-                K273::l_warning("Breaking - but never converged :(");
+                report("Breaking - but never converged :(");
                 break;
             }
         }
@@ -913,7 +919,10 @@ PuctNode* PuctEvaluator::fastApplyMove(const PuctNodeChild* next) {
     }
 
     if (this->garbage.size()) {
-        K273::l_error("Garbage collected... %zu, please wait", this->garbage.size());
+        if (this->conf->verbose) {
+            K273::l_error("Garbage collected... %zu, please wait", this->garbage.size());
+        }
+
         for (PuctNode* n : this->garbage) {
             this->removeNode(n);
         }
@@ -1045,12 +1054,18 @@ const PuctNodeChild* PuctEvaluator::onNextMove(int max_evaluations, double end_t
     }
 
     // collect workers
+    if (this->conf->verbose) {
+        K273::l_verbose("Starting collect.");
+    }
+
     this->do_playouts = false;
     while (worker_count > 0) {
         this->scheduler->yield();
     }
 
-    K273::l_verbose("All workers collected.");
+    if (this->conf->verbose) {
+        K273::l_verbose("All workers collected.");
+    }
 
     const PuctNodeChild* choice = this->choose();
 
