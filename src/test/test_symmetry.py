@@ -214,6 +214,10 @@ def game_test(game, pretty_board, advance_state_count):
 
         # translate state/moves
         basestate_list = t.translate_basestate(basestate.to_list(), do_reflection, rot_count)
+        basestate2_list = t.translate_basestate_faster(basestate.to_list(), do_reflection, rot_count)
+
+        assert basestate_list == basestate2_list
+
         translated_moves = translate_moves(sm, basestate, t, do_reflection, rot_count)
 
         translated_basestate.from_list(basestate_list)

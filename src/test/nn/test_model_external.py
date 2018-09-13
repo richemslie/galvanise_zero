@@ -39,7 +39,8 @@ def setup():
     addgame.install_games()
 
 
-games = ["draughts_bt_8x8"]
+#games = ["draughts_bt_8x8"]
+games = ["baduk_9x9"]
 
 
 def advance_state(sm, basestate):
@@ -72,14 +73,18 @@ def test_basic_config():
 
         # lookup game in manager
         transformer = man.get_transformer(game)
-        print transformer.x_cords
 
         print "rows x cols", transformer.num_rows, transformer.num_cols
+        print transformer.x_cords
+        print transformer.y_cords
 
         print
         print transformer.state_to_channels(basestate.to_list())
         basestate = advance_state(game_info.get_sm(), basestate)
         print
+        print transformer.state_to_channels(basestate.to_list())
+
+        basestate = advance_state(game_info.get_sm(), basestate)
         print transformer.state_to_channels(basestate.to_list())
 
 
