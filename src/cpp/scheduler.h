@@ -3,10 +3,9 @@
 #include "sample.h"
 #include "events.h"
 
-#include "greenlet/greenlet.h"
-
 #include <k273/inplist.h>
 #include <k273/exception.h>
+#include <greenlet/greenlet.h>
 
 #include <deque>
 #include <vector>
