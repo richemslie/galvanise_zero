@@ -287,25 +287,30 @@ class TrainManager(object):
         return value_weight
 
     def do_epochs(self, num_epochs_include_all=-1):
+
         # abbreviate, easier on the eyes
         conf = self.train_config
 
-        self.cache = datacache.DataCache(self.transformer, conf.generation_prefix,
-                                         do_augment_data=self.do_data_augmentation)
-        self.cache.sync()
+        cache = datacache.DataCache(self.transformer, conf.generation_prefix,
+                                    do_augment_data=self.do_data_augmentation)
+        cache.sync()
+
+        max_epoch_size = conf.max_epoch_size
+        if max_epoch_size is None:
+            max_epoch_size = cache.total_samples
 
         train_at_step = conf.next_step - 1
         ignore_after_step = conf.starting_step
         assert 0 <= ignore_after_step <= train_at_step
         buckets_def = datacache.Buckets(conf.resample_buckets)
 
-        indexer = self.cache.create_chunk_indexer(buckets_def,
-                                                  starting_step=train_at_step,
-                                                  ignore_after_step=ignore_after_step,
-                                                  validation_split=conf.validation_split)
+        indexer = cache.create_chunk_indexer(buckets_def,
+                                             starting_step=train_at_step,
+                                             ignore_after_step=ignore_after_step,
+                                             validation_split=conf.validation_split)
 
         # first get validation data, then we can forget about it as it doesn't need reshuffled
-        validation_size = int(conf.max_epoch_size * (1 - conf.validation_split))
+        validation_size = int(max_epoch_size * (1 - conf.validation_split))
         validation_indices = indexer.validation_epoch(validation_size)
 
         # XXX should be specified on the server... bit hacky to do this here
@@ -329,19 +334,19 @@ class TrainManager(object):
 
             # resample the samples!
             if i < num_epochs_include_all:
-                training_indices = indexer.training_epoch(conf.max_epoch_size, include_all=1)
+                training_indices = indexer.training_epoch(max_epoch_size, include_all=1)
             else:
-                training_indices = indexer.training_epoch(conf.max_epoch_size)
+                training_indices = indexer.training_epoch(max_epoch_size)
 
             if i > 0:
                 value_weight = self.update_value_weighting(value_weight)
 
             fitter = self.nn.get_model().fit_generator
-            fitter(self.cache.generate(training_indices, conf.batch_size),
+            fitter(cache.generate(training_indices, conf.batch_size),
                    len(training_indices) / conf.batch_size,
                    epochs=1,
                    verbose=0,
-                   validation_data=self.cache.generate(validation_indices, conf.batch_size),
+                   validation_data=cache.generate(validation_indices, conf.batch_size),
                    validation_steps=len(validation_indices) / conf.batch_size,
                    callbacks=[training_logger, self.controller],
                    shuffle=False,
