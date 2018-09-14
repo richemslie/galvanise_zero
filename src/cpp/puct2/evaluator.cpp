@@ -449,8 +449,8 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
 
         // (more exploration) apply score discount for massive number of inflight visits
         // XXX rng - kind of expensive here?  tried using 1 and 0.25... has quite an effect on exploration.
-        const double discounted_visits = inflight_visits * (this->rng.get() + 0.5);
-        if (c->traversals > 4 && discounted_visits > 0.1) {
+        const double discounted_visits = inflight_visits * (this->rng.get() + 0.25);
+        if (c->traversals > 16 && discounted_visits > 0.1) {
             child_score = (child_score * c->traversals) / (c->traversals + discounted_visits);
         }
 
