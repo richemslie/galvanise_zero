@@ -306,7 +306,6 @@ class GdlBasesTransformer(object):
         assert len(values) == self.role_count
         return np.array(values, dtype='float32')
 
-
     def get_symmetries_desc(self):
         gds = gamedesc.GameSymmetries()
         if hasattr(gds, self.game):
@@ -314,7 +313,7 @@ class GdlBasesTransformer(object):
         return None
 
 
-class GdlBasesTransformer_Draws(object):
+class GdlBasesTransformer_Draws(GdlBasesTransformer):
     def value_to_array(self, values):
         assert len(values) == 2
         if abs(values[0] - 0.5) < 0.01:
@@ -323,4 +322,4 @@ class GdlBasesTransformer_Draws(object):
         else:
             new_values = [values[0], values[1], 0.0]
 
-        return np.array(values, dtype='float32')
+        return np.array(new_values, dtype='float32')

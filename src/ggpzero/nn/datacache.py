@@ -461,14 +461,15 @@ class DataCache(object):
             # XXX check columns are correct types
 
             if self.summary.total_samples != self.db.size:
-                m = "db and summary file different sizes summary = %s != %s"
+                msg = "db and summary file different sizes summary: %s != %s" % (self.db.size,
+                                                                                 self.summary.total_samples)
+                log.warning(msg)
                 if self.db.size > self.summary.total_samples:
-                    print m
-                    print "resizing"
+                    log.warning("resizing")
                     self.db.resize(self.summary.total_samples)
 
                 else:
-                    raise Check(m % (self.summary.total_samples, self.db.size))
+                    raise Check(msg)
 
         except Exception as exc:
             log.error("error accessing db directory: %s" % exc)
@@ -486,6 +487,7 @@ class DataCache(object):
 
         # these are columns for bcolz table
         cols = fake_columns(self.transformer)
+        print cols
 
         # and create a table
         self.db = bcolz.ctable(cols, names=["channels", "policy0", "policy1", "value"], rootdir=db_path)

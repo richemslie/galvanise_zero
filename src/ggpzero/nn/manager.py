@@ -60,7 +60,7 @@ class Manager(object):
         return p
 
     def get_transformer(self, game, generation_descr=None):
-        from ggpzero.nn.bases import GdlBasesTransformer
+        from ggpzero.nn.bases import GdlBasesTransformer, GdlBasesTransformer_Draws
 
         if generation_descr is None:
             generation_descr = templates.default_generation_desc(game)
@@ -68,15 +68,16 @@ class Manager(object):
         assert isinstance(generation_descr, datadesc.GenerationDescription)
 
         desc = generation_descr
-        key = (game, desc.channel_last, desc.multiple_policy_heads, desc.num_previous_states)
+        key = (game, desc.channel_last, desc.multiple_policy_heads, desc.num_previous_states, desc.draw_head)
 
         transformer = self.transformers.get(key)
 
         if transformer is None:
             # looks up the game in the ggplib database
             game_info = lookup.by_name(game)
-
-            self.transformers[key] = transformer = GdlBasesTransformer(game_info, generation_descr)
+            transformer_clz = GdlBasesTransformer_Draws if generation_descr.draw_head else GdlBasesTransformer
+            transformer = transformer_clz(game_info, generation_descr)
+            self.transformers[key] = transformer
 
         return transformer
 
@@ -99,7 +100,7 @@ class Manager(object):
         assert isinstance(nn_model_conf, confs.NNModelConfig)
         assert isinstance(generation_descr, datadesc.GenerationDescription)
 
-        keras_model = get_network_model(nn_model_conf)
+        keras_model = get_network_model(nn_model_conf, generation_descr)
         return NeuralNetwork(transformer, keras_model, generation_descr)
 
     def save_network(self, nn, generation_name=None):

@@ -83,6 +83,8 @@ class GenerationDescription(object):
     # XXX todo
     transformer_description = attr.ib(None)
 
+    draw_head = attr.ib(False)
+
     # the training config attributes - for debugging, historical purposes
     # the number of samples trained on, etc
     # the number losses, validation losses, accurcacy

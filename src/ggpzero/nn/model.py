@@ -151,7 +151,7 @@ def residual_block_v2(filter_size, prev_filter_size, kernel_size, num_convs,
     return block
 
 
-def get_network_model(conf):
+def get_network_model(conf, generation_descr):
     assert isinstance(conf, confs.NNModelConfig)
 
     activation = 'leakyrelu' if conf.leaky_relu else 'relu'
@@ -241,6 +241,11 @@ def get_network_model(conf):
     #######
     # XXX config abuse:
 
+    if generation_descr.draw_head:
+        num_value_heads = 3
+    else:
+        num_value_heads = 2
+
     value_v3 = conf.value_hidden_size == 0
     value_v2 = conf.value_hidden_size < 0
     if value_v3:
@@ -278,7 +283,7 @@ def get_network_model(conf):
         hidden = klayers.Dense(256, name="value_hidden")(flat)
         hidden = act(hidden, 'crelu', name="value_hidden_act")
 
-        value_head = klayers.Dense(conf.role_count,
+        value_head = klayers.Dense(num_value_heads,
                                    name="value")(hidden)
 
     elif value_v2:
@@ -304,7 +309,7 @@ def get_network_model(conf):
 
         flat = klayers.Flatten()(to_flatten)
 
-        value_head = klayers.Dense(conf.role_count,
+        value_head = klayers.Dense(num_value_heads,
                                    activation="sigmoid", name="value")(flat)
 
     else:
@@ -320,7 +325,7 @@ def get_network_model(conf):
         if conf.dropout_rate_value > 0:
             hidden = klayers.Dropout(conf.dropout_rate_value)(hidden)
 
-        value_head = klayers.Dense(conf.role_count,
+        value_head = klayers.Dense(num_value_heads,
                                    activation="sigmoid", name="value")(hidden)
 
     # model:
