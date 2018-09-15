@@ -120,41 +120,6 @@ class Manager(object):
         with open(self.generation_path(game, generation_name), "w") as f:
             f.write(attrutil.attr_to_json(nn.generation_descr, pretty=True))
 
-    def load_network_fixme(self, game):
-        import glob
-        import datetime
-        p = os.path.join(self.data_path, game, "models")
-        os.chdir(p)
-        gens = glob.glob("%s_*" % game)
-
-        for g in gens:
-            print "doing", game, g
-            generation = os.path.splitext(g)[0]
-            new_style_gen = generation.replace(game + "_", "")
-
-            print generation, new_style_gen
-
-            # dummy generation_descr
-            generation_descr = templates.default_generation_desc(game)
-
-            json_str = open(self.model_path(game, generation)).read()
-            keras_model = keras_models.model_from_json(json_str)
-
-            keras_model.load_weights(self.weights_path(game, generation))
-            transformer = self.get_transformer(game, generation_descr)
-            print transformer, keras_model, generation_descr
-            nn = NeuralNetwork(transformer, keras_model, generation_descr)
-            generation_descr.name = new_style_gen
-            generation_descr.trained_losses = "unknown"
-            generation_descr.trained_validation_losses = "unknown"
-            generation_descr.trained_policy_accuracy = "unknown"
-            generation_descr.trained_value_accuracy = "unknown"
-            ctime = os.stat(self.model_path(game, generation)).st_ctime
-
-            generation_descr.date_created = datetime.datetime.fromtimestamp(ctime).strftime("%Y/%m/%d %H:%M")
-            print generation_descr
-            self.save_network(nn)
-
     def load_network(self, game, generation_name):
         json_str = open(self.generation_path(game, generation_name)).read()
         generation_descr = attrutil.json_to_attr(json_str)
