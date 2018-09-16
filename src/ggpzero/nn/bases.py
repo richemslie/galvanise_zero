@@ -68,7 +68,7 @@ class GdlBasesTransformer(object):
         self.game_info = game_info
 
         if game_desc is None:
-           game_desc = getattr(gamedesc.Games(), self.game)()
+            game_desc = getattr(gamedesc.Games(), self.game)()
 
         assert isinstance(game_desc, gamedesc.GameDesc)
         self.game_desc = game_desc
@@ -86,6 +86,7 @@ class GdlBasesTransformer(object):
         # this is the 'image' data ordering for tensorflow/keras
         self.channel_last = generation_descr.channel_last
         self.num_previous_states = generation_descr.num_previous_states
+        self.num_rewards = 3 if generation_descr.draw_head else 2
 
         assert self.num_previous_states >= 0
         self.init_spaces()

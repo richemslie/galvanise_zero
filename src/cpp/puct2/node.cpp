@@ -413,9 +413,13 @@ void PuctNodeRequest::reply(const ModelResult& result,
     }
 
     for (int ri=0; ri<role_count; ri++) {
-        float s = result.getReward(ri);
 
-        // store the result as is, we don't use it for anything
+        float s = result.getReward(ri);
+        if (transformer->getNumberRewards() == 3) {
+            float mid = result.getReward(2) / 2.0f;
+            s += mid;
+        }
+
         node->setFinalScore(ri, s);
 
         // clamp and set current score

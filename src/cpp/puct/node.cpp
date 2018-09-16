@@ -374,6 +374,11 @@ void PuctNodeRequest::reply(const GGPZero::ModelResult& result,
 
     for (int ri=0; ri<role_count; ri++) {
         float s = result.getReward(ri);
+        if (transformer->getNumberRewards() == 3) {
+            float mid = result.getReward(2) / 2.0f;
+            s += mid;
+        }
+
         if (s > 1.0) {
             s = 1.0f;
 

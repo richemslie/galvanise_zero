@@ -112,7 +112,7 @@ const ReadyEvent* Supervisor::poll(int predict_count, std::vector <float*>& data
             }
 
             memcpy(event->final_scores, data[index++],
-                   sizeof(float) * predict_count * this->sm->getRoleCount());
+                   sizeof(float) * predict_count * this->transformer->getNumberRewards());
         }
     };
 

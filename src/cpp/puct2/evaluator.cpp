@@ -942,6 +942,10 @@ PuctNode* PuctEvaluator::fastApplyMove(const PuctNodeChild* next) {
     }
 
     this->root = new_root;
+
+    // ensure we have no parent
+    this->root->parent = nullptr;
+
     this->game_depth++;
 
     if (number_of_nodes_before - this->number_of_nodes > 0) {

@@ -36,6 +36,7 @@ def create_c_transformer(transformer):
                                    transformer.raw_channels_per_state,
                                    transformer.num_of_controls_channels,
                                    transformer.num_previous_states,
+                                   transformer.num_rewards,
                                    transformer.policy_dist_count)
 
     # build it up

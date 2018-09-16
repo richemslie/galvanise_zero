@@ -34,9 +34,7 @@ SelfPlayManager::SelfPlayManager(GGPLib::StateMachineInterface* sm,
     number_actual_resigns(0),
     number_aborts_game_length(0) {
 
-    this->scheduler = new NetworkScheduler(this->transformer,
-                                           this->sm->getRoleCount(),
-                                           this->batch_size);
+    this->scheduler = new NetworkScheduler(this->transformer, this->batch_size);
 
     // allocate buffers for predict_done_event
     for (int ii=0; ii<this->transformer->getNumberPolicies(); ii++) {
@@ -46,7 +44,7 @@ SelfPlayManager::SelfPlayManager(GGPLib::StateMachineInterface* sm,
         this->predict_done_event.policies.push_back(mem);
     }
 
-    const int num_of_floats_final_scores = (this->sm->getRoleCount() *
+    const int num_of_floats_final_scores = (this->transformer->getNumberRewards() *
                                             this->batch_size);
 
     this->predict_done_event.final_scores = new float[num_of_floats_final_scores];

@@ -77,7 +77,7 @@ namespace GGPZero {
     class NetworkScheduler {
     public:
         NetworkScheduler(const GdlBasesTransformer* transformer,
-                         int role_count, int batch_size, int lru_cache_size=1000);
+                         int batch_size, int lru_cache_size=1000);
         ~NetworkScheduler();
 
     public:
@@ -109,7 +109,6 @@ namespace GGPZero {
 
     private:
         const GdlBasesTransformer* transformer;
-        const int role_count;
         const unsigned int batch_size;
 
         std::vector <greenlet_t*> requestors;

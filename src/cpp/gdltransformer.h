@@ -72,11 +72,13 @@ namespace GGPZero {
                             int channels_per_state,
                             int num_control_channels,
                             int num_prev_states,
+                            int num_rewards,
                             std::vector <int>& expected_policy_sizes) :
             channel_size(channel_size),
             channels_per_state(channels_per_state),
             num_control_channels(num_control_channels),
             num_prev_states(num_prev_states),
+            num_rewards(num_rewards),
             expected_policy_sizes(expected_policy_sizes) {
         }
 
@@ -128,7 +130,7 @@ namespace GGPZero {
             // XXX currently we have one reward/value head per role.  Same as policy.  So we can
             // abuse that for now.  In the future, we want to be able to modify these
             // independently.
-            return 2;
+            return this->num_rewards;
         }
 
         GGPLib::BaseState::ArrayType* createHashMask(GGPLib::BaseState* bs) const;
@@ -138,6 +140,7 @@ namespace GGPZero {
         const int channels_per_state;
         const int num_control_channels;
         const int num_prev_states;
+        const int num_rewards;
         std::vector <BaseToBoardSpace> board_space;
         std::vector <BaseToChannelSpace> control_space;
 

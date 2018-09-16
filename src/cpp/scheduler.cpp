@@ -42,10 +42,8 @@ void ModelResult::set(const GGPLib::BaseState* bs,
 ///////////////////////////////////////////////////////////////////////////////
 
 NetworkScheduler::NetworkScheduler(const GdlBasesTransformer* transformer,
-                                   int role_count, int batch_size,
-                                   int lru_cache_size) :
+                                   int batch_size, int lru_cache_size) :
     transformer(transformer),
-    role_count(role_count),
     batch_size(batch_size),
     main_loop(nullptr),
     top(nullptr),

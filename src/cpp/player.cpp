@@ -23,7 +23,7 @@ Player::Player(GGPLib::StateMachineInterface* sm,
 
     // first create a scheduler
     const int batch_size = 1;
-    this->scheduler = new NetworkScheduler(transformer, sm->getRoleCount(), batch_size);
+    this->scheduler = new NetworkScheduler(transformer, batch_size);
 
     // ... and then the evaluator...
     // dupe statemachine here, as the PuctEvaluator thinks it is sharing a statemachine (ie it

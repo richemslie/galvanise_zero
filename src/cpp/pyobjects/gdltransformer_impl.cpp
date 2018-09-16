@@ -184,14 +184,16 @@ static void GdlBasesTransformerWrapper_dealloc(PyObject* ptr) {
 ///////////////////////////////////////////////////////////////////////////////
 
 static PyObject* gi_GdlBasesTransformer(PyObject* self, PyObject* args) {
-    int channel_size, channels_per_state, num_control_channels, num_prev_states;
+    int channel_size, channels_per_state, num_control_channels;
+    int num_prev_states, num_rewards;
     PyObject* expected_policy_sizes;
 
-    if (! ::PyArg_ParseTuple(args, "iiiiO!",
+    if (! ::PyArg_ParseTuple(args, "iiiiiO!",
                              &channel_size,
                              &channels_per_state,
                              &num_control_channels,
                              &num_prev_states,
+                             &num_rewards,
                              &PyList_Type, &expected_policy_sizes)) {
         return nullptr;
     }
@@ -210,6 +212,7 @@ static PyObject* gi_GdlBasesTransformer(PyObject* self, PyObject* args) {
                                                                channels_per_state,
                                                                num_control_channels,
                                                                num_prev_states,
+                                                               num_rewards,
                                                                policy_sizes);
 
     return (PyObject *) PyType_GdlBasesTransformerWrapper_new(transformer);
