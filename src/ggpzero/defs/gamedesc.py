@@ -376,7 +376,8 @@ class Games(object):
                         "1 2 3 4 5 6 7 8 9 10 11".split(),
                         [cell], [control])
 
-    def draughts_bt_8x8(self):
+
+    def _draughts_helper(self):
         interim_status = simple_control("interim_status")
         control = binary_control("control", "white", "black")
 
@@ -385,11 +386,23 @@ class Games(object):
 
         capturing_piece = BoardChannels("capturing_piece", 1, 2)
         last_piece = BoardChannels("last_at", 1, 2)
+        return [cell, capturing_piece, last_piece], [interim_status, control]
+
+    def draughts_bt_8x8(self):
+        board_channels, controls = self._draughts_helper()
 
         return GameDesc("draughts_bt_8x8",
                         "a b c d e f g h".split(),
                         "1 2 3 4 5 6 7 8".split(),
-                        [cell, capturing_piece, last_piece], [interim_status, control])
+                        board_channels, controls)
+
+    def draughts_10x10(self):
+        board_channels, controls = self._draughts_helper()
+
+        return GameDesc("draughts_10x10",
+                        "a b c d e f g h i j".split(),
+                        "1 2 3 4 5 6 7 8 9 10".split(),
+                        board_channels, controls)
 
     def connect6(self):
         # 4 control channels (black/white place twice per turn)

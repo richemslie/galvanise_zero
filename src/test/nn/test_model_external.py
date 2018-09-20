@@ -39,8 +39,8 @@ def setup():
     addgame.install_games()
 
 
-#games = ["draughts_bt_8x8"]
-games = ["baduk_9x9"]
+games = ["baduk_9x9", "draughts_bt_8x8", "draughts_10x10"]
+#games = ["baduk_9x9"]
 
 
 def advance_state(sm, basestate):
