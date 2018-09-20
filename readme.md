@@ -21,7 +21,7 @@ Games trained for > 5 days (from most recent)
 
 See https://github.com/richemslie/ggp-zero/blob/dev/src/ggpzero/defs/gamedesc.py for full list.
 
-Amazons and Breakthrough are the winners of the ICGA 2017 Computer Olympiad.  Chess and Go are
+Amazons and Breakthrough are the winners of the ICGA 2018 Computer Olympiad.  Chess and Go are
 reasonably strong, but no where near the level one could achieve if spending 100s of GPU days
 training.
 
