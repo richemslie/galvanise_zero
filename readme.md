@@ -21,14 +21,7 @@ Games trained for > 5 days (from most recent)
 
 See https://github.com/richemslie/ggp-zero/blob/dev/src/ggpzero/defs/gamedesc.py for full list.
 
-Amazons and Breakthrough are the winners of the ICGA 2018 Computer Olympiad.  Chess and Go are
-reasonably strong, but no where near the level one could achieve if spending 100s of GPU days
-training.
-
-Go 9x9 has a rating 2560 elo on CGOS after about a week of training.
-
-Chess was harder to test due to not having 50 rule, but somewhere about 2200-2600 elo would be my
-best guess.
+Amazons and Breakthrough models were strong enough to win gold medals at ICGA 2018 Computer Olympiad.  Reversi performs a litte under AB players (about ntest level 20) and Hex/Connect6 play around somewhere around top 10 human level on LG (at a guess, really don't know for sure).  Chess and Go are reasonably strong, but no where near the level one could achieve if spending 100s of GPU days training.  Go 9x9 has a rating 2560 elo on CGOS after about a week of training.  Chess was harder to test due to not having 50 rule, but somewhere about 2200-2600 elo would be my best guess.
 
 Also, Chess and Connect6 "cheated" as experimented with adding some data from historical games
 during the self play.
@@ -65,7 +58,7 @@ the state of the art GGP players, given some (relatively) small time frame to tr
 days to a week, on commodity hardware - and not months/years worth of training time on hundreds of
 GPUs).
 
-Some game types which are completely unsupported right now:
+Some game types which would be interesting to try:
 
 * non-zero board games (such as non zero sum variant of Skirmish)
 * multiplayer games
