@@ -13,9 +13,9 @@
 namespace GGPZero::PuctV2 {
 
     // forwards
-    class PuctConfig;
     class PuctEvaluator;
-    class PuctNodeChild;
+    struct PuctConfig;
+    struct PuctNodeChild;
 
     // this is a bit of hack, wasnt really designed to actually play from c++
     class Player {

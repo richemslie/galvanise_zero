@@ -9,9 +9,9 @@
 
 namespace GGPZero {
     // forwards
-    class Sample;
-    class PuctNode;
-    class PuctConfig;
+    struct Sample;
+    struct PuctNode;
+    struct PuctConfig;
     class PuctEvaluator;
     class NetworkScheduler;
     class SelfPlayManager;

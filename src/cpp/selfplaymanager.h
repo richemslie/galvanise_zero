@@ -15,7 +15,7 @@ namespace GGPZero {
     // forwards
     class SelfPlay;
     class PuctEvaluator;
-    class SelfPlayConfig;
+    struct SelfPlayConfig;
 
     class SelfPlayManager {
     public:

@@ -22,8 +22,8 @@ namespace GGPZero {
     // forwards
     class PuctEvaluator;
     class SelfPlay;
-    class SelfPlayConfig;
     class SelfPlayManager;
+    struct SelfPlayConfig;
 
     typedef K273::LockedQueue <SelfPlayManager*> ReadyQueue;
     typedef K273::LockedQueue <SelfPlayManager* > PredictDoneQueue;

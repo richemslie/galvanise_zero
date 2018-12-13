@@ -12,11 +12,12 @@
 namespace GGPZero {
 
     // forwards
-    class PuctConfig;
     class PuctEvaluator;
-    class PuctNodeChild;
     class NetworkScheduler;
     class GdlBasesTransformer;
+
+    struct PuctConfig;
+    struct PuctNodeChild;
 
     // this is a bit of hack, wasnt really designed to actually play from c++
     class Player {
