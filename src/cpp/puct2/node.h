@@ -26,6 +26,9 @@ namespace GGPZero::PuctV2 {
         float policy_prob;
         float next_prob;
 
+        Score debug_node_score;
+        Score debug_puct_score;
+
         GGPLib::JointMove move;
     };
 

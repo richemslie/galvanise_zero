@@ -126,6 +126,9 @@ static int initialiseChildHelper(PuctNode* node, int role_index, int child_index
             child->policy_prob = 1.0f;
             child->next_prob = 0.0f;
 
+            child->debug_node_score = 0.0;
+            child->debug_puct_score = 0.0;
+
             child->move.setSize(role_count);
             child->move.assign(joint_move);
 
@@ -277,7 +280,7 @@ void PuctNode::dumpNode(const PuctNode* node,
             visits = child->to_node->visits;
         }
 
-        string msg = K273::fmtString("%s %s %d(%d):%s %.2f/%.2f   %s",
+        string msg = K273::fmtString("%s %s %d(%d):%s %.2f/%.2f   %s   %.2f/%.2f",
                                      indent.c_str(),
                                      move.c_str(),
                                      child->traversals,
@@ -285,7 +288,10 @@ void PuctNode::dumpNode(const PuctNode* node,
                                      finalised.c_str(),
                                      child->policy_prob * 100,
                                      child->next_prob * 100,
-                                     score.c_str());
+                                     score.c_str(),
+                                     child->debug_node_score,
+                                     child->debug_puct_score);
+
 
         if (child == highlight) {
             K273::l_info(msg);
