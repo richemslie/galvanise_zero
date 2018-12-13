@@ -711,6 +711,10 @@ const PuctNodeChild* PuctEvaluator::onNextMove(int max_evaluations, double end_t
 }
 
 float PuctEvaluator::getTemperature() const {
+    if (this->game_depth == 0) {
+        return 3.0;
+    }
+
     if (this->game_depth >= this->conf->depth_temperature_stop) {
         return -1;
     }
@@ -858,7 +862,7 @@ Children PuctEvaluator::getProbabilities(PuctNode* node, float temperature, bool
     float total_probability = 0.0f;
     for (int ii=0; ii<node->num_children; ii++) {
         PuctNodeChild* child = node->getNodeChild(this->sm->getRoleCount(), ii);
-        int child_visits = child->to_node ? child->to_node->visits + 0.1f : 0.1f;
+        float child_visits = child->to_node ? child->to_node->visits + 0.1f : 0.1f;
         if (use_linger) {
             child->next_prob = linger_pct * child->policy_prob + (1 - linger_pct) * (child_visits / node_visits);
 

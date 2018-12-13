@@ -232,20 +232,28 @@ PuctNode* PuctEvaluator::expandChild(PuctNode* parent, PuctNodeChild* child) {
 ///////////////////////////////////////////////////////////////////////////////
 // selection - move to new class, should have no side effects.  in/out path:
 
-void PuctEvaluator::setPuctConstant(PuctNode* node, int depth) const {
-    const float node_score = node->getCurrentScore(node->lead_role_index);
-
+float PuctEvaluator::setPuctConstant(PuctNode* node, int depth) const {
     // note we have dropped concept of before
-    if (node->visits < 8) {
+    if (node->visits < 3 * this->conf->batch_size) {
         node->puct_constant = this->conf->puct_constant_init;
-        return;
+        return node->getCurrentScore(node->lead_role_index);
     }
 
     // get top traversals out from this node
     float top_traversals = 0;
     float total_traversals = 0;
+
+    float node_best_score = -1.0;
     for (int ii=0; ii<node->num_children; ii++) {
         PuctNodeChild* c = node->getNodeChild(this->sm->getRoleCount(), ii);
+        if (c->to_node != nullptr) {
+            PuctNode* cn = c->to_node;
+            const float child_score = cn->getCurrentScore(node->lead_role_index);
+            if (child_score > node_best_score) {
+                node_best_score = child_score;
+            }
+        }
+
         if ((float) c->traversals > top_traversals) {
             top_traversals = c->traversals;
         }
@@ -256,14 +264,14 @@ void PuctEvaluator::setPuctConstant(PuctNode* node, int depth) const {
     if (total_traversals > node->num_children) {
         float ratio = top_traversals / float(total_traversals);
 
-        if (node_score > 0.8 && ratio < 0.95) {
+        if (node_best_score > 0.8 && ratio < 0.9) {
             // let it run away?
             node->puct_constant -= 0.01;
 
-        } else if (node_score < 0.8 && ratio > 0.8) {
+        } else if (node_best_score < 0.8 && ratio > 0.7) {
             node->puct_constant += 0.01;
 
-        } else if (ratio < 0.55) {
+        } else if (ratio < 0.5) {
             node->puct_constant -= 0.01;
         }
 
@@ -278,6 +286,8 @@ void PuctEvaluator::setPuctConstant(PuctNode* node, int depth) const {
             node->puct_constant = std::max(node->puct_constant, this->conf->puct_constant_min);
         }
     }
+
+    return node_best_score;
 }
 
 bool PuctEvaluator::converged(int count) const {
@@ -310,7 +320,7 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
     const int depth = path.size();
 
     // dynamically set the PUCT constant
-    this->setPuctConstant(node, depth);
+    const float node_best_score = this->setPuctConstant(node, depth);
 
     // nothing to select
     if (node->num_children == 1) {
@@ -318,8 +328,6 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
         path.emplace_back(node, child, child, node->num_children_expanded);
         return child;
     }
-
-    const float node_score = node->getCurrentScore(node->lead_role_index);
 
     // prior... (alpha go zero said 0 but there score ranges from [-1,1])
     // original value from network / or terminal value
@@ -357,7 +365,7 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
     bool allow_expansions = true;
     if (depth > 0) {
         if (node->visits < this->conf->expand_threshold_visits ||
-            node_score > 0.98) {
+            node_best_score > 0.98) {
             // count non final expansions
             int non_final_expansions = 0;
             for (int ii=0; ii<node->num_children; ii++) {
@@ -374,6 +382,13 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
             }
         }
     }
+
+    double skew_adjustment = 0.0;
+    // if (node->visits > this->conf->expand_threshold_visits) {
+    //     if (node_best_score > 0.42) {
+    //         skew_adjustment = node_best_score - 0.42;
+    //     }
+    // }
 
     int unselectables = 0;
     for (int ii=0; ii<node->num_children; ii++) {
@@ -395,7 +410,7 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
             continue;
         }
 
-        // we use doubles throughtout, for more precision
+        // we use doubles throughout, for more precision
         double child_score = prior_score;
         const int traversals = c->traversals + 1;
 
@@ -441,9 +456,13 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
             }
 
             // anti latching behaviour (XXX why do we need this at all?)
-            if (allow_expansions && c->traversals > total_traversals * 0.7) {
-                best_fallback = c;
-                continue;
+            const float limit_runaway_pct = depth > 0 ? 0.7 : 0.5;
+            if (depth == 0 && this->rng.get() > 0.1) {
+                if (c->traversals > 16 &&
+                    c->traversals > total_traversals * limit_runaway_pct) {
+                    best_fallback = c;
+                    continue;
+                }
             }
         }
 
@@ -455,7 +474,11 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
         }
 
         // end product
-        const double score = child_score + exploration_score;
+        // use for debug/display
+        c->debug_node_score = child_score - skew_adjustment;
+        c->debug_puct_score = exploration_score;
+
+        const double score = child_score - skew_adjustment + exploration_score;
 
         if (score > best_score) {
             best_child = c;
@@ -465,8 +488,15 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
 
     // this only happens if there was nothing to select
     if (best_child == nullptr) {
+
         if (best_fallback != nullptr) {
-            best_child = best_fallback;
+            if (best_child_score != nullptr) {
+                best_child = best_child_score;
+
+            } else {
+                best_child = best_fallback;
+            }
+
         } else if (bad_fallback != nullptr) {
             // this is bad, very bad.  There could be a race condition where this keeps getting called
             // ... so we insert a yield just in case.
@@ -541,13 +571,49 @@ void PuctEvaluator::backUpMiniMax(float* new_scores, const PathElement& cur) {
 
 void PuctEvaluator::backPropagate(float* new_scores, const Path& path) {
     const int role_count = this->sm->getRoleCount();
-    const int start_index = path.size() - 1;
+
+    auto forceFinalise = [role_count](PuctNode* cur) -> const PuctNodeChild* {
+        // XXX add to config
+        // conceptually, when determining whether to finalise a node, the goal is to ignore any
+        // children who's policy is less than pct.  Thereby aggressively finalising at the expense
+        // of accuracy.
+        const float more_to_explore_pct_ignore = 0.005;
+
+        float best_score = -1;
+        const PuctNodeChild* best = nullptr;
+
+        for (int ii=0; ii<cur->num_children; ii++) {
+            const PuctNodeChild* c = cur->getNodeChild(role_count, ii);
+
+            if (c->to_node != nullptr && c->to_node->is_finalised) {
+                float score = c->to_node->getCurrentScore(cur->lead_role_index);
+
+                // opportunist case
+                if (score > 0.99) {
+                    return c;
+                }
+
+                if (score > best_score) {
+                    best_score = score;
+                    best = c;
+                }
+
+            } else {
+                // not finalised, so more to explore?  See more_to_explore_pct_ignore comment above.
+                if (c->policy_prob > more_to_explore_pct_ignore) {
+                    // more to explore
+                    return nullptr;
+                }
+            }
+        }
+
+        return best;
+    };
 
     bool bp_finalised_only_once = true;
-
     const PathElement* prev = nullptr;
 
-    for (int index=start_index; index >= 0; index--) {
+    for (int index=path.size() - 1; index >= 0; index--) {
         const PathElement& cur = path[index];
 
         ASSERT(cur.node != nullptr);
@@ -556,39 +622,10 @@ void PuctEvaluator::backPropagate(float* new_scores, const Path& path) {
             !cur.node->is_finalised && cur.node->lead_role_index >= 0) {
             bp_finalised_only_once = false;
 
-            const PuctNodeChild* best = nullptr;
-            {
-                float best_score = -1;
-                bool more_to_explore = false;
-                for (int ii=0; ii<cur.node->num_children; ii++) {
-                    const PuctNodeChild* c = cur.node->getNodeChild(role_count, ii);
-
-                    if (c->to_node != nullptr && c->to_node->is_finalised) {
-                        float score = c->to_node->getCurrentScore(cur.node->lead_role_index);
-                        if (score > best_score) {
-                            best_score = score;
-                            best = c;
-                        }
-
-                    } else {
-                        // not finalised, so more to explore
-                        more_to_explore = true;
-                    }
-                }
-
-                // special opportunist case...
-                if (best_score > 0.99) {
-                    more_to_explore = false;
-                }
-
-                if (more_to_explore) {
-                    best = nullptr;
-                }
-            }
-
-            if (best != nullptr) {
+            const PuctNodeChild* finalised_child = forceFinalise(cur.node);
+            if (finalised_child != nullptr) {
                 for (int ii=0; ii<role_count; ii++) {
-                    cur.node->setCurrentScore(ii, best->to_node->getCurrentScore(ii));
+                    cur.node->setCurrentScore(ii, finalised_child->to_node->getCurrentScore(ii));
                 }
 
                 cur.node->is_finalised = true;
@@ -597,8 +634,7 @@ void PuctEvaluator::backPropagate(float* new_scores, const Path& path) {
 
         if (cur.node->is_finalised) {
             // This is important.  If we are backpropagating some path which is exploring, the
-            // finalised scores take precedent
-            // Also important for transpositions (if ever implemented)
+            // finalised scores take precedent.  Also important for transpositions.
             for (int ii=0; ii<role_count; ii++) {
                 new_scores[ii] = cur.node->getCurrentScore(ii);
             }
@@ -671,7 +707,6 @@ int PuctEvaluator::treePlayout() {
 
             this->scheduler->yield();
         }
-
         // if does not exist, then create it (will incur a nn prediction)
         if (child->to_node == nullptr) {
             current = this->expandChild(current, child);
@@ -695,6 +730,9 @@ int PuctEvaluator::treePlayout() {
 
     for (int ii=0; ii<this->sm->getRoleCount(); ii++) {
         scores[ii] = current->getCurrentScore(ii);
+        // if (!current->is_finalised) {
+        //     scores[ii] += (0.5 - this->rng.get()) / 10.0;
+        // }
     }
 
     this->backPropagate(scores, path);
@@ -1211,7 +1249,7 @@ Children PuctEvaluator::getProbabilities(PuctNode* node, float temperature, bool
     float total_probability = 0.0f;
     for (int ii=0; ii<node->num_children; ii++) {
         PuctNodeChild* child = node->getNodeChild(this->sm->getRoleCount(), ii);
-        int child_visits = child->to_node ? child->traversals + 0.1f : 0.1f;
+        float child_visits = child->to_node ? child->traversals + 0.1f : 0.1f;
         if (use_linger) {
             child->next_prob = linger_pct * child->policy_prob + (1 - linger_pct) * (child_visits / node_visits);
 

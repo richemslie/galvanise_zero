@@ -201,7 +201,11 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
 
             // create a sample (call getProbabilities() to ensure probabilities are right for policy)
             // ZZZ configure %
-            this->pe->getProbabilities(node, 1.15f, true);
+            if (node->game_depth == 0) {
+                this->pe->getProbabilities(node, 3.0f, true);
+            } else {
+                this->pe->getProbabilities(node, 1.15f, true);
+            }
 
             // XXX why we get the manager to do this????  Doesn't make sense(we can grab the
             // statemachine from this->pe)...
@@ -217,8 +221,8 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
             this->manager->incrDupes();
 
             // use the score iterations to advance state
-            const int score_iterations = this->conf->score_iterations;
-            choice = this->pe->onNextMove(score_iterations);
+            //const int score_iterations = this->conf->score_iterations;
+            choice = this->pe->onNextMove(iterations);
         }
 
         // apply the move
@@ -236,12 +240,10 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
 
         // some of the time actually resign (if we have at least one sample)
         // note, that this is done every turn, so over n time steps, more likely to actually resign
-        if (this->has_resigned) {
-            if (this->game_samples.size() > 1) {
-                if (this->rng.get() < this->conf->pct_actually_resign) {
-                    this->manager->incrActualResigns();
-                    break;
-                }
+        if (this->has_resigned && this->game_samples.size() > 1) {
+            if (this->rng.get() < this->conf->pct_actually_resign) {
+                this->manager->incrActualResigns();
+                break;
             }
         }
     }
