@@ -35,8 +35,6 @@ namespace GGPZero {
         float depth_temperature_max;
 
         float fpu_prior_discount;
-
-        int policy_dilution_visits = -1;
     };
 
     struct ExtraPuctConfig {

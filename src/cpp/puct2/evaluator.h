@@ -60,7 +60,6 @@ namespace GGPZero::PuctV2 {
 
         int treePlayout();
 
-        void normaliseRootNode();
         void playoutWorker();
         void playoutMain(double end_time);
         void logDebug(const PuctNodeChild* choice_root);

@@ -84,7 +84,6 @@ static PuctConfig* createPuctConfig(PyObject* dict) {
     config->depth_temperature_max = asFloat("depth_temperature_max");
 
     config->fpu_prior_discount = asFloat("fpu_prior_discount");
-    config->policy_dilution_visits = asInt("policy_dilution_visits");
 
     std::string choose_method = asString("choose");
     if (choose_method == "choose_top_visits") {
@@ -121,11 +120,8 @@ static GGPZero::PuctV2::PuctConfig* createPuctConfigV2(PyObject* dict) {
 
     config->verbose = asInt("verbose");
 
-    config->puct_constant_init = asFloat("puct_constant_init");
-    config->puct_constant_min = asFloat("puct_constant_min");
-    config->puct_constant_max = asFloat("puct_constant_max");
-    config->puct_constant_min_root = asFloat("puct_constant_min_root");
-    config->puct_constant_max_root = asFloat("puct_constant_max_root");
+    config->puct_constant = asFloat("puct_constant_min");
+    config->puct_constant_root = asFloat("puct_constant_min_root");
 
     config->dirichlet_noise_pct = asFloat("dirichlet_noise_pct");
     config->dirichlet_noise_alpha = asFloat("dirichlet_noise_alpha");
@@ -140,12 +136,7 @@ static GGPZero::PuctV2::PuctConfig* createPuctConfigV2(PyObject* dict) {
 
     config->fpu_prior_discount = asFloat("fpu_prior_discount");
 
-    config->scaled_visits_at = asInt("scaled_visits_at");
-    config->scaled_visits_reduce = asFloat("scaled_visits_reduce");
-    config->scaled_visits_finalised_reduce = asFloat("scaled_visits_finalised_reduce");
-
     config->minimax_backup_ratio = asFloat("minimax_backup_ratio");
-    config->minimax_required_visits = asInt("minimax_required_visits");
     config->minimax_threshold_visits = asInt("minimax_threshold_visits");
 
     config->top_visits_best_guess_converge_ratio = asFloat("top_visits_best_guess_converge_ratio");
@@ -158,7 +149,6 @@ static GGPZero::PuctV2::PuctConfig* createPuctConfigV2(PyObject* dict) {
     config->number_of_expansions_end_game = asInt("number_of_expansions_end_game");
 
     config->batch_size = asInt("batch_size");
-    config->policy_dilution_visits = asInt("policy_dilution_visits");
 
     std::string choose_method = asString("choose");
     if (choose_method == "choose_top_visits") {

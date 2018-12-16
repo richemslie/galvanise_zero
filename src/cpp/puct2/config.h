@@ -11,11 +11,13 @@ namespace GGPZero::PuctV2 {
     struct PuctConfig {
         bool verbose;
 
-        float puct_constant_init = 0.85f;
-        float puct_constant_min = 0.75f;
-        float puct_constant_max = 3.5f;
-        float puct_constant_min_root = 2.5f;
-        float puct_constant_max_root = 5.0f;
+        float puct_constant = 0.75f;
+        float puct_constant_root = 2.5f;
+
+        //int puct_before_expansions;
+        //int puct_before_root_expansions;
+
+        //int root_expansions_preset_visits;
 
         float dirichlet_noise_pct;
         float dirichlet_noise_alpha;
@@ -33,13 +35,7 @@ namespace GGPZero::PuctV2 {
         float fpu_prior_discount;
 
         // < 0, off
-        int scaled_visits_at = 1000;
-        float scaled_visits_reduce = 4.0;
-        float scaled_visits_finalised_reduce = 100.0;
-
-        // < 0, off
         float minimax_backup_ratio = 0.75;
-        uint32_t minimax_required_visits = 200;
         uint32_t minimax_threshold_visits = 200;
 
         // < 0, off
@@ -53,12 +49,6 @@ namespace GGPZero::PuctV2 {
         int number_of_expansions_end_game = 2;
 
         int batch_size = 32;
-
-        // XXX not used currently
-        int policy_dilution_visits = -1;
-
-        // -1 is off
-        int root_node_normalisation_limit = 1000;
     };
 
 }

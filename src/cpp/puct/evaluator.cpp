@@ -74,9 +74,8 @@ void PuctEvaluator::updateConf(const PuctConfig* conf, const ExtraPuctConfig* ex
         K273::l_verbose("dirichlet_noise (alpha: %.2f, pct: %.2f), fpu_prior_discount: %.2f",
                         conf->dirichlet_noise_alpha, conf->dirichlet_noise_pct, conf->fpu_prior_discount);
 
-        K273::l_verbose("choose: %s, policy_dilution_visits:%d",
-                        (conf->choose == ChooseFn::choose_top_visits) ? "choose_top_visits" : "choose_temperature",
-                        conf->policy_dilution_visits);
+        K273::l_verbose("choose: %s",
+                        (conf->choose == ChooseFn::choose_top_visits) ? "choose_top_visits" : "choose_temperature");
 
         K273::l_verbose("temperature: %.2f, start(%d), stop(%d), incr(%.2f), max(%.2f) scale(%.2f)",
                         conf->temperature, conf->depth_temperature_start, conf->depth_temperature_stop,
@@ -378,12 +377,6 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, int depth) {
         float node_score = prior_score;
 
         float child_pct = c->policy_prob;
-
-        if (this->conf->policy_dilution_visits > 0) {
-            const double xprob = 1.0 / (double) node->num_children;
-            const double coef = std::min(1.0, this->conf->policy_dilution_visits / (double) node->visits);
-            child_pct = coef * c->policy_prob + (1.0 - coef) * xprob;
-        }
 
         if (c->to_node != nullptr) {
             PuctNode* cn = c->to_node;
