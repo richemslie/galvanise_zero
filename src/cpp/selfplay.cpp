@@ -193,7 +193,7 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
         const PuctNodeChild* choice = nullptr;
 
         // not atomic, but good enough
-        if (man.isUnique(node->getBaseState(), node->game_depth)) {
+        if (node->game_depth > 0 && man.isUnique(node->getBaseState(), node->game_depth)) {
             man.add(node->getBaseState());
 
             // run the simulations
@@ -201,11 +201,7 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
 
             // create a sample (call getProbabilities() to ensure probabilities are right for policy)
             // ZZZ configure %
-            if (node->game_depth == 0) {
-                this->pe->getProbabilities(node, 3.0f, true);
-            } else {
-                this->pe->getProbabilities(node, 1.15f, true);
-            }
+            this->pe->getProbabilities(node, 1.15f, true);
 
             // XXX why we get the manager to do this????  Doesn't make sense(we can grab the
             // statemachine from this->pe)...

@@ -120,8 +120,8 @@ static GGPZero::PuctV2::PuctConfig* createPuctConfigV2(PyObject* dict) {
 
     config->verbose = asInt("verbose");
 
-    config->puct_constant = asFloat("puct_constant_min");
-    config->puct_constant_root = asFloat("puct_constant_min_root");
+    config->puct_constant = asFloat("puct_constant");
+    config->puct_constant_root = asFloat("puct_constant_root");
 
     config->dirichlet_noise_pct = asFloat("dirichlet_noise_pct");
     config->dirichlet_noise_alpha = asFloat("dirichlet_noise_alpha");

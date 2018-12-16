@@ -705,7 +705,7 @@ const PuctNodeChild* PuctEvaluator::onNextMove(int max_evaluations, double end_t
 
 float PuctEvaluator::getTemperature() const {
     if (this->game_depth == 0) {
-        return 3.0;
+        return 5.0;
     }
 
     if (this->game_depth >= this->conf->depth_temperature_stop) {
@@ -833,6 +833,12 @@ const PuctNodeChild* PuctEvaluator::chooseTemperature(const PuctNode* node) {
     for (const PuctNodeChild* c : dist) {
         seen_probability += c->next_prob;
         if (seen_probability > expected_probability) {
+
+            if (this->game_depth == 0) {
+                const int choice = c->move.get(node->lead_role_index);
+                K273::l_debug("root choice was %s", this->sm->legalToMove(node->lead_role_index, choice));
+            }
+
             return c;
         }
     }
