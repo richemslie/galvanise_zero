@@ -110,13 +110,13 @@ class Worker(Broker):
             self.game_info.game == msg.game
 
         self.self_play_conf = msg.self_play_conf
-        self.with_generation_name = msg.generation_name
+        self.latest_generation_name = msg.generation_name
 
         # refresh the neural network.  May have to run some commands to get it.
         self.nn = None
         try:
             self.nn = get_manager().load_network(self.game_info.game,
-                                                 self.with_generation_name)
+                                                 self.latest_generation_name)
             self.configure_self_play()
 
         except Exception as exc:
@@ -141,7 +141,7 @@ class Worker(Broker):
 
         if self.nn is None:
             self.nn = get_manager().load_network(self.game_info.game,
-                                                 self.self_play_conf.with_generation)
+                                                 self.latest_generation_name)
 
         if self.supervisor is None:
             self.supervisor = cppinterface.Supervisor(self.sm, self.nn,
@@ -155,7 +155,12 @@ class Worker(Broker):
             if self.conf.exit_on_update_config:
                 os._exit(0)
 
-            self.supervisor.update_nn(self.nn)
+            log.info("Latest generation: %s" % self.latest_generation_name)
+            gen = int(self.latest_generation_name.split("_")[-1])
+            if gen % self.conf.replace_network_every_n_gens == 0:
+                log.warn("Updating network to: %s" % gen)
+                self.supervisor.update_nn(self.nn)
+
             self.supervisor.clear_unique_states()
 
     def cb_from_superviser(self):
@@ -225,7 +230,7 @@ class Worker(Broker):
         self.trainer.update_config(train_config)
         self.trainer.get_network(network_model, generation_description)
 
-        self.trainer.do_epochs(num_epochs_include_all=2)
+        self.trainer.do_epochs(num_epochs_include_all=1)
         self.trainer.save()
 
 

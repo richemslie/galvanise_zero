@@ -43,18 +43,13 @@ class PUCTEvaluatorConfig(object):
     # < 0 is off.
     fpu_prior_discount = attribute(-1)
 
-    # dilute the policy probability after n visits (-1 off)
-    policy_dilution_visits = attribute(-1)
 
 @register_attrs
 class PUCTEvaluatorV2Config(object):
     verbose = attribute(False)
 
-    puct_constant_init = attribute(0.85)
-    puct_constant_min = attribute(0.75)
-    puct_constant_max = attribute(3.5)
-    puct_constant_min_root = attribute(2.5)
-    puct_constant_max_root = attribute(5.0)
+    puct_constant = attribute(0.75)
+    puct_constant_root = attribute(2.5)
 
     # added to root child policy pct (alpha less than 0 is off)
     dirichlet_noise_pct = attribute(0.25)
@@ -78,12 +73,7 @@ class PUCTEvaluatorV2Config(object):
     # < 0 is off.
     fpu_prior_discount = attribute(-1)
 
-    scaled_visits_at = attribute(1000)
-    scaled_visits_reduce = attribute(4.0)
-    scaled_visits_finalised_reduce = attribute(100.0)
-
     minimax_backup_ratio = attribute(0.75)
-    minimax_required_visits = attribute(200)
     minimax_threshold_visits = attribute(200)
 
     top_visits_best_guess_converge_ratio = attribute(0.8)
@@ -98,8 +88,6 @@ class PUCTEvaluatorV2Config(object):
     # batches to GPU.  number of greenlets to run, along with virtual lossesa
     batch_size = attribute(32)
 
-    # dilute the policy probability after n visits (-1 off)
-    policy_dilution_visits = attribute(-1)
 
 @register_attrs
 class PUCTPlayerConfig(object):
@@ -260,6 +248,9 @@ class WorkerConfig(object):
 
     # will exit if there is an update to the config
     exit_on_update_config = attribute(False)
+
+    # dont replace the network every new network, instead wait n generations
+    replace_network_every_n_gens = attribute(1)
 
 
 @register_attrs
