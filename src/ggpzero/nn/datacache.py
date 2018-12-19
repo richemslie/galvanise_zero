@@ -49,6 +49,7 @@ import os
 import sys
 import gzip
 import math
+import time
 import random
 import hashlib
 import datetime
@@ -66,7 +67,18 @@ from ggpzero.util import attrutil, symmetry
 from ggpzero.defs import datadesc
 from ggpzero.nn.manager import get_manager
 
-from ggpzero.util.state import decode_state
+from ggpzero.util.state import fast_decode_state
+
+
+class ElaspedTime(object):
+    def __init__(self):
+        self.at_time = time.time()
+
+    def update(self):
+        cur_time = time.time()
+        elapsed = cur_time - self.at_time
+        self.at_time = cur_time
+        return elapsed
 
 
 class Check(Exception):
@@ -487,7 +499,6 @@ class DataCache(object):
 
         # these are columns for bcolz table
         cols = fake_columns(self.transformer)
-        print cols
 
         # and create a table
         self.db = bcolz.ctable(cols, names=["channels", "policy0", "policy1", "value"], rootdir=db_path)
@@ -536,7 +547,7 @@ class DataCache(object):
             return new_policies
 
         def decode_state2(encoded):
-            state = decode_state(encoded)
+            state = fast_decode_state(encoded)
             return state[:len(t.base_symbols)]
 
         # go through each samples
@@ -544,7 +555,6 @@ class DataCache(object):
         for sample in samples:
             count += 1
 
-            seen = set()
             decoded_state = decode_state2(sample.state)
             decoded_prev_states = [decode_state2(s) for s in sample.prev_states]
 
@@ -552,17 +562,14 @@ class DataCache(object):
                 # XXX first prescription must be do_reflection == False and rot_count == 0
 
                 # only do 50% of translations...
-                if len(seen) and random.random() > 0.5:
-                    continue
+                #if len(seen) and random.random() > 0.5:
+                #    continue
 
                 # translate states/policies
                 state = t.translate_basestate_faster(decoded_state, do_reflection, rot_count)
 
                 # dont do duplicates
                 state = tuple(state)
-                if state in seen:
-                    continue
-                seen.add(state)
 
                 prev_states = [t.translate_basestate_faster(s, do_reflection, rot_count)
                                for s in decoded_prev_states]
@@ -595,7 +602,7 @@ class DataCache(object):
             # lets delete any spurious memory
             gc.collect()
 
-            log.debug("Proccesing %s" % file_path)
+            log.debug("Processing %s" % file_path)
             data = attrutil.json_to_attr(gzip.open(file_path).read())
 
             if len(data.samples) != data.num_samples:
@@ -614,33 +621,69 @@ class DataCache(object):
             stats = StatsAccumulator()
             t = self.transformer
 
+            # ZZZ really slow
+            # ZZZ profile/gather times in loop... (guessing the time is in decoding state)
+            time_check = 0
+            time_stats = 0
+            time_decode = 0
+            time_decode_prevs = 0
+            time_channels = 0
+            time_outputs = 0
+            time_db_resize = 0
+            time_db_insert = 0
+
+            cur_size = indx
+
             for sample in self.augment_data(data.samples):
-                t.check_sample(sample)
+                et = ElaspedTime()
+                #t.check_sample(sample)
+                time_check += et.update()
+
                 stats.add(sample)
+                time_stats += et.update()
 
                 # add channels
 
                 # only decode if not already decoded (as in the case of augmentation)
-                state = sample.state
-                if not isinstance(state, (tuple, list)):
-                    state = decode_state(state)
+                state = fast_decode_state(sample.state)
 
-                prev_states = sample.prev_states
-                if prev_states and not isinstance(prev_states[0], (tuple, list)):
-                    prev_states = [decode_state(s) for s in prev_states]
+                time_decode += et.update()
+
+                prev_states = [fast_decode_state(s) for s in sample.prev_states]
+
+                time_decode_prevs += et.update()
 
                 cols = [t.state_to_channels(state, prev_states)]
+                time_channels += et.update()
 
                 for ri, policy in enumerate(sample.policies):
                     cols.append(t.policy_to_array(policy, ri))
+                time_outputs += et.update()
 
                 cols.append(t.value_to_array(sample.final_score))
 
                 # is this an efficient way to do things?
-                self.db.resize(indx + 1)
+                if indx >= cur_size:
+                    cur_size += 20
+                    self.db.resize(cur_size)
+                time_db_resize += et.update()
                 for ii, name in enumerate(self.db.names):
                     self.db[name][indx] = cols[ii]
                 indx += 1
+                time_db_insert += et.update()
+
+            print "time_check: %.2f" % time_check
+            print "time_stats: %.2f" % time_stats
+            print "time_decode: %.2f" % time_decode
+            print "time_decode_prevs: %.2f" % time_decode_prevs
+            print "time_channels: %.2f" % time_channels
+            print "time_outputs: %.2f" % time_outputs
+            print "time_db_resize: %.2f" % time_db_resize
+            print "time_db_insert: %.2f" % time_db_insert
+
+            if indx != cur_size:
+                cur_size = indx
+                self.db.resize(indx)
 
             self.db.flush()
             log.debug("Added %d samples to db" % stats.num_samples)

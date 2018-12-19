@@ -1,6 +1,8 @@
 import base64
 import numpy as np
 
+import ggpzero_interface
+
 
 def encode_state(s):
     assert isinstance(s, (list, tuple))
@@ -11,8 +13,11 @@ def encode_state(s):
 
 
 def decode_state(s):
-    if isinstance(s, (tuple, list)):
+    if isinstance(s, tuple):
+        return s
+    elif isinstance(s, list):
         return tuple(s)
+
     s = base64.decodestring(s)
     aa = np.fromstring(s, dtype=np.uint8)
 
@@ -21,3 +26,13 @@ def decode_state(s):
     # smart Basestate object... )
     a = np.unpackbits(aa)
     return tuple(a)
+
+
+def fast_decode_state(s):
+    if isinstance(s, tuple):
+        return s
+    elif isinstance(s, list):
+        return tuple(s)
+
+    return ggpzero_interface.buf_to_tuple_reverse_bytes(base64.decodestring(s))
+

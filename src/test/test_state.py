@@ -3,9 +3,9 @@ import random
 
 from ggplib.db import lookup
 
-from ggpzero.util.state import encode_state, decode_state
+from ggpzero.util.state import encode_state, decode_state, fast_decode_state
 
-games = ["breakthrough", "speedChess", "hex"]
+games = ["breakthrough", "hex", "hexLG13"]
 
 def advance_state(sm, basestate):
     sm.update_bases(basestate)
@@ -112,60 +112,38 @@ def test_more():
         print "good", game
 
 
+def test_speed():
+    import time
 
-
-# 488/16: bs = hex.get_sm().get_initial_state()
-# 488/17: sm = hex.get_sm()
-# 488/18: bs.hash_code()
-# 488/19: bs = advance_state(sm, bs)
-# 488/20: import random
-# 488/21: bs = advance_state(sm, bs)
-# 488/22: bs.hash_code()
-# 488/23: bs = advance_state(sm, bs)
-# 488/24: bs.hash_code()
-# 488/25: bs = advance_state(sm, bs)
-# 488/26: bs.hash_code()
-# 488/27: bs = advance_state(sm, bs)
-# 488/28: bs.hash_code()
-# 488/29: bs = advance_state(sm, bs)
-# 488/30: bs.hash_code()
-# 490/1: from ggpzero.util.state import encode_state, decode_state
-# 490/2: from ggplib.db import lookup
-# 490/3: bt = lookup.by_name("breakthrough")
-# 490/4: sm = bt.get_sm()
-# 490/5: s = sm.get_initial_state()
-# 490/6: s.to_list()
-# 490/7: encode_state(bs.to_list())
-# 490/8: encode_state(ss.to_list())
-# 490/9: encode_state(s.to_list())
-# 490/10: s.to_string()
-# 490/11: s.to_string()
-# 490/12: import base64
-# 490/13: base64.encodestring(s.to_string())
-# 490/14: len(encode_state(s.to_list()))
-# 490/15: len(base64.encodestring(s.to_string()))
-# 491/1: history
-# 491/2: %history -g
-# 491/3: from ggpzero.util.state import encode_state, decode_state
-# 491/4: from ggplib.db import lookup
-# 491/5: bt = lookup.by_name("breakthrough")
-# 491/6: sm = bt.get_sm()
-# 491/7: s = sm.get_initial_state()
-# 491/8: encode_state(bs.to_list())
-# 491/9: encode_state(s.to_list())
-# 491/10: import base64
-# 491/11:
-# base64.encodestring(s.to_string())
-# base64.encodestring(s.to_string())
-# 491/12: %timeit base64.encodestring(s.to_string())
-# 491/13: %timeit encode_state(s.to_list())
-# 491/14: x = encode_state(s.to_list())
-# 491/15: %timeit decode_state(x)
-#    1: %history -g
+    for game in games:
+        print "doing", game
         sm = lookup.by_name(game).get_sm()
+
+        # a couple of states
         bs_0 = sm.get_initial_state()
 
         bs_1 = sm.new_base_state()
         bs_1.assign(bs_0)
-        for i in range(3):
+        for i in range(5):
             advance_state(sm, bs_1)
+
+        # encode states
+        encoded_0 = encode_state(bs_0.to_list())
+        encoded_1 = encode_state(bs_1.to_list())
+
+        assert decode_state(encoded_0) == fast_decode_state(encoded_0)
+        assert decode_state(encoded_1) == fast_decode_state(encoded_1)
+
+        s = time.time()
+        for i in range(10000):
+            l0 = decode_state(encoded_0)
+            l1 = decode_state(encoded_1)
+
+        print "time taken %.3f msecs" % ((time.time() - s) * 1000)
+
+        s = time.time()
+        for i in range(10000):
+            l0 = fast_decode_state(encoded_0)
+            l1 = fast_decode_state(encoded_1)
+
+        print "time taken %.3f msecs" % ((time.time() - s) * 1000)

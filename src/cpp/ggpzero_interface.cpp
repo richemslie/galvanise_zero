@@ -19,9 +19,38 @@ PyObject* ggpzero_interface_error;
 #include "pyobjects/player_impl2.cpp"
 #include "pyobjects/supervisor_impl.cpp"
 
+
+static PyObject* gi_buf_to_tuple_reverse_bytes(PyObject* self, PyObject* args) {
+    PyObject* buf_object = nullptr;
+    if (! ::PyArg_ParseTuple(args, "O", &buf_object)) {
+        return nullptr;
+    }
+
+    ASSERT(PyString_Check(buf_object));
+    const char* ptbuf = PyString_AsString(buf_object);
+
+    const int buf_size = PyString_GET_SIZE(buf_object);
+    PyObject* tup = PyTuple_New(buf_size * 8);
+
+    for (int ii=0; ii<buf_size; ii++, ptbuf++) {
+        const char c = *ptbuf;
+        PyTuple_SetItem(tup, 0 + ii * 8, PyBool_FromLong(c & (1 << 7)));
+        PyTuple_SetItem(tup, 1 + ii * 8, PyBool_FromLong(c & (1 << 6)));
+        PyTuple_SetItem(tup, 2 + ii * 8, PyBool_FromLong(c & (1 << 5)));
+        PyTuple_SetItem(tup, 3 + ii * 8, PyBool_FromLong(c & (1 << 4)));
+        PyTuple_SetItem(tup, 4 + ii * 8, PyBool_FromLong(c & (1 << 3)));
+        PyTuple_SetItem(tup, 5 + ii * 8, PyBool_FromLong(c & (1 << 2)));
+        PyTuple_SetItem(tup, 6 + ii * 8, PyBool_FromLong(c & (1 << 1)));
+        PyTuple_SetItem(tup, 7 + ii * 8, PyBool_FromLong(c & (1 << 0)));
+    }
+
+    return tup;
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 
 PyMethodDef gi_functions[] = {
+    {"buf_to_tuple_reverse_bytes", gi_buf_to_tuple_reverse_bytes, METH_VARARGS, "buf_to_tuple_reverse_bytes"},
     {"GdlBasesTransformer", gi_GdlBasesTransformer, METH_VARARGS, "GdlBasesTransformer"},
     {"Player", gi_Player, METH_VARARGS, "Player"},
     {"Player2", gi_Player2, METH_VARARGS, "Player2"},
