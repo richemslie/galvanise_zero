@@ -465,7 +465,7 @@ class GameSymmetries(object):
                           apply_actions=[ApplySymmetry("place", 1, 2)],
                           do_rotations_90=False,
                           do_rotations_180=True,
-                          do_reflection=True)
+                          do_reflection=False)
     hexLG11 = _hex
     hexLG13 = _hex
 
