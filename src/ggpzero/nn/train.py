@@ -1,3 +1,4 @@
+
 from builtins import super
 
 from ggplib.util import log
@@ -341,6 +342,7 @@ class TrainManager(object):
             if i > 0:
                 value_weight = self.update_value_weighting(value_weight)
 
+            assert len(validation_indices) / conf.batch_size > 0, "validation steps must be more than zero (not enough data)"
             fitter = self.nn.get_model().fit_generator
             fitter(cache.generate(training_indices, conf.batch_size),
                    len(training_indices) / conf.batch_size,

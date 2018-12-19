@@ -100,7 +100,7 @@ def residual_block_v1(cnn_filter_size, cnn_kernel_size,
     return block
 
 
-def residual_block_v2(filter_size, prev_filter_size, kernel_size, num_convs,
+def residual_block_v2(filter_size, kernel_size, num_convs,
                       dropout=-1, activation="relu", prefix="residual_block_",
                       **kwds):
 
@@ -137,13 +137,6 @@ def residual_block_v2(filter_size, prev_filter_size, kernel_size, num_convs,
             x = klayers.Dropout(dropout)(x)
 
         x = conv(x, num_convs)
-
-        if filter_size != prev_filter_size:
-            if is_channels_first():
-                tensor = klayers.Conv2D(filter_size, (1, 1), activation='linear', padding='same')(tensor)
-            else:
-                tensor = klayers.Conv2D(filter_size, (1, 1), activation='linear', padding='same')(tensor)
-
         x = klayers.add([tensor, x], name=prefix + "add")
 
         return x
@@ -176,34 +169,25 @@ def get_network_model(conf, generation_descr):
                                use_bias=False,
                                name='initial-conv')(inputs_board)
 
-        filter_size = prev_filter_size = conf.cnn_filter_size
-
-        # XXX hard coding incr size (to zero)
-        incr_size = 0
-
+        # XXX hard coding dropout
         # XXX hard coding layers
-        # for i, c in enumerate([1, 1, 1, 1, 1, 1, 2, 2, 2, 3, 2, 2, 2, 1, 1, 1, 1, 1, 1]):
-        for i, c in enumerate([1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1]):
-            if i > 0 and i % 3 == 0:
-                filter_size += incr_size
-
-            # XXX hard coding dropout
-            layer = residual_block_v2(filter_size, prev_filter_size,
+        #for convs in [1, 1, 1, 1, 1, 1, 2, 2, 2, 3, 2, 2, 2, 1, 1, 1, 1, 1, 1]:
+        for i, c in enumerate([1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1]):
+            layer = residual_block_v2(conf.cnn_filter_size,
                                       conf.cnn_kernel_size,
                                       c,
                                       prefix="ResLayer_%s_" % i,
                                       dropout=0.3,
                                       activation=activation)(layer)
-            prev_filter_size = filter_size
 
     else:
-        # AG0 way:
-
         # initial conv2d/Resnet on cords
         layer = conv2d_block(conf.cnn_filter_size, conf.cnn_kernel_size,
                              activation=activation,
-                             name='initial')(inputs_board)
+                             padding="same",
+                             name='initial-conv')(inputs_board)
 
+        # AG0 way:
         for i in range(conf.residual_layers):
             layer = residual_block_v1(conf.cnn_filter_size,
                                       conf.cnn_kernel_size,
@@ -284,6 +268,7 @@ def get_network_model(conf, generation_descr):
         hidden = act(hidden, 'crelu', name="value_hidden_act")
 
         value_head = klayers.Dense(num_value_heads,
+                                   activation="sigmoid",
                                    name="value")(hidden)
 
     elif value_v2:
@@ -319,6 +304,7 @@ def get_network_model(conf, generation_descr):
                                   padding='valid',
                                   activation=activation)(layer)
         flat = klayers.Flatten()(to_flatten)
+
         hidden = klayers.Dense(conf.value_hidden_size, name="value_hidden_layer",
                                activation="relu")(flat)
 
