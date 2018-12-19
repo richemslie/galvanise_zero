@@ -226,6 +226,56 @@ PuctNode* PuctEvaluator::expandChild(PuctNode* parent, PuctNodeChild* child) {
 ///////////////////////////////////////////////////////////////////////////////
 // selection - move to new class, should have no side effects.  in/out path:
 
+std::vector <float> PuctEvaluator::getDirichletNoise(PuctNode* node, int depth) {
+
+    // set dirichlet noise on root?
+
+    if (depth != 0) {
+        return std::vector <float>();
+    }
+
+    if (this->conf->dirichlet_noise_alpha < 0) {
+        return std::vector <float>();
+    }
+
+    std::gamma_distribution <float> gamma(this->conf->dirichlet_noise_alpha, 1.0f);
+
+    std::vector <float> res;
+    res.resize(node->num_children, 0.0f);
+
+    float total_noise = 0.0f;
+    for (int ii=0; ii<node->num_children; ii++) {
+        res[ii] = gamma(this->rng);
+        total_noise += res[ii];
+    }
+
+    // fail if we didn't produce any noise
+    if (total_noise < std::numeric_limits<float>::min()) {
+        return std::vector <float>();
+    }
+
+    // normalize:
+    for (int ii=0; ii<node->num_children; ii++) {
+       res[ii] /= total_noise;
+    }
+
+    // It is a good idea to keep this code, knowing what our noise looks like for different games is
+    // an important configuration step
+    // if (this->conf->verbose) {
+    //     std::string debug_dirichlet_noise = "dirichlet_noise = ";
+    //     for (int ii=0; ii<node->num_children; ii++) {
+    //         debug_dirichlet_noise += K273::fmtString("%.3f", res[ii]);
+    //         if (ii != node->num_children - 1) {
+    //             debug_dirichlet_noise += ", ";
+    //         }
+    //     }
+
+    //     K273::l_info(debug_dirichlet_noise);
+    // }
+
+    return res;
+}
+
 float PuctEvaluator::setPuctConstant(PuctNode* node, int depth) const {
 
     // XXX configurable
@@ -295,12 +345,15 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
         return child;
     }
 
+    std::vector <float> dirichlet_noise = this->getDirichletNoise(node, depth);
+    const bool do_dirichlet_noise = !dirichlet_noise.empty();
+
     // prior... (alpha go zero said 0 but there score ranges from [-1,1])
     // original value from network / or terminal value
     float prior_score = node->getFinalScore(node->lead_role_index, true);
 
     int total_traversals = 0;
-    if (this->conf->fpu_prior_discount > 0) {
+    if (!do_dirichlet_noise && this->conf->fpu_prior_discount > 0) {
         float total_policy_visited = 0.0;
         for (int ii=0; ii<node->num_children; ii++) {
             PuctNodeChild* c = node->getNodeChild(this->sm->getRoleCount(), ii);
@@ -376,8 +429,15 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
         // add inflight_visits to exploration score
         const double inflight_visits = c->to_node != nullptr ? c->to_node->inflight_visits : 0;
 
+        double child_pct = c->policy_prob;
+
+        if (do_dirichlet_noise) {
+            float noise_pct = this->conf->dirichlet_noise_pct;
+            child_pct = (1.0f - noise_pct) * child_pct + noise_pct * dirichlet_noise[ii];
+        }
+
         // standard PUCT as per AG0 paper
-        double exploration_score = c->policy_prob * sqrt_node_visits / (traversals + inflight_visits);
+        double exploration_score = child_pct * sqrt_node_visits / (traversals + inflight_visits);
 
         // always base exploration_score on constant (which self tunes)
         exploration_score *= node->puct_constant;

@@ -47,10 +47,11 @@ namespace GGPZero::PuctV2 {
         PuctNode* createNode(PuctNode* parent, const GGPLib::BaseState* state);
         PuctNode* expandChild(PuctNode* parent, PuctNodeChild* child);
 
+        float setPuctConstant(PuctNode* node, int depth) const;
+
         // set dirichlet noise on node
         // note can't be const method as rng state modified
-        std::vector <float> getDirichletNoise(int depth);
-        float setPuctConstant(PuctNode* node, int depth) const;
+        std::vector<float> getDirichletNoise(PuctNode* node, int depth);
 
         bool converged(int count) const;
         PuctNodeChild* selectChild(PuctNode* node, Path& path);
