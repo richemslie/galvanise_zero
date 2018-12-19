@@ -158,7 +158,7 @@ class Worker(Broker):
             log.info("Latest generation: %s" % self.latest_generation_name)
             gen = int(self.latest_generation_name.split("_")[-1])
             if gen % self.conf.replace_network_every_n_gens == 0:
-                log.warn("Updating network to: %s" % gen)
+                log.warning("Updating network to: %s" % gen)
                 self.supervisor.update_nn(self.nn)
 
             self.supervisor.clear_unique_states()
