@@ -143,7 +143,18 @@ PuctNode* PuctEvaluator::createNode(PuctNode* parent, const GGPLib::BaseState* s
 
     this->addNode(new_node);
 
-    if (!new_node->is_finalised) {
+
+    if (new_node->is_finalised) {
+        // hack to try and focus more on winning lines
+        // (XXX) actually a very good hack... maybe make it less hacky somehow
+        for (int ii=0; ii<this->sm->getRoleCount(); ii++) {
+            const float s = new_node->getCurrentScore(ii);
+            if (s > 0.99) {
+                new_node->setCurrentScore(ii, s * 1.05);
+            }
+        }
+
+    } else {
         if (expansion_time && new_node->num_children == 1) {
             return new_node;
         }
@@ -705,7 +716,7 @@ const PuctNodeChild* PuctEvaluator::onNextMove(int max_evaluations, double end_t
 
 float PuctEvaluator::getTemperature() const {
     if (this->game_depth == 0) {
-        return 5.0;
+        return 7.0;
     }
 
     if (this->game_depth >= this->conf->depth_temperature_stop) {
