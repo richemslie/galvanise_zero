@@ -45,9 +45,6 @@ namespace GGPZero::PuctV2 {
         int converge_relaxed = 5000;
         int converge_non_relaxed = 1000;
 
-        uint32_t expand_threshold_visits = 42;
-        int number_of_expansions_end_game = 2;
-
         int batch_size = 32;
     };
 

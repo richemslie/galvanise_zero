@@ -87,9 +87,6 @@ void PuctEvaluator::updateConf(const PuctConfig* conf) {
         K273::l_verbose("think %.1f, relaxed %d/%d, batch_size=%d",
                         conf->think_time, conf->converge_relaxed,
                         conf->converge_non_relaxed, conf->batch_size);
-
-        K273::l_verbose("expand_threshold_visits %d, #expansions_end_game %d",
-                        conf->expand_threshold_visits, conf->number_of_expansions_end_game);
     }
 
     this->conf = conf;
@@ -181,6 +178,8 @@ PuctNode* PuctEvaluator::createNode(PuctNode* parent, const GGPLib::BaseState* s
             const float s = new_node->getCurrentScore(ii);
             if (s > 0.99) {
                 new_node->setCurrentScore(ii, s * 1.05);
+            } else if (s < 0.01) {
+                new_node->setCurrentScore(ii, -0.05);
             }
         }
 
@@ -276,34 +275,13 @@ std::vector <float> PuctEvaluator::getDirichletNoise(PuctNode* node, int depth) 
     return res;
 }
 
-float PuctEvaluator::setPuctConstant(PuctNode* node, int depth) const {
-
+void PuctEvaluator::setPuctConstant(PuctNode* node, int depth) const {
     // XXX configurable
     const float cpuct_base_id = 19652.0f;
     const float puct_constant = depth == 0 ? this->conf->puct_constant_root : this->conf->puct_constant;
 
     node->puct_constant = std::log((1 + node->visits + cpuct_base_id) /
                                    cpuct_base_id) + puct_constant;
-
-    // note we have dropped concept of before
-    if (node->visits < this->conf->batch_size) {
-        return node->getCurrentScore(node->lead_role_index);
-    }
-
-    float node_best_score = -1.0;
-    for (int ii=0; ii<node->num_children; ii++) {
-        PuctNodeChild* c = node->getNodeChild(this->sm->getRoleCount(), ii);
-
-        if (c->to_node != nullptr) {
-            PuctNode* cn = c->to_node;
-            const float child_score = cn->getCurrentScore(node->lead_role_index);
-            if (child_score > node_best_score) {
-                node_best_score = child_score;
-            }
-        }
-    }
-
-    return node_best_score;
 }
 
 bool PuctEvaluator::converged(int count) const {
@@ -336,7 +314,7 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
     const int depth = path.size();
 
     // dynamically set the PUCT constant
-    const float node_best_score = this->setPuctConstant(node, depth);
+    this->setPuctConstant(node, depth);
 
     // nothing to select
     if (node->num_children == 1) {
@@ -381,27 +359,6 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
     PuctNodeChild* bad_fallback = nullptr;
     PuctNodeChild* best_fallback = nullptr;
 
-    bool allow_expansions = true;
-    if (depth > 0) {
-        if (node->visits < this->conf->expand_threshold_visits ||
-            node_best_score > 0.98) {
-            // count non final expansions
-            int non_final_expansions = 0;
-            for (int ii=0; ii<node->num_children; ii++) {
-                PuctNodeChild* c = node->getNodeChild(this->sm->getRoleCount(), ii);
-                if (c->to_node != nullptr && !c->to_node->is_finalised &&
-                    (c->to_node->getCurrentScore(node->lead_role_index) > 0.98 ||
-                     c->to_node->getCurrentScore(node->lead_role_index) < 0.02)) {
-                    non_final_expansions++;
-                }
-            }
-
-            if (non_final_expansions >= this->conf->number_of_expansions_end_game) {
-                allow_expansions = false;
-            }
-        }
-    }
-
     int unselectables = 0;
     for (int ii=0; ii<node->num_children; ii++) {
         PuctNodeChild* c = node->getNodeChild(this->sm->getRoleCount(), ii);
@@ -418,7 +375,7 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
             continue;
         }
 
-        if (c->to_node == nullptr && !allow_expansions) {
+        if (c->to_node == nullptr) {
             continue;
         }
 
@@ -580,6 +537,7 @@ void PuctEvaluator::backPropagate(float* new_scores, const Path& path) {
     auto forceFinalise = [role_count](PuctNode* cur) -> const PuctNodeChild* {
         float best_score = -1;
         const PuctNodeChild* best = nullptr;
+        bool more_to_explore = false;
 
         for (int ii=0; ii<cur->num_children; ii++) {
             const PuctNodeChild* c = cur->getNodeChild(role_count, ii);
@@ -592,6 +550,15 @@ void PuctEvaluator::backPropagate(float* new_scores, const Path& path) {
                     return c;
                 }
 
+                if (false && score < 0.01) {
+                    if (cur->getCurrentScore(cur->lead_role_index) < -0.005) {
+                        if (cur->visits > 500) {
+                            K273::l_debug("XXX");
+                            return c;
+                        }
+                    }
+                }
+
                 if (score > best_score) {
                     best_score = score;
                     best = c;
@@ -599,8 +566,12 @@ void PuctEvaluator::backPropagate(float* new_scores, const Path& path) {
 
             } else {
                 // not finalised, so more to explore...
-                return nullptr;
+                more_to_explore = true;
             }
+        }
+
+        if (more_to_explore) {
+            return nullptr;
         }
 
         return best;
@@ -729,6 +700,10 @@ void PuctEvaluator::playoutWorker() {
         }
 
         int depth = this->treePlayout();
+        if (depth == 0) {
+            K273::l_debug("worker depth == 0");
+
+        }
         this->stats.playouts_max_depth = std::max(depth, this->stats.playouts_max_depth);
         this->stats.playouts_total_depth += depth;
     }

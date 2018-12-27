@@ -145,9 +145,6 @@ static GGPZero::PuctV2::PuctConfig* createPuctConfigV2(PyObject* dict) {
     config->converge_relaxed = asInt("converge_relaxed");
     config->converge_non_relaxed = asInt("converge_non_relaxed");
 
-    config->expand_threshold_visits = asInt("expand_threshold_visits");
-    config->number_of_expansions_end_game = asInt("number_of_expansions_end_game");
-
     config->batch_size = asInt("batch_size");
 
     std::string choose_method = asString("choose");
