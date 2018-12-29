@@ -35,6 +35,7 @@ SelfPlay::SelfPlay(SelfPlayManager* manager, const SelfPlayConfig* conf, PuctEva
 SelfPlay::~SelfPlay() {
 }
 
+
 PuctNode* SelfPlay::selectNode() {
     // reset the puct evaluator and establish root
     this->pe->reset(0);
@@ -49,7 +50,7 @@ PuctNode* SelfPlay::selectNode() {
     const int iterations = this->conf->select_iterations;
 
     // start from initial_state if select is turned off
-    if (iterations < 0 || this->collect_until_finalised) {
+    if (iterations < 0 || this->play_full_game) {
         return node;
     }
 
@@ -180,7 +181,7 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
 
         const int sample_count = this->game_samples.size();
         if (sample_count >= this->conf->max_number_of_samples) {
-            if (this->collect_until_finalised) {
+            if (this->play_full_game) {
                 if (node->is_finalised) {
                     break;
                 }
@@ -193,7 +194,7 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
         const PuctNodeChild* choice = nullptr;
 
         // not atomic, but good enough
-        if (node->game_depth > 0 && man.isUnique(node->getBaseState(), node->game_depth)) {
+        if (man.isUnique(node->getBaseState(), node->game_depth)) {
             man.add(node->getBaseState());
 
             // run the simulations
@@ -201,7 +202,7 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
 
             // create a sample (call getProbabilities() to ensure probabilities are right for policy)
             // ZZZ configure %
-            this->pe->getProbabilities(node, 1.15f, true);
+            this->pe->getProbabilities(node, this->conf->temperature_for_policy, true);
 
             // XXX why we get the manager to do this????  Doesn't make sense(we can grab the
             // statemachine from this->pe)...
@@ -386,12 +387,11 @@ void SelfPlay::playOnce() {
     // reset resignation status
     this->has_resigned = false;
 
-    this->collect_until_finalised = false;
-    // XXX rename this to collect_until_finalised_pct
-    if (this->conf->sample_to_end_pct > 0) {
+    this->play_full_game = false;
+    if (this->conf->play_full_game_pct > 0) {
         double r = this->rng.get();
-        if (r < this->conf->sample_to_end_pct) {
-            this->collect_until_finalised = true;
+        if (r < this->conf->play_full_game_pct) {
+            this->play_full_game = true;
         }
     }
 

@@ -82,9 +82,6 @@ class PUCTEvaluatorV2Config(object):
     converge_relaxed = attribute(5000)
     converge_non_relaxed = attribute(1000)
 
-    expand_threshold_visits = attribute(42)
-    number_of_expansions_end_game = attribute(2)
-
     # batches to GPU.  number of greenlets to run, along with virtual lossesa
     batch_size = attribute(32)
 
@@ -110,9 +107,11 @@ class SelfPlayConfig(object):
     # -1 is off, and defaults to alpha-zero style
     max_number_of_samples = attribute(4)
 
-    # uses all the same machinery, but instead of scoring, will go play all the way to end
-    # -1 off
-    sample_to_end_pct = attribute(-1)
+    # temperature for policy
+    temperature_for_policy = attribute(1.0)
+
+    # percentage of games to play from beginning to end (using sample_xxx config)
+    play_full_game_pct = attribute(-1)
 
     # select will get to the point where we start sampling
     select_puct_config = attribute(default=attr_factory(PUCTEvaluatorConfig))

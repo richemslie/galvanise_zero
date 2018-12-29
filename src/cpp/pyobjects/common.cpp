@@ -183,6 +183,8 @@ static SelfPlayConfig* createSelfPlayConfig(PyObject* dict) {
     };
 
     config->max_number_of_samples = asInt("max_number_of_samples");
+    config->play_full_game_pct = asFloat("play_full_game_pct");
+    config->temperature_for_policy = asFloat("temperature_for_policy");
 
     config->resign0_score_probability = asFloat("resign0_score_probability");
     config->resign0_false_positive_retry_percentage = asFloat("resign0_false_positive_retry_percentage");
@@ -198,7 +200,6 @@ static SelfPlayConfig* createSelfPlayConfig(PyObject* dict) {
 
     config->score_puct_config = ::createPuctConfig(asDict("score_puct_config"));
     config->score_iterations = asInt("score_iterations");
-    config->sample_to_end_pct = asFloat("sample_to_end_pct");
 
     config->abort_max_length = asInt("abort_max_length");
     config->number_repeat_states_draw = asInt("number_repeat_states_draw");
