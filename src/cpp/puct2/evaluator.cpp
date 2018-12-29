@@ -375,10 +375,6 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
             continue;
         }
 
-        if (c->to_node == nullptr) {
-            continue;
-        }
-
         // we use doubles throughout, for more precision
         double child_score = prior_score;
         const int traversals = c->traversals + 1;
