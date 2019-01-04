@@ -1,7 +1,7 @@
 gzero/galvanise_zero
 ====================
 gzero provides a framework for neural networks to learn to play solely based on self-play.  This
-is largely based off the papers of AlphaZero, as well as the excellent
+is largely based off Deepmind's papers on AlphaGo, AlphaGo Zero and AlphaZero, as well as the excellent
 [exIT paper](https://arxiv.org/abs/1705.08439), and a number of other zero open source were inspirational.
 
 The name gzero stems from the fact that this project was initially a spin off my galvanise player
@@ -9,7 +9,7 @@ in GGP.
 
 Status January 2019
 -------------------
-All games are written in [GDL](https://en.wikipedia.org/wiki/Game_Description_Language) unless otherwise stated.  There is *no* gme specific code other than 
+All games are written in [GDL](https://en.wikipedia.org/wiki/Game_Description_Language) unless otherwise stated.  There is *no* game specific code other than 
 a single python file describing mappings for policy and state (see [here](https://github.com/richemslie/galvanise_zero/issues/1) for more information).
 
 Here are the games that were trained for more than five days (on a couple of GPUs).
