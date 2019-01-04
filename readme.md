@@ -1,16 +1,20 @@
-ggpzero/gzero/galvanise
-=======================
+gzero/galvanise_zero
+====================
 gzero provides a framework for neural networks to learn to play solely based on self-play.  This
-is loosely based on the papers of AlphaZero and exIT, and a number of zero open source were greatly
-inspirational.
+is largely based off the papers of AlphaZero, as well as the excellent
+[exIT paper](https://arxiv.org/abs/1705.08439), and a number of other zero open source were inspirational.
 
 The name gzero stems from the fact that this project was initially a spin off my galvanise player
 in GGP.
 
-Status September 2018
+Status January 2019
 -------------------
+All games are written in [GDL](https://en.wikipedia.org/wiki/Game_Description_Language) unless otherwise stated.  There is game specific code other than 
+a single python file describing mappings for policy and state (see [here](https://github.com/richemslie/galvanise_zero/issues/1) for more information).
+
 Games trained for > 5 days (from most recent)
 
+* international draughts (statemachine in c++)
 * go(baduk) 9x9 (no super ko, statemachine in c++)
 * chess (with no 50 rule)
 * connect 6
@@ -19,16 +23,21 @@ Games trained for > 5 days (from most recent)
 * reversi (8 and 10 board sizes)
 * breakthrough
 
-See https://github.com/richemslie/ggp-zero/blob/dev/src/ggpzero/defs/gamedesc.py for full list.
+Amazons and Breakthrough models were strong enough to win gold medals at ICGA 2018 Computer Olympiad. :clap: :clap:
+Also current Little Golem champion in Breakthrough.
 
-Amazons and Breakthrough models were strong enough to win gold medals at ICGA 2018 Computer Olympiad.  Reversi performs a litte under AB players (about ntest level 20) and Hex/Connect6 play around somewhere around top 10 human level on LG (at a guess, really don't know for sure).  Chess and Go are reasonably strong, but no where near the level one could achieve if spending 100s of GPU days training.  Go 9x9 has a rating 2560 elo on CGOS after about a week of training.  Chess was harder to test due to not having 50 rule, but somewhere about 2200-2600 elo would be my best guess.
+Reversi is also very strong relative to humans, yet performs a bit worse than top AB programs (about ntest level 20).
 
-Also, Chess and Connect6 "cheated" as experimented with adding some data from historical games
-during the self play.
+Hex/Connect6 play around somewhere around top human level on LG, and are currently in the top tier Championships.
+
+Chess and Baduk 9x9 are reasonably strong for the little time they were trained.  Baduk 9x9 had a rating 2560 elo on CGOS after about a week of training.  Chess was harder to test due to not having 50 rule, but somewhere about 2200-2600 elo would be a decent guess.
+
+Also, Chess and Connect6 "cheated" as experimented with adding data from historical games
+as well as the self play data.
+
+All the models can (eventually) be found [here](https://github.com/richemslie/gzero_data).
 
 --------------------
-
-The project is currently on hiatus.
 
 The code is in fairly good shape, but could do with some refactoring and
 documentation (especially a how to guide on how to train a game).  It would definitely be good to
@@ -43,11 +52,10 @@ for themselves.  Some notes:
 5. cpp puct/puct2 really needs to be combined.
 
 
-Little Gollem
--------------
-Search for user
-[gzero_bot](http://littlegolem.net/jsp/info/player.jsp?plid=58835) on Little Golem if you would
-like to challenge it to a game.
+Little Golem
+------------
+Most trained games are available to play on Little Golem website.  Send an invite to play
+[gzero_bot](http://littlegolem.net/jsp/info/player.jsp?plid=58835).
 
 
 project goal(s)
@@ -60,22 +68,20 @@ GPUs).
 
 Some game types which would be interesting to try:
 
-* non-zero board games (such as non zero sum variant of Skirmish)
-* multiplayer games
+* non-zero sum board games (such as non zero sum variant of Skirmish)
+* multiplayer games (games with > 2 players)
 * games that are not easily represented as a 2D array of channels
 * simultaneous games
-* single player games (puzzles)
 
 
-Related repos
--------------
+Related repos (will be merged eventually here)
+----------------------------------------------
 * ggpzero is extension of [ggplib](https://github.com/ggplib/ggplib)
-* Models can be found [here](https://github.com/richemslie/gzero_data)
 * Custom games, game specific code (*) can be found [here](https://github.com/richemslie/gzero_games)
 
 
 (*)  Most game specific game is for testing purposes, printing the board to console, or connecting
 to platforms/programs, such as GTP in go and UCI in chess.  State machines for go(Baduk) and
-Internation Draughts are written in C++.
+International Draughts are written in C++.
 
 
