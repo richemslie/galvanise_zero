@@ -1,8 +1,7 @@
 gzero/galvanise_zero
 ====================
-gzero provides a framework for neural networks to learn to play solely based on self-play.  This
-is largely based off Deepmind's papers on AlphaGo, AlphaGo Zero and AlphaZero, as well as the excellent
-[exIT paper](https://arxiv.org/abs/1705.08439), and a number of other zero open source were inspirational.
+gzero provides a framework for neural networks to learn solely based on self play.  This is largely based off Deepmind's papers on AlphaGo, AlphaGo Zero and AlphaZero, as well as the excellent
+[exIT paper](https://arxiv.org/abs/1705.08439), and a number of open source projects were inspirational.
 
 The name gzero stems from the fact that this project was initially a spin off my galvanise player
 in GGP.
@@ -26,9 +25,9 @@ Here are the games that were trained for more than five days (on a couple of GPU
 Amazons and Breakthrough models were strong enough to win gold medals at ICGA 2018 Computer Olympiad. :clap: :clap:
 Also current LG Champion in Breakthrough.
 
-Reversi is also very strong relative to humans on LG, yet performs a bit worse than top AB programs (about ntest level 20 the last time I tested).
+Reversi is also strong relative to humans on LG, yet performs a bit worse than top AB programs (about ntest level 20 the last time I tested).
 
-Hex/Connect6 play around somewhere around top human level on LG, and are currently in the top tier Championships.
+Hex/Connect6 play around somewhere top human level on LG, and are currently in the top tier Championships.
 
 Chess and Baduk 9x9 are reasonably strong for the little time they were trained.  Baduk 9x9 had a rating 2560 elo on CGOS after about a week of training.  Chess was harder to test due to not having 50 rule, but somewhere about 2200-2600 elo would be a decent guess.
 
