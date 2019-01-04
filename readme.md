@@ -9,10 +9,10 @@ in GGP.
 
 Status January 2019
 -------------------
-All games are written in [GDL](https://en.wikipedia.org/wiki/Game_Description_Language) unless otherwise stated.  There is game specific code other than 
+All games are written in [GDL](https://en.wikipedia.org/wiki/Game_Description_Language) unless otherwise stated.  There is *no* gme specific code other than 
 a single python file describing mappings for policy and state (see [here](https://github.com/richemslie/galvanise_zero/issues/1) for more information).
 
-Games trained for > 5 days (from most recent)
+Here are the games that were trained for more than five days (on a couple of GPUs).
 
 * international draughts (statemachine in c++)
 * go(baduk) 9x9 (no super ko, statemachine in c++)
@@ -24,9 +24,9 @@ Games trained for > 5 days (from most recent)
 * breakthrough
 
 Amazons and Breakthrough models were strong enough to win gold medals at ICGA 2018 Computer Olympiad. :clap: :clap:
-Also current Little Golem champion in Breakthrough.
+Also current LG Champion in Breakthrough.
 
-Reversi is also very strong relative to humans, yet performs a bit worse than top AB programs (about ntest level 20).
+Reversi is also very strong relative to humans on LG, yet performs a bit worse than top AB programs (about ntest level 20 the last time I tested).
 
 Hex/Connect6 play around somewhere around top human level on LG, and are currently in the top tier Championships.
 
@@ -68,7 +68,7 @@ GPUs).
 
 Some game types which would be interesting to try:
 
-* non-zero sum board games (such as non zero sum variant of Skirmish)
+* non-zero sum games (such as the non zero sum variant of Skirmish)
 * multiplayer games (games with > 2 players)
 * games that are not easily represented as a 2D array of channels
 * simultaneous games
