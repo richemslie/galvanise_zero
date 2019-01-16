@@ -282,6 +282,9 @@ void PuctEvaluator::setPuctConstant(PuctNode* node, int depth) const {
 
     node->puct_constant = std::log((1 + node->visits + cpuct_base_id) /
                                    cpuct_base_id) + puct_constant;
+
+    //node->puct_constant = mod * std::log((1 + node->visits + cpuct_base_id) /
+    //                                     cpuct_base_id) + puct_constant;
 }
 
 bool PuctEvaluator::converged(int count) const {
@@ -732,42 +735,44 @@ void PuctEvaluator::playoutMain(double end_time) {
         return false;
     };
 
-    auto report = [&do_report](std::string s){
-        if (do_report()) {
-            K273::l_warning(s);
-        }
-    };
 
     int iterations = 0;
     while (true) {
         const int our_role_index = this->root->lead_role_index;
 
         if (this->root->is_finalised && iterations > 1000) {
-            report("Breaking early as finalised");
+            K273::l_warning("Breaking early as finalised");
             break;
         }
 
         if (end_time > 0 && K273::get_time() > end_time) {
-            report("Hit hard time limit");
+            K273::l_warning("Hit hard time limit");
             break;
         }
 
         // use think time:
         // XXX hacked up so can run in reasonable times during ICGA
-        if (use_think_time && iterations % 20 == 0 && K273::get_time() > (start_time + 0.25)) {
+        if (use_think_time && iterations % 20 == 0 && K273::get_time() > (start_time + 0.1)) {
 
             if (elapsed(1.0) && this->converged(this->conf->converge_relaxed)) {
-                report("Breaking since converged (relaxed)");
+                K273::l_warning("Breaking since converged (relaxed)");
                 break;
             }
 
-            if (elapsed(1.33) && this->converged(this->conf->converge_non_relaxed)) {
-                report("Breaking since converged (non-relaxed)");
+            const PuctNodeChild* best = this->chooseTopVisits(this->root);
+            if ((this->conf->think_time < 1.0 || best->to_node->getCurrentScore(our_role_index) > 0.98)
+                && elapsed(1.0)) {
+                K273::l_warning("Should be ok... (non converged)");
                 break;
             }
 
-            if (elapsed(1.75)) {
-                report("Breaking - but never converged :(");
+            if (elapsed(1.5) && this->converged(this->conf->converge_non_relaxed)) {
+                K273::l_warning("Breaking since converged (non-relaxed)");
+                break;
+            }
+
+            if (elapsed(4.0)) {
+                K273::l_warning("Breaking - but never converged :(");
                 break;
             }
         }
