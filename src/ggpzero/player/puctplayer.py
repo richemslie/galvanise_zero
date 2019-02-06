@@ -107,3 +107,6 @@ class PUCTPlayerV2(PUCTPlayer):
 
     def update_config(self, *args, **kwds):
         self.poller.update_config(*args, **kwds)
+
+    def set_dirichlet_noise(self, *args, **kwds):
+        self.poller.set_dirichlet_noise(*args, **kwds)
