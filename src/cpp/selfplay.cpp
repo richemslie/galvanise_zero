@@ -201,8 +201,7 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
             choice = this->pe->onNextMove(iterations);
 
             // create a sample (call getProbabilities() to ensure probabilities are right for policy)
-            // ZZZ configure %
-            this->pe->getProbabilities(node, this->conf->temperature_for_policy, true);
+            this->pe->getProbabilities(node, this->conf->temperature_for_policy, false);
 
             // XXX why we get the manager to do this????  Doesn't make sense(we can grab the
             // statemachine from this->pe)...
