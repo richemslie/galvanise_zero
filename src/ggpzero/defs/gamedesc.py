@@ -458,6 +458,8 @@ class GameSymmetries(object):
                           do_reflection=True)
 
     def _hex(self):
+        ''' Thanks to Niall Cardin (who in turn extended his thanks to Jeff Klingner) for setting
+            me right on my hex symmetries. '''
         return Symmetries(skip_bases=["control", "step", "owner", "canSwap"],
                           apply_bases=[ApplySymmetry("cell", 1, 2),
                                        ApplySymmetry("connected", 2, 3)],
