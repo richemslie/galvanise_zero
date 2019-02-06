@@ -68,9 +68,8 @@ void PuctEvaluator::updateConf(const PuctConfig* conf) {
                         conf->verbose, conf->max_dump_depth,
                         (conf->choose == ChooseFn::choose_top_visits) ? "choose_top_visits" : "choose_temperature");
 
-        K273::l_verbose("puct constant %.2f, root: %.2f",
-                        conf->puct_constant,
-                        conf->puct_constant_root);
+        K273::l_verbose("puct constant %.2f, root: %.2f, multiplier: %.2f",
+                        conf->puct_constant, conf->puct_constant_root, conf->puct_multiplier);
 
         K273::l_verbose("dirichlet_noise (alpha: %.2f, pct: %.2f), fpu_prior_discount: %.2f",
                         conf->dirichlet_noise_alpha, conf->dirichlet_noise_pct, conf->fpu_prior_discount);
@@ -84,9 +83,8 @@ void PuctEvaluator::updateConf(const PuctConfig* conf) {
                         conf->minimax_backup_ratio,
                         conf->minimax_threshold_visits);
 
-        K273::l_verbose("think %.1f, relaxed %d/%d, batch_size=%d",
-                        conf->think_time, conf->converge_relaxed,
-                        conf->converge_non_relaxed, conf->batch_size);
+        K273::l_verbose("think %.1f, converged %d, batch_size=%d",
+                        conf->think_time, conf->converge_relaxed, conf->batch_size);
     }
 
     this->conf = conf;
@@ -280,11 +278,10 @@ void PuctEvaluator::setPuctConstant(PuctNode* node, int depth) const {
     const float cpuct_base_id = 19652.0f;
     const float puct_constant = depth == 0 ? this->conf->puct_constant_root : this->conf->puct_constant;
 
-    node->puct_constant = std::log((1 + node->visits + cpuct_base_id) /
-                                   cpuct_base_id) + puct_constant;
+    node->puct_constant = std::log((1 + node->visits + cpuct_base_id) / cpuct_base_id);
 
-    //node->puct_constant = mod * std::log((1 + node->visits + cpuct_base_id) /
-    //                                     cpuct_base_id) + puct_constant;
+    node->puct_constant *= this->conf->puct_multiplier;
+    node->puct_constant += puct_constant;
 }
 
 bool PuctEvaluator::converged(int count) const {
@@ -395,7 +392,7 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
         // standard PUCT as per AG0 paper
         double exploration_score = child_pct * sqrt_node_visits / (traversals + inflight_visits);
 
-        // always base exploration_score on constant (which self tunes)
+        // always base exploration_score on constant
         exploration_score *= node->puct_constant;
 
         if (c->to_node != nullptr) {
@@ -431,10 +428,21 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
             }
         }
 
+        // XXX add this back in *again*.  Basically in words: at the root node, if we are not
+        // exploring then there isn't any point in doing any search (this is for cases where it
+        // exploits 99% on one child).
+        // XXX hard coded to 70%
+        if (depth == 0 && this->rng.get() > 0.1) {
+            if (c->traversals > 16 &&
+                c->traversals > total_traversals * 0.7) {
+                best_fallback = c;
+                continue;
+            }
+        }
+
         // (more exploration) apply score discount for massive number of inflight visits
-        // XXX rng - kind of expensive here?  tried using 1 and 0.25... has quite an effect on exploration.
-        const double discounted_visits = inflight_visits * (this->rng.get() + 0.25);
-        if (c->traversals > 16 && discounted_visits > 0.1) {
+        const double discounted_visits = inflight_visits * this->rng.get();
+        if (discounted_visits > 0.1) {
             child_score = (child_score * c->traversals) / (c->traversals + discounted_visits);
         }
 
@@ -517,12 +525,10 @@ void PuctEvaluator::backUpMiniMax(float* new_scores, const PathElement& cur) {
     double ratio = this->conf->minimax_backup_ratio;
 
     // scale the ratio towards zero as it visits approaches this->conf->minimax_required_visits.
-    if (cur.num_children_expanded == cur.node->num_children) {
-        ratio -= ratio * (cur.node->visits / (double) this->conf->minimax_threshold_visits);
+    ratio -= ratio * (cur.node->visits / (double) this->conf->minimax_threshold_visits);
 
-        // clamp to make sure no rounding issues
-        ratio = std::max(std::min(1.0, ratio), 0.0);
-    }
+    // clamp to make sure no rounding issues
+    ratio = std::max(std::min(1.0, ratio), 0.0);
 
     for (int ii=0; ii<this->sm->getRoleCount(); ii++) {
         new_scores[ii] = (ratio * best->getCurrentScore(ii) +
@@ -735,7 +741,6 @@ void PuctEvaluator::playoutMain(double end_time) {
         return false;
     };
 
-
     int iterations = 0;
     while (true) {
         const int our_role_index = this->root->lead_role_index;
@@ -754,26 +759,23 @@ void PuctEvaluator::playoutMain(double end_time) {
         // XXX hacked up so can run in reasonable times during ICGA
         if (use_think_time && iterations % 20 == 0 && K273::get_time() > (start_time + 0.1)) {
 
-            if (elapsed(1.0) && this->converged(this->conf->converge_relaxed)) {
-                K273::l_warning("Breaking since converged (relaxed)");
-                break;
-            }
+            if (elapsed(1.0)) {
 
-            const PuctNodeChild* best = this->chooseTopVisits(this->root);
-            if ((this->conf->think_time < 1.0 || best->to_node->getCurrentScore(our_role_index) > 0.98)
-                && elapsed(1.0)) {
-                K273::l_warning("Should be ok... (non converged)");
-                break;
-            }
+                if (this->converged(this->conf->converge_relaxed)) {
+                    K273::l_warning("Breaking since converged (relaxed)");
+                    break;
+                }
 
-            if (elapsed(1.5) && this->converged(this->conf->converge_non_relaxed)) {
-                K273::l_warning("Breaking since converged (non-relaxed)");
-                break;
-            }
+                const PuctNodeChild* best = this->chooseTopVisits(this->root);
+                if (this->conf->think_time < 1.0 || best->to_node->getCurrentScore(our_role_index) > 0.98) {
+                    K273::l_warning("Breaking since: quick time OR score... (non converged)");
+                    break;
+                }
 
-            if (elapsed(4.0)) {
-                K273::l_warning("Breaking - but never converged :(");
-                break;
+                if (elapsed(2.5)) {
+                    K273::l_warning("Breaking - but never converged :(");
+                    break;
+                }
             }
         }
 
@@ -1197,9 +1199,9 @@ void PuctEvaluator::logDebug(const PuctNodeChild* choice_root) {
         Children dist;
         if (cur->num_children > 0 && cur->visits > 0) {
             if (cur->visits < cur->num_children) {
-                dist = this->getProbabilities(cur, 1.2, true);
+                dist = this->getProbabilities(cur, 1.0, true);
             } else {
-                dist = this->getProbabilities(cur, 1.2, false);
+                dist = this->getProbabilities(cur, 1.0, false);
             }
         }
 

@@ -13,6 +13,7 @@ namespace GGPZero::PuctV2 {
 
         float puct_constant = 0.75f;
         float puct_constant_root = 2.5f;
+        float puct_multiplier = 1.0f;
 
         //int puct_before_expansions;
         //int puct_before_root_expansions;
@@ -43,7 +44,6 @@ namespace GGPZero::PuctV2 {
 
         float think_time = 10.0;
         int converge_relaxed = 5000;
-        int converge_non_relaxed = 1000;
 
         int batch_size = 32;
     };
