@@ -5,6 +5,7 @@ from ggpzero.defs.datadesc import GenerationDescription
 
 # DO NOT IMPORT msgs.py
 
+
 @register_attrs
 class PUCTEvaluatorConfig(object):
     verbose = attribute(False)
@@ -50,6 +51,8 @@ class PUCTEvaluatorV2Config(object):
 
     puct_constant = attribute(0.75)
     puct_constant_root = attribute(2.5)
+    puct_multiplier = attribute(1.0)
+    converge_non_relaxed = attribute(1000)
 
     # added to root child policy pct (alpha less than 0 is off)
     dirichlet_noise_pct = attribute(0.25)
@@ -80,7 +83,6 @@ class PUCTEvaluatorV2Config(object):
 
     think_time = attribute(10.0)
     converge_relaxed = attribute(5000)
-    converge_non_relaxed = attribute(1000)
 
     # batches to GPU.  number of greenlets to run, along with virtual lossesa
     batch_size = attribute(32)
