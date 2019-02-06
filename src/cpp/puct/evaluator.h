@@ -35,11 +35,10 @@ namespace GGPZero {
         virtual ~PuctEvaluator();
 
     public:
-        void updateConf(const PuctConfig* conf, const ExtraPuctConfig* extra=nullptr);
+        void updateConf(const PuctConfig* conf);
 
         // special config for self play only
-        void setRepeatStateDraw(int number_repeat_states_draw,
-                                float repeat_states_score);
+        void setRepeatStateDraw(int number_repeat_states_draw, float repeat_states_score);
 
     private:
         void addNode(PuctNode* new_node);
@@ -92,7 +91,6 @@ namespace GGPZero {
         GGPLib::BaseState* basestate_expand_node;
 
         const PuctConfig* conf;
-        const ExtraPuctConfig* extra;
 
         // introduce a different way of doing things
         int number_repeat_states_draw;

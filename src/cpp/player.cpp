@@ -14,7 +14,7 @@ using namespace GGPZero;
 
 Player::Player(GGPLib::StateMachineInterface* sm,
                const GdlBasesTransformer* transformer,
-               const PuctConfig* conf) :
+               PuctConfig* conf) :
     transformer(transformer),
     evaluator(nullptr),
     scheduler(nullptr),
@@ -29,9 +29,8 @@ Player::Player(GGPLib::StateMachineInterface* sm,
     // dupe statemachine here, as the PuctEvaluator thinks it is sharing a statemachine (ie it
     // doesn't dupe the statemachine itself)
     this->evaluator = new PuctEvaluator(sm->dupe(), conf, this->scheduler, transformer);
-    ExtraPuctConfig* extra_conf = new ExtraPuctConfig;
-    extra_conf->matchmode = true;
-    this->evaluator->updateConf(conf, extra_conf);
+    conf->matchmode = true;
+    this->evaluator->updateConf(conf);
 }
 
 Player::~Player() {

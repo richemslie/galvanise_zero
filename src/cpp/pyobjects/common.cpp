@@ -67,10 +67,9 @@ static PuctConfig* createPuctConfig(PyObject* dict) {
     };
 
     config->verbose = asInt("verbose");
-    config->puct_before_expansions = asInt("puct_before_expansions");
-    config->puct_before_root_expansions = asInt("puct_before_root_expansions");
-    config->puct_constant_before = asFloat("puct_constant_before");
-    config->puct_constant_after = asFloat("puct_constant_after");
+    // ZZZZXXXXXXX
+    config->puct_constant = asFloat("puct_constant_before");
+
     config->root_expansions_preset_visits = asInt("root_expansions_preset_visits");
     config->dirichlet_noise_pct = asFloat("dirichlet_noise_pct");
     config->dirichlet_noise_alpha = asFloat("dirichlet_noise_alpha");

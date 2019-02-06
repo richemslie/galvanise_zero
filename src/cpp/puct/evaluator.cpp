@@ -29,7 +29,6 @@ PuctEvaluator::PuctEvaluator(GGPLib::StateMachineInterface* sm,
     sm(sm),
     basestate_expand_node(nullptr),
     conf(conf),
-    extra(nullptr),
     number_repeat_states_draw(-1),
     repeat_states_score(-1.0f),
     scheduler(scheduler),
@@ -53,23 +52,17 @@ PuctEvaluator::~PuctEvaluator() {
     this->reset(0);
 
     delete this->conf;
-    delete this->extra;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 
-void PuctEvaluator::updateConf(const PuctConfig* conf, const ExtraPuctConfig* extra_conf) {
-    if (extra_conf == nullptr) {
-        extra_conf = new ExtraPuctConfig;
-    }
-
+void PuctEvaluator::updateConf(const PuctConfig* conf) {
     if (conf->verbose) {
-        K273::l_verbose("config verbose: %d, max_dump_depth: %d, puct_constant before (%.2f) after (%.2f)",
-                        conf->verbose, conf->max_dump_depth, conf->puct_constant_before, conf->puct_constant_after);
+        K273::l_verbose("config verbose: %d, max_dump_depth: %d",
+                        conf->verbose, conf->max_dump_depth);
 
-        K273::l_verbose("puct_expansion: (%d, root: %d), root_expansions_preset_visits: %d",
-                        conf->puct_before_expansions, conf->puct_before_root_expansions,
-                        conf->root_expansions_preset_visits);
+        K273::l_verbose("puct_constant: %f, root_expansions_preset_visits: %d",
+                        conf->puct_constant, conf->root_expansions_preset_visits);
 
         K273::l_verbose("dirichlet_noise (alpha: %.2f, pct: %.2f), fpu_prior_discount: %.2f",
                         conf->dirichlet_noise_alpha, conf->dirichlet_noise_pct, conf->fpu_prior_discount);
@@ -81,17 +74,14 @@ void PuctEvaluator::updateConf(const PuctConfig* conf, const ExtraPuctConfig* ex
                         conf->temperature, conf->depth_temperature_start, conf->depth_temperature_stop,
                         conf->depth_temperature_max, conf->depth_temperature_increment, conf->random_scale);
 
-        K273::l_verbose("Extra!  top_visits_best_guess_converge_ratio: %.2f, policy_cutoff_visits: %d",
-                        extra_conf->top_visits_best_guess_converge_ratio,
-                        extra_conf->policy_cutoff_visits);
+        K273::l_verbose("top_visits_best_guess_converge_ratio: %.2f",
+                        conf->top_visits_best_guess_converge_ratio);
 
-        K273::l_verbose("Extra!  evaluation_multipler (terminal %.2f, convergence %.2f)",
-                        extra_conf->evaluation_multipler_on_terminal,
-                        extra_conf->evaluation_multipler_to_convergence);
+        K273::l_verbose("evaluation_multipler convergence %.2f",
+                        conf->evaluation_multipler_to_convergence);
     }
 
     this->conf = conf;
-    this->extra = extra_conf;
 }
 
 void PuctEvaluator::setRepeatStateDraw(int number_repeat_states_draw,
@@ -246,19 +236,8 @@ bool PuctEvaluator::setDirichletNoise(int depth) {
 }
 
 float PuctEvaluator::getPuctConstant(PuctNode* node, int depth) const {
-    float constant = this->conf->puct_constant_after;
-
-    int num_expansions = depth == 0 ? this->conf->puct_before_root_expansions : this->conf->puct_before_expansions;
-
-    // special case where num_children is less than num_expansions required to switch.  In this
-    // case we switch to puct_constant_after as soon as we expanded everything
-    num_expansions = std::min((int)node->num_children, num_expansions);
-
-    if (node->num_children_expanded < num_expansions) {
-        constant = this->conf->puct_constant_before;
-    }
-
-    return constant;
+    // XXX remove this method
+    return this->conf->puct_constant;
 }
 
 void PuctEvaluator::backPropagate(float* new_scores) {
@@ -290,15 +269,12 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, int depth) {
 
     bool do_dirichlet_noise = this->setDirichletNoise(depth);
 
-    // for training small number of iterations, we get a nice distribution my removing the policy info from selection
-    const bool policy_cutoff = this->extra->policy_cutoff_visits > 0 && node->visits > this->extra->policy_cutoff_visits;
-
-    // don't do dirichlet noise after policy cut off
-    if (this->extra->policy_cutoff_visits > 0 && policy_cutoff) {
+    // don't do dirichlet noise every turn (XXX experimental)
+    if (node->visits % 2 == 0) {
         do_dirichlet_noise = false;
     }
 
-    float puct_constant = this->getPuctConstant(node, depth);
+    float puct_constant = this->conf->puct_constant;
     float sqrt_node_visits = std::sqrt(node->visits + 1);
 
     // get best
@@ -316,11 +292,7 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, int depth) {
         for (int ii=0; ii<node->num_children; ii++) {
             PuctNodeChild* c = node->getNodeChild(this->sm->getRoleCount(), ii);
             if (c->to_node != nullptr && c->to_node->visits > 0) {
-                if (policy_cutoff) {
-                    total_policy_visited += 1.0f / (float) node->num_children;
-                } else {
-                    total_policy_visited += c->policy_prob;
-                }
+                total_policy_visited += 1.0f / (float) node->num_children;
             }
         }
 
@@ -337,9 +309,6 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, int depth) {
         float node_score = prior_score;
 
         float child_pct = c->policy_prob;
-        if (policy_cutoff) {
-            child_pct = 1.0f / (float) node->num_children;
-        }
 
         if (c->to_node != nullptr) {
             PuctNode* cn = c->to_node;
@@ -348,6 +317,7 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, int depth) {
 
             // ensure finalised are enforced more than other nodes (network can return 1.0f for
             // basically dumb moves, if it thinks it will win regardless)
+            // XXX isn't this redundant now, cause of 1.05 for wins?
             if (cn->is_finalised) {
                 if (node_score > 0.99) {
                     if (depth > 0) {
@@ -404,15 +374,8 @@ int PuctEvaluator::treePlayout() {
         this->path.emplace_back(child, current);
 
         // End of the road
-        if (tree_playout_depth > 0) {
-            if (current->is_finalised) {
-                break;
-            }
-
-        } else {
-            if (current->isTerminal()) {
-                break;
-            }
+        if (current->isTerminal()) {
+            break;
         }
 
         // Choose selection
@@ -470,19 +433,18 @@ void PuctEvaluator::playoutLoop(int max_evaluations, double end_time) {
 
     double next_report_time = -1;
 
-    if (this->extra->matchmode) {
+    if (this->conf->matchmode) {
         next_report_time = K273::get_time() + 2.5;
     }
-
-    bool do_once_multiplier = true;
 
     while (iterations < max_iterations) {
         if (max_evaluations > 0 && this->evaluations > max_evaluations) {
 
             if (this->converged(this->root)) {
                 break;
+
             } else {
-                int max_convergence_evaluations = max_evaluations * this->extra->evaluation_multipler_to_convergence;
+                const int max_convergence_evaluations = max_evaluations * this->conf->evaluation_multipler_to_convergence;
                 if (this->evaluations > max_convergence_evaluations) {
                     break;
                 }
@@ -498,12 +460,6 @@ void PuctEvaluator::playoutLoop(int max_evaluations, double end_time) {
         total_depth += depth;
 
         iterations++;
-
-        // small pondering like extension, only at end game...
-        if (do_once_multiplier && this->evaluations < iterations) {
-            max_evaluations = max_evaluations * this->extra->evaluation_multipler_on_terminal;
-            do_once_multiplier = false;
-        }
 
         if (next_report_time > 0 && K273::get_time() > next_report_time) {
             next_report_time = K273::get_time() + 2.5;
@@ -748,14 +704,14 @@ const PuctNodeChild* PuctEvaluator::chooseTopVisits(const PuctNode* node) {
     // compare top two.  This is a heuristic to cheaply check if the node hasn't yet converged and
     // chooses the one with the best score.  It isn't very accurate, the only way to get 100%
     // accuracy is to keep running for longer, until it cleanly converges.  This is a best guess for now.
-    if (this->extra->top_visits_best_guess_converge_ratio > 0 && children.size() >= 2) {
+    if (this->conf->top_visits_best_guess_converge_ratio > 0 && children.size() >= 2) {
         PuctNode* n0 = children[0]->to_node;
         PuctNode* n1 = children[1]->to_node;
 
         if (n0 != nullptr && n1 != nullptr) {
             const int role_index = node->lead_role_index;
 
-            if (n1->visits > n0->visits * this->extra->top_visits_best_guess_converge_ratio &&
+            if (n1->visits > n0->visits * this->conf->top_visits_best_guess_converge_ratio &&
                 n1->getCurrentScore(role_index) > n0->getCurrentScore(role_index)) {
                 return children[1];
             } else {

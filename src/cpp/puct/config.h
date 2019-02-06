@@ -12,13 +12,9 @@ namespace GGPZero {
     struct PuctConfig {
         bool verbose;
 
-        int puct_before_expansions;
-        int puct_before_root_expansions;
-
         int root_expansions_preset_visits;
 
-        float puct_constant_before;
-        float puct_constant_after;
+        float puct_constant;
 
         float dirichlet_noise_pct;
         float dirichlet_noise_alpha;
@@ -35,19 +31,12 @@ namespace GGPZero {
         float depth_temperature_max;
 
         float fpu_prior_discount;
-    };
 
-    struct ExtraPuctConfig {
-        bool matchmode = false;
-
-        // < 0, off
+        // XXX add / remove features
         float top_visits_best_guess_converge_ratio = 0.8;
-        float cpuct_after_root_multiplier = 1.0;
-
-        double evaluation_multipler_on_terminal = 1.0;
         double evaluation_multipler_to_convergence = 2.5;
 
-        int policy_cutoff_visits = 25;
+        bool matchmode = false;
     };
 
 }
