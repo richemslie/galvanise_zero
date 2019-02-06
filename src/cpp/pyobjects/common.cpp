@@ -122,6 +122,7 @@ static GGPZero::PuctV2::PuctConfig* createPuctConfigV2(PyObject* dict) {
 
     config->puct_constant = asFloat("puct_constant");
     config->puct_constant_root = asFloat("puct_constant_root");
+    config->puct_multiplier = asFloat("puct_multiplier");
 
     config->dirichlet_noise_pct = asFloat("dirichlet_noise_pct");
     config->dirichlet_noise_alpha = asFloat("dirichlet_noise_alpha");
@@ -143,7 +144,6 @@ static GGPZero::PuctV2::PuctConfig* createPuctConfigV2(PyObject* dict) {
 
     config->think_time = asFloat("think_time");
     config->converge_relaxed = asInt("converge_relaxed");
-    config->converge_non_relaxed = asInt("converge_non_relaxed");
 
     config->batch_size = asInt("batch_size");
 

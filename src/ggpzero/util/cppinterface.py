@@ -170,6 +170,7 @@ class PlayPollerV2(PlayPoller):
         super().__init__(sm, nn, conf, batch_size=conf.batch_size)
 
         setattr(self, "update_config", getattr(self.c_player, "player_update_config"))
+        setattr(self, "set_dirichlet_noise", getattr(self.c_player, "player_set_dirichlet_noise"))
 
 
 class Supervisor(PollerBase):

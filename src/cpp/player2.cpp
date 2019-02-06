@@ -40,13 +40,16 @@ Player::~Player() {
     delete this->scheduler;
 }
 
-void Player::updateConfig(float think_time, int converge_relaxed,
-                          int converge_non_relaxed, bool verbose) {
+void Player::updateConfig(float think_time, int converge_relaxed, bool verbose) {
     this->config->think_time = think_time;
     this->config->converge_relaxed = converge_relaxed;
-    this->config->converge_non_relaxed = converge_non_relaxed;
     this->config->verbose = verbose;
+
     this->evaluator->updateConf(this->config);
+}
+
+void Player::setDirichletNoise(float alpha) {
+    this->config->dirichlet_noise_alpha = alpha;
 }
 
 void Player::puctPlayerReset(int game_depth) {
