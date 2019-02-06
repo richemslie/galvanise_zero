@@ -26,7 +26,7 @@ Supervisor::Supervisor(GGPLib::StateMachineInterface* sm,
     inline_sp_manager(nullptr),
     in_progress_manager(nullptr),
     in_progress_worker(nullptr),
-    unique_states(sm->dupe(), transformer, 200) {
+    unique_states(sm->dupe(), transformer, 100) {
 }
 
 Supervisor::~Supervisor() {
