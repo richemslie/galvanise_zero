@@ -280,7 +280,7 @@ void PuctNode::dumpNode(const PuctNode* node,
             visits = child->to_node->visits;
         }
 
-        string msg = K273::fmtString("%s %s %d(%d):%s %.2f/%.2f   %s   %.2f/%.2f",
+        string msg = K273::fmtString("%s %s %d(%d):%s %.2f/%.2f   %s   %.3f/%.3f/%.3f",
                                      indent.c_str(),
                                      move.c_str(),
                                      child->traversals,
@@ -290,7 +290,8 @@ void PuctNode::dumpNode(const PuctNode* node,
                                      child->next_prob * 100,
                                      score.c_str(),
                                      child->debug_node_score,
-                                     child->debug_puct_score);
+                                     child->debug_puct_score,
+                                     child->debug_node_score + child->debug_puct_score);
 
 
         if (child == highlight) {
