@@ -790,41 +790,41 @@ const PuctNodeChild* PuctEvaluator::chooseTemperature(const PuctNode* node) {
                       temperature, expected_probability);
     }
 
-    // hex hacks
-    if (node->num_children == 169) {
-        if (this->game_depth == 0) {
-            if (this->rng.get() < 0.5) {
-                for (const PuctNodeChild* c : dist) {
-                    const int choice = c->move.get(node->lead_role_index);
-                    std::string smove = this->sm->legalToMove(node->lead_role_index, choice);
-                    if (smove == "(place c 2)" || smove == "(place k 12)") {
-                        if (this->rng.get() < 0.3) {
-                            return c;
-                        }
-                    }
+    // // hex hacks
+    // if (node->num_children == 169) {
+    //     if (this->game_depth == 0) {
+    //         if (this->rng.get() < 0.5) {
+    //             for (const PuctNodeChild* c : dist) {
+    //                 const int choice = c->move.get(node->lead_role_index);
+    //                 std::string smove = this->sm->legalToMove(node->lead_role_index, choice);
+    //                 if (smove == "(place c 2)" || smove == "(place k 12)") {
+    //                     if (this->rng.get() < 0.3) {
+    //                         return c;
+    //                     }
+    //                 }
 
-                    if (smove == "(place a 13)" || smove == "(place m 1)") {
-                        if (this->rng.get() < 0.25) {
-                            return c;
-                        }
-                    }
-                }
-            }
+    //                 if (smove == "(place a 13)" || smove == "(place m 1)") {
+    //                     if (this->rng.get() < 0.25) {
+    //                         return c;
+    //                     }
+    //                 }
+    //             }
+    //         }
 
-            if (this->rng.get() < 0.95) {
-                expected_probability *= 0.5;
-            }
-        }
+    //         if (this->rng.get() < 0.95) {
+    //             expected_probability *= 0.5;
+    //         }
+    //     }
 
-        if (this->game_depth == 1) {
-            if (this->rng.get() < 0.95) {
-                expected_probability *= 0.75;
-            }
-        }
+    //     if (this->game_depth == 1) {
+    //         if (this->rng.get() < 0.95) {
+    //             expected_probability *= 0.75;
+    //         }
+    //     }
 
-        K273::l_debug("temperature %.2f, expected_probability %.2f",
-                      temperature, expected_probability);
-    }
+    //     K273::l_debug("temperature %.2f, expected_probability %.2f",
+    //                   temperature, expected_probability);
+    // }
 
     float seen_probability = 0;
     for (const PuctNodeChild* c : dist) {
