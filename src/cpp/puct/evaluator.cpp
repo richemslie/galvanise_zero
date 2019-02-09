@@ -282,7 +282,7 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, int depth) {
     float best_score = -1;
 
     // prior... (alpha go zero said 0 but there score ranges from [-1,1]
-    float prior_score = node->getFinalScore(node->lead_role_index);
+    float prior_score = node->visits < 4 ? node->getFinalScore(node->lead_role_index) : node->getCurrentScore(node->lead_role_index);
     if (this->conf->fpu_prior_discount > 0) {
         float fpu_reduction = this->conf->fpu_prior_discount;
 
@@ -292,7 +292,7 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, int depth) {
         for (int ii=0; ii<node->num_children; ii++) {
             PuctNodeChild* c = node->getNodeChild(this->sm->getRoleCount(), ii);
             if (c->to_node != nullptr && c->to_node->visits > 0) {
-                total_policy_visited += 1.0f / (float) node->num_children;
+                total_policy_visited += c->policy_prob;
             }
         }
 
@@ -654,12 +654,6 @@ const PuctNodeChild* PuctEvaluator::choose(const PuctNode* node) {
             K273::l_warning("this->conf->choose unsupported - falling back to choose_top_visits");
             choice = this->chooseTopVisits(node);
             break;
-    }
-
-    if (this->game_depth <= 1) {
-        K273::l_debug("(%d) choice was %s",
-                      this->game_depth,
-                      this->sm->legalToMove(node->lead_role_index, choice->move.get(node->lead_role_index)));
     }
 
     return choice;
