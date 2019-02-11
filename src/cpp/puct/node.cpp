@@ -340,36 +340,27 @@ void PuctNodeRequest::reply(const GGPZero::ModelResult& result,
                             const GdlBasesTransformer* transformer) {
 
     const int role_count = transformer->getNumberPolicies();
+    auto* raw_policy = result.getPolicy(node->lead_role_index);
+
     // Update children in new_node with prediction
     float total_prediction = 0.0f;
-
-    auto* raw_policy = result.getPolicy(node->lead_role_index);
     for (int ii=0; ii<node->num_children; ii++) {
         PuctNodeChild* c = node->getNodeChild(role_count, ii);
 
         c->policy_prob = raw_policy[c->move.get(node->lead_role_index)];
 
-        if (c->policy_prob < 0.001) {
-            // XXX stats?
-            c->policy_prob = 0.001;
-        }
-
+        // give each time at least some probability
+        c->policy_prob = std::max(0.001f, c->policy_prob);
         total_prediction += c->policy_prob;
     }
 
-    if (total_prediction > std::numeric_limits<float>::min()) {
-        // normalise:
-        for (int ii=0; ii<node->num_children; ii++) {
-            PuctNodeChild* c = node->getNodeChild(role_count, ii);
-            c->policy_prob /= total_prediction;
-        }
+    // XXX well this can't happen (since we set a minimum for each child)
+    ASSERT(total_prediction > std::numeric_limits<float>::min());
 
-    } else {
-        // well that sucks - absolutely no predictions, just make it uniform then...
-        for (int ii=0; ii<node->num_children; ii++) {
-            PuctNodeChild* c = node->getNodeChild(role_count, ii);
-            c->policy_prob = 1.0 / node->num_children;
-        }
+    // normalise:
+    for (int ii=0; ii<node->num_children; ii++) {
+        PuctNodeChild* c = node->getNodeChild(role_count, ii);
+        c->policy_prob /= total_prediction;
     }
 
     for (int ri=0; ri<role_count; ri++) {

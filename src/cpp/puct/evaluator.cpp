@@ -270,9 +270,9 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, int depth) {
     bool do_dirichlet_noise = this->setDirichletNoise(depth);
 
     // don't do dirichlet noise every turn (XXX experimental)
-    if (node->visits % 2 == 0) {
-        do_dirichlet_noise = false;
-    }
+    //if (node->visits % 2 == 0) {
+    //    do_dirichlet_noise = false;
+    //}
 
     float puct_constant = this->conf->puct_constant;
     float sqrt_node_visits = std::sqrt(node->visits + 1);
@@ -282,7 +282,7 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, int depth) {
     float best_score = -1;
 
     // prior... (alpha go zero said 0 but there score ranges from [-1,1]
-    float prior_score = node->visits < 4 ? node->getFinalScore(node->lead_role_index) : node->getCurrentScore(node->lead_role_index);
+    float prior_score = node->visits < 8 ? node->getFinalScore(node->lead_role_index) : node->getCurrentScore(node->lead_role_index);
     if (this->conf->fpu_prior_discount > 0) {
         float fpu_reduction = this->conf->fpu_prior_discount;
 
@@ -310,6 +310,12 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, int depth) {
 
         float child_pct = c->policy_prob;
 
+        if (do_dirichlet_noise) {
+            float noise_pct = this->conf->dirichlet_noise_pct;
+            child_pct = (1.0f - noise_pct) * child_pct + noise_pct * c->dirichlet_noise;
+            c->policy_prob = child_pct;
+        }
+
         if (c->to_node != nullptr) {
             PuctNode* cn = c->to_node;
             child_visits = cn->visits;
@@ -331,11 +337,6 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, int depth) {
                     child_pct = 0.0;
                 }
             }
-        }
-
-        if (do_dirichlet_noise) {
-            float noise_pct = this->conf->dirichlet_noise_pct;
-            child_pct = (1.0f - noise_pct) * child_pct + noise_pct * c->dirichlet_noise;
         }
 
         float cv = child_visits + 1;
@@ -727,7 +728,7 @@ const PuctNodeChild* PuctEvaluator::chooseTemperature(const PuctNode* node) {
     // subtle: when the visits is low (like 0), we want to use the policy part of the
     // distribution. By using linger here, we get that behaviour.
     Children dist;
-    if (root->visits < root->num_children) {
+    if (!this->conf->dirichlet_noise_alpha && root->visits < root->num_children) {
         dist = this->getProbabilities(this->root, temperature, true);
     } else {
         dist = this->getProbabilities(this->root, temperature, false);
@@ -797,7 +798,7 @@ Children PuctEvaluator::getProbabilities(PuctNode* node, float temperature, bool
 
     // add some smoothness.  This also works for the case when doing no evaluations (ie
     // onNextMove(0)), as the node_visits == 0 and be uniform.
-    float linger_pct = 0.1f;
+    float linger_pct = 0.01f;
 
     float total_probability = 0.0f;
     for (int ii=0; ii<node->num_children; ii++) {
