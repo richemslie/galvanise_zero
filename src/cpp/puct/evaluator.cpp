@@ -286,6 +286,10 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, int depth) {
     if (this->conf->fpu_prior_discount > 0) {
         float fpu_reduction = this->conf->fpu_prior_discount;
 
+        if (depth == 0) {
+            fpu_reduction *= 2.0;
+        }
+
         // original value from network / or terminal value
         float total_policy_visited = 0.0;
 
