@@ -209,8 +209,8 @@ class ChunkIndexer(object):
 
         shuffle.
         '''
-        # XXX add config options
-        include_pct = 0.6
+        # XXX add config option (actually best just an argument here)
+        include_pct = 0.35
 
         levels = self.validation_levels if validation else self.train_levels
         sizes = [end - start for start, end in levels]
@@ -252,6 +252,12 @@ class ChunkIndexer(object):
                     if sum(remaining_sizes) > max_remaining_size:
                         remaining_sizes[-1] -= sum(remaining_sizes) + - max_remaining_size
 
+                        if remaining_sizes[-1] <= 0:
+                            print 'uggh XXX.... FIXME', remaining_sizes[-1]
+                            print "max_size = sum(sizes)", max_size, sum(sizes)
+                            remaining_sizes.pop(-1)
+                            max_size = sum(sizes)
+
                 sizes = include_sizes + remaining_sizes
 
             assert sum(sizes) <= max_size
@@ -270,7 +276,7 @@ class ChunkIndexer(object):
 
     def validation_epoch(self, epoch_size=None):
         # XXX maybe add a trim mode - so always taking most recent data???  Maybe better to just
-        # have seperate buckets?
+        # have separate buckets?
         return self.get_indices(max_size=epoch_size, validation=True)
 
 
@@ -344,9 +350,9 @@ class StatsAccumulator(object):
     def av_puct_score_dist(self):
         return str([(p, total / float(self.num_samples)) for p, total in self.total_puct_score_dist])
 
-    def add(self, sample):
+    def add(self, sample, was_draw=False):
         self.num_samples += 1
-        self.total_draws += 1 if abs(sample.final_score[0] - 0.5) < 0.01 else 0
+        self.total_draws += 1 if was_draw else 0
         self.bare_policies += 1 if all(len(p) == 1 for p in sample.policies) else 0
         self.match_depths.setdefault(sample.match_identifier, []).append(sample.depth)
 
@@ -372,10 +378,16 @@ class StatsAccumulator(object):
 
 
 class DataCache(object):
-    def __init__(self, transformer, gen_prefix, do_augment_data=False):
+    # XXX data_augment_pct to replace do_augment_data
+    def __init__(self, transformer, gen_prefix, do_augment_data=False,
+                 data_augment_pct=0.35,
+                 score_draw_as_random_hack=False):
+
         self.transformer = transformer
         self.gen_prefix = gen_prefix
         self.do_augment_data = do_augment_data
+        self.data_augment_pct = data_augment_pct
+        self.score_draw_as_random_hack = score_draw_as_random_hack
 
         man = get_manager()
         self.data_path = man.samples_path(self.transformer.game, gen_prefix)
@@ -558,18 +570,23 @@ class DataCache(object):
             decoded_state = decode_state2(sample.state)
             decoded_prev_states = [decode_state2(s) for s in sample.prev_states]
 
+            seen = set()
             for do_reflection, rot_count in prescription:
                 # XXX first prescription must be do_reflection == False and rot_count == 0
 
-                # only do 50% of translations...
-                #if len(seen) and random.random() > 0.5:
-                #    continue
+                # only do X% of translations...
+                if len(seen) and random.random() > self.data_augment_pct:
+                    continue
 
                 # translate states/policies
                 state = t.translate_basestate_faster(decoded_state, do_reflection, rot_count)
 
                 # dont do duplicates
                 state = tuple(state)
+
+                if state in seen:
+                    continue
+                seen.add(state)
 
                 prev_states = [t.translate_basestate_faster(s, do_reflection, rot_count)
                                for s in decoded_prev_states]
@@ -635,11 +652,32 @@ class DataCache(object):
             cur_size = indx
 
             for sample in self.augment_data(data.samples):
+                # ensure that final scores are clamped before adding to db
+                sample.final_score = [min(1.0, v) for v in sample.final_score]
+                sample.final_score = [max(0.0, v) for v in sample.final_score]
+
+                sample_is_draw = False
+                if abs(sample.final_score[0] - 0.5) < 0.01:
+                    assert abs(sample.final_score[1] - 0.5) < 0.01
+                    sample_is_draw = True
+
+                # XXX highly experimental
+                if sample_is_draw and self.score_draw_as_random_hack:
+                    # the idea is just to randomly assing a win or loss to train on.  Then the
+                    # network can average out over a 'bazillion' draw samples and determine that
+                    # the value should be 0.5.  In theory.  XXX
+                    if random.random() > 0.5:
+                        sample.final_score = [1.0, 0]
+                    else:
+                        sample.final_score = [0, 1.0]
+
                 et = ElaspedTime()
-                #t.check_sample(sample)
+
+                # XXX too slow, and only useful for debugging serious bugs - disable
+                # t.check_sample(sample)
                 time_check += et.update()
 
-                stats.add(sample)
+                stats.add(sample, was_draw=sample_is_draw)
                 time_stats += et.update()
 
                 # add channels
@@ -658,6 +696,7 @@ class DataCache(object):
 
                 for ri, policy in enumerate(sample.policies):
                     cols.append(t.policy_to_array(policy, ri))
+
                 time_outputs += et.update()
 
                 cols.append(t.value_to_array(sample.final_score))
@@ -666,9 +705,11 @@ class DataCache(object):
                 if indx >= cur_size:
                     cur_size += 20
                     self.db.resize(cur_size)
+
                 time_db_resize += et.update()
                 for ii, name in enumerate(self.db.names):
                     self.db[name][indx] = cols[ii]
+
                 indx += 1
                 time_db_insert += et.update()
 
@@ -738,4 +779,11 @@ class DataCache(object):
 
             inputs = record["channels"]
             outputs = [record[name] for name in self.db.names[1:]]
+
+            # comment out for some extra debugging
+            # if ii == 0:
+            #    for x in 50, 250, 500:
+            #        print "inputs", inputs[x]
+            #        print "outputs", [o[x] for o in outputs]
+
             yield inputs, outputs

@@ -11,7 +11,6 @@ from ggpzero.defs import confs
 
 from ggpzero.nn.manager import get_manager
 
-from ggpzero.nn import network
 from ggpzero.nn import datacache
 
 
@@ -98,9 +97,7 @@ class TrainingLoggerCb(keras_callbacks.Callback):
 class TrainingController(keras_callbacks.Callback):
     ''' custom callback to do nice logging and early stopping '''
 
-    def __init__(self, retraining, num_policies):
-        self.retraining = retraining
-
+    def __init__(self, num_policies):
         self.stop_training = False
         self.at_epoch = 0
 
@@ -109,8 +106,6 @@ class TrainingController(keras_callbacks.Callback):
 
         self.num_policies = num_policies
 
-        self.retrain_best = None
-        self.retrain_best_val_policy_acc = -1
         self.epoch_last_set_at = None
         self.value_loss_diff = -1
 
@@ -137,10 +132,6 @@ class TrainingController(keras_callbacks.Callback):
         self.value_loss_diff = val_loss - loss
 
     def on_epoch_begin(self, epoch, logs=None):
-        if self.retrain_best is None and self.retraining:
-            log.info('Reusing old retraining network for *next* retraining network')
-            self.retrain_best = self.model.get_weights()
-
         self.at_epoch += 1
 
     def on_epoch_end(self, _, logs=None):
@@ -157,36 +148,30 @@ class TrainingController(keras_callbacks.Callback):
         overfitting = policy_acc - 0.02 > val_policy_acc
 
         # store best weights as best val_policy_acc
+
+        # allow small decrease
+        allow_policy_acc = self.best_val_policy_acc - 0.01
         if (self.epoch_last_set_at is None or
-            (val_policy_acc > self.best_val_policy_acc and not overfitting)):
+            (val_policy_acc > allow_policy_acc and not overfitting)):
             log.debug("Setting best to last val_policy_acc %.4f" % val_policy_acc)
             self.best = self.model.get_weights()
-            self.best_val_policy_acc = val_policy_acc
+            self.best_val_policy_acc = max(val_policy_acc, self.best_val_policy_acc)
             self.epoch_last_set_at = epoch
 
-        store_retraining_weights = ((policy_acc + 0.01) < val_policy_acc and
-                                    val_policy_acc > self.retrain_best_val_policy_acc)
-
-        if store_retraining_weights:
-            log.debug("Setting retraining_weights to val_policy_acc %.4f" % val_policy_acc)
-            self.retrain_best = self.model.get_weights()
-            self.retrain_best_val_policy_acc = val_policy_acc
-
         # stop training:
-        if (not self.retraining and epoch >= 4 or
-            self.retraining and epoch >= 2):
+        if epoch >= 3:
             if overfitting:
                 log.info("Early stopping... since policy accuracy overfitting")
                 self.stop_training = True
 
-            # if things havent got better - STOP.  We can go on forever without improving.
-            if self.epoch_last_set_at is not None and epoch > self.epoch_last_set_at + 3:
-                log.info("Early stopping... since not improving")
+            # if things havent got better (XXX hardcoded to 5) - STOP.  We can go on forever without improving.
+            if self.epoch_last_set_at is not None and epoch > self.epoch_last_set_at + 5:
+                log.info("Early stopping... since not improving (disabled)")
                 self.stop_training = True
 
-    def on_train_end(self, logs=None):
+    def do_train_end(self):
         if self.best:
-            log.info("Switching to best weights with val_policy_acc %.4f" % self.best_val_policy_acc)
+            log.warning("Switching to best weights with val_policy_acc %.4f" % self.best_val_policy_acc)
             self.model.set_weights(self.best)
 
 
@@ -226,6 +211,12 @@ class TrainManager(object):
 
         attrutil.pprint(nn_model_config)
 
+        # ZZZ XXX hack in for now
+        self.l2_loss = None
+        if nn_model_config.l2_regularisation:
+            assert isinstance(nn_model_config.l2_regularisation, float)
+            self.l2_loss = nn_model_config.l2_regularisation
+
         man = get_manager()
         if man.can_load(conf.game, self.next_generation):
             msg = "Generation already exists %s / %s" % (conf.game, self.next_generation)
@@ -236,8 +227,8 @@ class TrainManager(object):
         nn = None
         retraining = False
         if conf.use_previous:
-            prev_generation = "%s_%s_prev" % (conf.generation_prefix,
-                                              conf.next_step - 1)
+            prev_generation = "%s_%s" % (conf.generation_prefix,
+                                         conf.next_step - 1)
 
             if man.can_load(conf.game, prev_generation):
                 log.info("Previous generation found: %s" % prev_generation)
@@ -256,7 +247,7 @@ class TrainManager(object):
         self.retraining = retraining
         log.info("Network %s, retraining: %s" % (self.nn, self.retraining))
 
-    def update_value_weighting(self, value_weight):
+    def update_value_weighting(self, value_weight, force_compile=False):
         ''' dynamic value weighting.  Based off of the value loss, as an approximated of overfitting
         value head '''
 
@@ -281,11 +272,16 @@ class TrainManager(object):
                 value_weight /= (value_weight_reduction * 2)
 
         value_weight = min(max(value_weight_min, value_weight), 1.0)
-        if abs(value_weight - orig_weight) > 0.0001:
-            self.nn.compile(self.train_config.compile_strategy,
-                            self.train_config.learning_rate,
-                            value_weight=value_weight)
+        if force_compile or abs(value_weight - orig_weight) > 0.0001:
+            self.compile_nn(value_weight)
+
         return value_weight
+
+    def compile_nn(self, value_weight):
+        self.nn.compile(self.train_config.compile_strategy,
+                        self.train_config.learning_rate,
+                        value_weight,
+                        l2_loss=self.l2_loss)
 
     def do_epochs(self, num_epochs_include_all=-1):
 
@@ -314,21 +310,15 @@ class TrainManager(object):
         validation_size = int(max_epoch_size * (1 - conf.validation_split))
         validation_indices = indexer.validation_epoch(validation_size)
 
-        # XXX should be specified on the server... bit hacky to do this here
-        num_epochs = conf.epochs if self.retraining else conf.epochs * 2
-
-        training_logger = TrainingLoggerCb(num_epochs, conf.batch_size)
-        self.controller = TrainingController(self.retraining,
-                                             len(self.transformer.policy_dist_count))
+        training_logger = TrainingLoggerCb(conf.epochs, conf.batch_size)
+        self.controller = TrainingController(len(self.transformer.policy_dist_count))
 
         # starting value weight
         value_weight = conf.initial_value_weight
 
-        self.nn.compile(self.train_config.compile_strategy,
-                        self.train_config.learning_rate,
-                        value_weight=value_weight)
+        self.compile_nn(value_weight)
 
-        for i in range(num_epochs):
+        for i in range(conf.epochs):
             if self.controller.stop_training:
                 log.warning("Stop training early via controller")
                 break
@@ -342,7 +332,9 @@ class TrainManager(object):
             if i > 0:
                 value_weight = self.update_value_weighting(value_weight)
 
-            assert len(validation_indices) / conf.batch_size > 0, "validation steps must be more than zero (not enough data)"
+            assert len(validation_indices) / conf.batch_size > 0, \
+                "validation steps must be more than zero (not enough data)"
+
             fitter = self.nn.get_model().fit_generator
             fitter(cache.generate(training_indices, conf.batch_size),
                    len(training_indices) / conf.batch_size,
@@ -356,34 +348,12 @@ class TrainManager(object):
 
             self.do_callbacks()
 
+        self.controller.do_train_end()
+
     def save(self):
         # XXX set generation attributes
 
         man = get_manager()
 
         man.save_network(self.nn, generation_name=self.next_generation)
-        self.do_callbacks()
-
-        ###############################################################################
-        # save a previous model for next time
-        if self.controller.retrain_best is None:
-            log.warning("No retraining network")
-            return
-
-        log.info("Saving retraining network with val_policy_acc: %.4f" % (
-            self.controller.retrain_best_val_policy_acc))
-
-        # there is an undocumented keras clone function, but this is sure to work (albeit slow and evil)
-        from ggpzero.util.keras import keras_models
-
-        for_next_generation = "%s_prev" % self.next_generation
-
-        prev_model = keras_models.model_from_json(self.nn.keras_model.to_json())
-        prev_model.set_weights(self.controller.retrain_best)
-
-        prev_generation_descr = attrutil.clone(self.nn.generation_descr)
-        prev_generation_descr.name = for_next_generation
-        prev_nn = network.NeuralNetwork(self.nn.gdl_bases_transformer,
-                                        prev_model, prev_generation_descr)
-        man.save_network(prev_nn, for_next_generation)
         self.do_callbacks()

@@ -4,7 +4,7 @@ import numpy as np
 
 from ggplib.util import log
 
-from ggpzero.util.keras import SGD, Adam, keras_metrics
+from ggpzero.util.keras import SGD, Adam, keras_metrics, keras_regularizers, keras_models
 
 
 class HeadResult(object):
@@ -65,14 +65,16 @@ class NeuralNetwork(object):
         else:
             return self.predict_n([state])[0]
 
-    def compile(self, compile_strategy, learning_rate=None, value_weight=1.0):
+    def compile(self, compile_strategy, learning_rate=None, value_weight=1.0, l2_loss=None):
+        # XXX allow l2_loss on final layers.
+
         value_objective = "mean_squared_error"
         policy_objective = 'categorical_crossentropy'
         if compile_strategy == "SGD":
             if learning_rate:
                 optimizer = SGD(lr=learning_rate, momentum=0.9)
             else:
-                optimizer = SGD(lr=1e-2, momentum=0.9)
+                optimizer = SGD(lr=0.01, momentum=0.9)
 
         elif compile_strategy == "adam":
             if learning_rate:
@@ -105,6 +107,42 @@ class NeuralNetwork(object):
 
         def top_3_acc(y_true, y_pred):
             return keras_metrics.top_k_categorical_accuracy(y_true, y_pred, k=3)
+
+        if l2_loss is not None:
+            log.warning("Applying l2 loss (%.5f)" % l2_loss)
+            l2_loss = keras_regularizers.l2(l2_loss)
+
+        rebuild_model = False
+        for layer in self.keras_model.layers:
+            # To get global weight decay in keras regularizers have to be added to every layer
+            # in the model.
+
+            if hasattr(layer, 'kernel_regularizer'):
+
+                # ignore l2 loss on squeeze
+                if "_se_" in layer.name:
+                    log.warning("Ignoring applying l2 to %s/%s" % (layer.name, layer))
+                    assert layer.kernel_regularizer is None
+                    continue
+
+                if l2_loss is not None and layer.kernel_regularizer is None:
+                    rebuild_model = True
+                    log.verbose("Applying l2 loss to %s/%s" % (layer.name, layer))
+                    layer.kernel_regularizer = l2_loss
+
+                if layer.kernel_regularizer is not None and l2_loss is None:
+                    log.verbose("Unsetting l2 loss on %s/%s" % (layer.name, layer))
+                    rebuild_model = True
+                    layer.kernel_regularizer = l2_loss
+
+        # This ensures a fresh build of the network (there is no API to do this in keras, hence
+        # this hacky workaround).  Furthermore, needing to rebuild the network here, before
+        # compiling, is somewhat buggy/idiosyncrasy of keras.
+        if rebuild_model:
+            config = self.keras_model.get_config()
+            weights = self.keras_model.get_weights()
+            self.keras_model = keras_models.Model.from_config(config)
+            self.keras_model.set_weights(weights)
 
         self.keras_model.compile(loss=loss, optimizer=optimizer,
                                  loss_weights=loss_weights,

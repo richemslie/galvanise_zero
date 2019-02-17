@@ -1,6 +1,6 @@
 from ggpzero.defs import confs
 
-from ggpzero.util.keras import is_channels_first, keras_models, keras_regularizers, get_antirectifier
+from ggpzero.util.keras import is_channels_first, keras_models, get_antirectifier
 from ggpzero.util.keras import keras_layers as klayers
 
 
@@ -44,26 +44,16 @@ def conv2d_block(*args, **kwds):
     return block
 
 
-def residual_block_v1(cnn_filter_size, cnn_kernel_size,
-                      simple=False, dropout=-1, prefix="residual_block_",
-                      **kwds):
+def residual_block_v1(filter_size, kernel_size,
+                      activation="relu", prefix=""):
+    assert prefix
 
-    # kwds -> passed through to Conv2D
-    for n in "padding use_bias name":
-        assert n not in kwds
-
-    activation = kwds.pop('activation', "relu")
-
-    def conv(x, name, kernel_size=None):
+    def conv(x, name):
         name = prefix + name
-        if kernel_size is None:
-            kernel_size = cnn_kernel_size
-        x = klayers.Conv2D(cnn_filter_size, kernel_size,
-                           name=name,
-                           padding="same",
-                           use_bias=False,
-                           **kwds)(x)
-        return x
+        return klayers.Conv2D(filter_size, kernel_size,
+                              name=name,
+                              padding="same",
+                              use_bias=False)(x)
 
     def bn_(x, name):
         return bn(x, prefix + name)
@@ -72,49 +62,34 @@ def residual_block_v1(cnn_filter_size, cnn_kernel_size,
         return act(x, activation, prefix + name)
 
     def block(tensor):
-        if simple:
-            x = conv(tensor, "conv")
-            x = bn_(x, "bn")
+        x = conv(tensor, "conv0")
+        x = bn_(x, "bn0")
+        x = act_(x, "act0")
 
-            if dropout:
-                x = klayers.Dropout(dropout)(x)
-
-        else:
-            x = conv(tensor, "conv0")
-            x = bn_(x, "bn0")
-            x = act_(x, "act0")
-
-            x = conv(x, "conv1", kernel_size=1)
-            x = bn_(x, "bn1")
-            x = act_(x, "act1")
-
-            if dropout:
-                x = klayers.Dropout(dropout)(x)
-
-            x = conv(x, "conv2")
-            x = bn_(x, "bn2")
+        x = conv(x, "conv1")
+        x = bn_(x, "bn1")
 
         x = klayers.add([tensor, x], name=prefix + "add")
-        return act_(x, "act_final")
+        return act_(x, "act_add")
 
     return block
 
 
 def residual_block_v2(filter_size, kernel_size, num_convs,
-                      dropout=-1, activation="relu", prefix="residual_block_",
-                      **kwds):
+                      dropout=None, activation="relu", prefix="",
+                      squeeze_excite=False):
 
-    # kwds -> passed through to Conv2D
-    for n in "padding use_bias name":
-        assert n not in kwds
+    assert prefix
+
+    if squeeze_excite:
+        assert dropout is None
 
     def conv(x, step):
         name = prefix + "conv%s" % step
         x = klayers.Conv2D(filter_size, kernel_size,
                            name=name,
                            padding="same",
-                           use_bias=False,
-                           **kwds)(x)
+                           use_bias=False)(x)
         return x
 
     def bn_(x, step):
@@ -122,6 +97,31 @@ def residual_block_v2(filter_size, kernel_size, num_convs,
 
     def act_(x, step):
         return act(x, activation, prefix + "act_%s" % step)
+
+    def se_block(in_block, ratio=4):
+        # XXX code modified:
+        # from https://github.com/titu1994/keras-squeeze-excite-network
+        assert is_channels_first()
+
+        x = klayers.GlobalAveragePooling2D(name=prefix + "se_average")(in_block)
+        x = klayers.Reshape((1, 1, filter_size))(x)
+
+        # is there a reason to use kernel_initializer='he_normal' ??? We use default everywhere
+        # else?
+        x = klayers.Dense(filter_size // ratio,
+                          name=prefix + "se_compress",
+                          kernel_initializer='he_normal',
+                          use_bias=False,
+                          activation='relu')(x)
+        x = klayers.Dense(filter_size,
+                          name=prefix + "se_gating",
+                          kernel_initializer='he_normal',
+                          use_bias=False,
+                          activation='sigmoid')(x)
+
+        x = klayers.Permute((3, 1, 2),
+                            name=prefix + "se_permute")(x)
+        return klayers.multiply([in_block, x], name=prefix + "se_scale")
 
     def block(tensor):
         x = tensor
@@ -133,10 +133,14 @@ def residual_block_v2(filter_size, kernel_size, num_convs,
         x = bn_(x, num_convs)
         x = act_(x, num_convs)
 
-        if dropout > 0:
+        if dropout is not None:
             x = klayers.Dropout(dropout)(x)
 
         x = conv(x, num_convs)
+
+        if squeeze_excite:
+            x = se_block(x, filter_size)
+
         x = klayers.add([tensor, x], name=prefix + "add")
 
         return x
@@ -161,7 +165,7 @@ def get_network_model(conf, generation_descr):
                                             conf.input_channels),
                                      name="inputs_board")
 
-    # XXX config abuse:
+    # XXX lots of config abuse:
     v2 = conf.residual_layers <= 0
     if v2:
         layer = klayers.Conv2D(conf.cnn_filter_size, 1,
@@ -169,25 +173,45 @@ def get_network_model(conf, generation_descr):
                                use_bias=False,
                                name='initial-conv')(inputs_board)
 
-        # XXX hard coding dropout
-        # XXX hard coding layers
-        #for convs in [1, 1, 1, 1, 1, 1, 2, 2, 2, 3, 2, 2, 2, 1, 1, 1, 1, 1, 1]:
-        for i, c in enumerate([1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1]):
-            layer = residual_block_v2(conf.cnn_filter_size,
-                                      conf.cnn_kernel_size,
-                                      c,
-                                      prefix="ResLayer_%s_" % i,
-                                      dropout=0.3,
-                                      activation=activation)(layer)
+        # XXX hacks galore (needs to go into config somehow)
+        if conf.residual_layers < 0:
+            res_layers = [2] * -conf.residual_layers
+            squeeze_excite = False
+            dropout = None
+        else:
+            assert conf.residual_layers == 0
+            res_layers = [1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1]
+            squeeze_excite = True
+            dropout = 0.25
+
+        for i, c in enumerate(res_layers):
+            if c == 2:
+                layer = residual_block_v2(conf.cnn_filter_size,
+                                          conf.cnn_kernel_size,
+                                          c,
+                                          prefix="ResLayer_%s_" % i,
+                                          squeeze_excite=squeeze_excite,
+                                          dropout=dropout,
+                                          activation=activation)(layer)
+            else:
+                layer = residual_block_v2(conf.cnn_filter_size,
+                                          conf.cnn_kernel_size,
+                                          c,
+                                          prefix="ResLayer_%s_" % i,
+                                          squeeze_excite=False,
+                                          dropout=None,
+                                          activation=activation)(layer)
 
     else:
+        # AG0 way:
+
         # initial conv2d/Resnet on cords
         layer = conv2d_block(conf.cnn_filter_size, conf.cnn_kernel_size,
                              activation=activation,
                              padding="same",
                              name='initial-conv')(inputs_board)
 
-        # AG0 way:
+        # layers
         for i in range(conf.residual_layers):
             layer = residual_block_v1(conf.cnn_filter_size,
                                       conf.cnn_kernel_size,
@@ -247,13 +271,13 @@ def get_network_model(conf, generation_descr):
         assert dims < conf.input_columns
 
         to_flatten1 = conv2d_block(32, 1,
-                                   name='reward_flatten1',
+                                   name='value_flatten1',
                                    activation=activation,
                                    do_bn=False,
                                    padding='valid')(average_layer)
 
         to_flatten2 = conv2d_block(1, 1,
-                                   name='reward_flatten2',
+                                   name='value_flatten2',
                                    activation=activation,
                                    do_bn=False,
                                    padding='valid')(layer)
@@ -261,11 +285,16 @@ def get_network_model(conf, generation_descr):
         flat = klayers.concatenate([klayers.Flatten()(to_flatten1),
                                     klayers.Flatten()(to_flatten2)])
 
-        if conf.dropout_rate_value > 0:
-            flat = klayers.Dropout(conf.dropout_rate_value)(flat)
+        # XXX
+        # if conf.dropout_rate_value > 0:
+        #    flat = klayers.Dropout(conf.dropout_rate_value)(flat)
 
         hidden = klayers.Dense(256, name="value_hidden")(flat)
         hidden = act(hidden, 'crelu', name="value_hidden_act")
+
+        # XXX dropout here?
+        if conf.dropout_rate_value > 0:
+            flat = klayers.Dropout(conf.dropout_rate_value)(flat)
 
         value_head = klayers.Dense(num_value_heads,
                                    activation="sigmoid",
@@ -317,20 +346,4 @@ def get_network_model(conf, generation_descr):
     # model:
     outputs = policy_heads + [value_head]
 
-    model = keras_models.Model(inputs=[inputs_board], outputs=outputs)
-
-    # add in weight decay?  XXX rename conf to reflect it is weight decay and use +ve value instead
-    # of hard coded value.
-    # XXX this hasn't been tested
-
-    if conf.l2_regularisation:
-        for layer in model.layers:
-            # XXX To get global weight decay in keras regularizers have to be added to every layer
-            # in the model. In my models these layers are batch normalization (beta/gamma
-            # regularizer) and dense/convolutions (W_regularizer/b_regularizer) layers.
-
-            if hasattr(layer, 'kernel_regularizer'):
-                # XXX too much?  Is it doubled from paper?  XXX 5e-3 ?
-                layer.kernel_regularizer = keras_regularizers.l2(1e-4)
-
-    return model
+    return keras_models.Model(inputs=[inputs_board], outputs=outputs)
