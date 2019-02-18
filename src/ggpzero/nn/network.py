@@ -121,8 +121,9 @@ class NeuralNetwork(object):
 
                 # ignore l2 loss on squeeze
                 if "_se_" in layer.name:
-                    log.warning("Ignoring applying l2 to %s/%s" % (layer.name, layer))
                     assert layer.kernel_regularizer is None
+                    if l2_loss is not None:
+                        log.warning("Ignoring applying l2 to %s/%s" % (layer.name, layer))
                     continue
 
                 if l2_loss is not None and layer.kernel_regularizer is None:

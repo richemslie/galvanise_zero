@@ -104,7 +104,7 @@ def residual_block_v2(filter_size, kernel_size, num_convs,
         assert is_channels_first()
 
         x = klayers.GlobalAveragePooling2D(name=prefix + "se_average")(in_block)
-        x = klayers.Reshape((1, 1, filter_size))(x)
+        x = klayers.Reshape((1, 1, filter_size), name=prefix + "reshape")(x)
 
         # is there a reason to use kernel_initializer='he_normal' ??? We use default everywhere
         # else?
@@ -134,7 +134,8 @@ def residual_block_v2(filter_size, kernel_size, num_convs,
         x = act_(x, num_convs)
 
         if dropout is not None:
-            x = klayers.Dropout(dropout)(x)
+            x = klayers.Dropout(dropout,
+                                name=prefix + "dropout_%s" % num_convs)(x)
 
         x = conv(x, num_convs)
 
@@ -191,7 +192,7 @@ def get_network_model(conf, generation_descr):
                                           c,
                                           prefix="ResLayer_%s_" % i,
                                           squeeze_excite=squeeze_excite,
-                                          dropout=dropout,
+                                          dropout=None,
                                           activation=activation)(layer)
             else:
                 layer = residual_block_v2(conf.cnn_filter_size,
@@ -199,7 +200,7 @@ def get_network_model(conf, generation_descr):
                                           c,
                                           prefix="ResLayer_%s_" % i,
                                           squeeze_excite=False,
-                                          dropout=None,
+                                          dropout=0.25,
                                           activation=activation)(layer)
 
     else:
