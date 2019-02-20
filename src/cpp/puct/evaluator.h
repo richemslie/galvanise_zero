@@ -50,7 +50,7 @@ namespace GGPZero {
         void checkDrawStates(const PuctNode* node, PuctNode* next);
 
         // set dirichlet noise on node
-        bool setDirichletNoise(int depth);
+        void setDirichletNoise(PuctNode* node);
         float getPuctConstant(PuctNode* node, int depth) const;
 
     public:
@@ -98,8 +98,6 @@ namespace GGPZero {
         GGPLib::BaseState::EqualsMasked* masked_bs_equals;
 
         NetworkScheduler* scheduler;
-
-        std::string identifier;
 
         int game_depth;
         int evaluations;

@@ -67,8 +67,8 @@ static PuctConfig* createPuctConfig(PyObject* dict) {
     };
 
     config->verbose = asInt("verbose");
-    // ZZZZXXXXXXX
-    config->puct_constant = asFloat("puct_constant_before");
+
+    config->puct_constant = asFloat("puct_constant");
 
     config->root_expansions_preset_visits = asInt("root_expansions_preset_visits");
     config->dirichlet_noise_pct = asFloat("dirichlet_noise_pct");
@@ -83,6 +83,10 @@ static PuctConfig* createPuctConfig(PyObject* dict) {
     config->depth_temperature_max = asFloat("depth_temperature_max");
 
     config->fpu_prior_discount = asFloat("fpu_prior_discount");
+    config->fpu_prior_discount_root = asFloat("fpu_prior_discount_root");
+
+    config->top_visits_best_guess_converge_ratio = asFloat("top_visits_best_guess_converge_ratio");
+    config->evaluation_multipler_to_convergence = asFloat("evaluation_multipler_to_convergence");
 
     std::string choose_method = asString("choose");
     if (choose_method == "choose_top_visits") {

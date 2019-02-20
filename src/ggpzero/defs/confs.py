@@ -14,13 +14,7 @@ class PUCTEvaluatorConfig(object):
     # -1 off.
     root_expansions_preset_visits = attribute(-1)
 
-    # applies different constant until the following expansions are met
-    puct_before_expansions = attribute(4)
-    puct_before_root_expansions = attribute(4)
-
-    # the puct constant.  before expansions, and after expansions are met
-    puct_constant_before = attribute(0.75)
-    puct_constant_after = attribute(0.75)
+    puct_constant = attribute(0.85)
 
     # added to root child policy pct (less than 0 is off)
     dirichlet_noise_pct = attribute(0.25)
@@ -42,7 +36,11 @@ class PUCTEvaluatorConfig(object):
     # popular leela-zero feature: First Play Urgency.  When the policy space is large - this might
     # be neccessary.  If > 0, applies the prior of the parent, minus a discount to unvisited nodes
     # < 0 is off.
-    fpu_prior_discount = attribute(-1)
+    fpu_prior_discount = attribute(-1.0)
+    fpu_prior_discount_root = attribute(-1.0)
+
+    top_visits_best_guess_converge_ratio = attribute(0.85)
+    evaluation_multipler_to_convergence = attribute(2.0)
 
 
 @register_attrs
@@ -172,7 +170,8 @@ class NNModelConfig(object):
     # the size of policy distribution.  The size of the list will be 1 if not multiple_policies.
     policy_dist_count = attribute(default=attr_factory(list))
 
-    l2_regularisation = attribute(False)
+    # XXX move to TrainNNConfig, not part of model
+    l2_regularisation = attribute(0.0001)
 
     # < 0 - no dropout
     dropout_rate_policy = attribute(0.333)

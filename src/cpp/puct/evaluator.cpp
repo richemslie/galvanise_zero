@@ -32,7 +32,6 @@ PuctEvaluator::PuctEvaluator(GGPLib::StateMachineInterface* sm,
     number_repeat_states_draw(-1),
     repeat_states_score(-1.0f),
     scheduler(scheduler),
-    identifier("PuctEvaluator"),
     game_depth(0),
     evaluations(0),
     initial_root(nullptr),
@@ -64,8 +63,9 @@ void PuctEvaluator::updateConf(const PuctConfig* conf) {
         K273::l_verbose("puct_constant: %f, root_expansions_preset_visits: %d",
                         conf->puct_constant, conf->root_expansions_preset_visits);
 
-        K273::l_verbose("dirichlet_noise (alpha: %.2f, pct: %.2f), fpu_prior_discount: %.2f",
-                        conf->dirichlet_noise_alpha, conf->dirichlet_noise_pct, conf->fpu_prior_discount);
+        K273::l_verbose("dirichlet_noise (alpha: %.2f, pct: %.2f), fpu_prior_discount: %.2f/%.2f",
+                        conf->dirichlet_noise_alpha, conf->dirichlet_noise_pct,
+                        conf->fpu_prior_discount, conf->fpu_prior_discount_root);
 
         K273::l_verbose("choose: %s",
                         (conf->choose == ChooseFn::choose_top_visits) ? "choose_top_visits" : "choose_temperature");
@@ -184,15 +184,15 @@ void PuctEvaluator::checkDrawStates(const PuctNode* node, PuctNode* next) {
     }
 }
 
-bool PuctEvaluator::setDirichletNoise(int depth) {
+void PuctEvaluator::setDirichletNoise(PuctNode* node) {
     // set dirichlet noise on root?
 
-    if (depth != 0) {
-        return false;
+    if (this->conf->dirichlet_noise_alpha < 0) {
+        return;
     }
 
-    if (this->conf->dirichlet_noise_alpha < 0) {
-        return false;
+    if (node->visits != 1) {
+        return;
     }
 
     std::gamma_distribution<float> gamma(this->conf->dirichlet_noise_alpha, 1.0f);
@@ -207,13 +207,21 @@ bool PuctEvaluator::setDirichletNoise(int depth) {
 
     // fail if we didn't produce any noise
     if (total_noise < std::numeric_limits<float>::min()) {
-        return false;
+        return;
+    }
+
+    float total_policy = 0;
+    for (int ii=0; ii<this->root->num_children; ii++) {
+        PuctNodeChild* c = this->root->getNodeChild(this->sm->getRoleCount(), ii);
+        float noise_pct = this->conf->dirichlet_noise_pct;
+        c->policy_prob = (1.0f - noise_pct) * c->policy_prob + noise_pct * c->dirichlet_noise;
+        total_policy += c->policy_prob;
     }
 
     // normalize:
     for (int ii=0; ii<this->root->num_children; ii++) {
        PuctNodeChild* c = this->root->getNodeChild(this->sm->getRoleCount(), ii);
-       c->dirichlet_noise /= total_noise;
+       c->policy_prob /= total_policy;
     }
 
     // It is a good idea to keep this code, knowing what our noise looks like for different games is
@@ -231,8 +239,6 @@ bool PuctEvaluator::setDirichletNoise(int depth) {
         K273::l_info(debug_dirichlet_noise);
     }
     */
-
-    return true;
 }
 
 float PuctEvaluator::getPuctConstant(PuctNode* node, int depth) const {
@@ -267,12 +273,11 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, int depth) {
         return node->getNodeChild(this->sm->getRoleCount(), 0);
     }
 
-    bool do_dirichlet_noise = this->setDirichletNoise(depth);
-
-    // don't do dirichlet noise every turn (XXX experimental)
-    //if (node->visits % 2 == 0) {
-    //    do_dirichlet_noise = false;
-    //}
+    // setting policy seems a dangerous practice... especially with transpositions and loops in
+    // transpositions
+    if (depth == 0) {
+        this->setDirichletNoise(node);
+    }
 
     float puct_constant = this->conf->puct_constant;
     float sqrt_node_visits = std::sqrt(node->visits + 1);
@@ -284,11 +289,7 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, int depth) {
     // prior... (alpha go zero said 0 but there score ranges from [-1,1]
     float prior_score = node->visits < 8 ? node->getFinalScore(node->lead_role_index) : node->getCurrentScore(node->lead_role_index);
     if (this->conf->fpu_prior_discount > 0) {
-        float fpu_reduction = this->conf->fpu_prior_discount;
-
-        if (depth == 0) {
-            fpu_reduction *= 2.0;
-        }
+        float fpu_reduction = depth == 0 ? this->conf->fpu_prior_discount_root : this->conf->fpu_prior_discount;
 
         // original value from network / or terminal value
         float total_policy_visited = 0.0;
@@ -313,13 +314,6 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, int depth) {
         float node_score = prior_score;
 
         float child_pct = c->policy_prob;
-
-        if (do_dirichlet_noise) {
-            float noise_pct = this->conf->dirichlet_noise_pct;
-            child_pct = (1.0f - noise_pct) * child_pct + noise_pct * c->dirichlet_noise;
-            c->policy_prob = child_pct;
-        }
-
         if (c->to_node != nullptr) {
             PuctNode* cn = c->to_node;
             child_visits = cn->visits;
@@ -745,42 +739,6 @@ const PuctNodeChild* PuctEvaluator::chooseTemperature(const PuctNode* node) {
                       temperature, expected_probability);
     }
 
-    // // hex hacks
-    // if (node->num_children == 169) {
-    //     if (this->game_depth == 0) {
-    //         if (this->rng.get() < 0.5) {
-    //             for (const PuctNodeChild* c : dist) {
-    //                 const int choice = c->move.get(node->lead_role_index);
-    //                 std::string smove = this->sm->legalToMove(node->lead_role_index, choice);
-    //                 if (smove == "(place c 2)" || smove == "(place k 12)") {
-    //                     if (this->rng.get() < 0.3) {
-    //                         return c;
-    //                     }
-    //                 }
-
-    //                 if (smove == "(place a 13)" || smove == "(place m 1)") {
-    //                     if (this->rng.get() < 0.25) {
-    //                         return c;
-    //                     }
-    //                 }
-    //             }
-    //         }
-
-    //         if (this->rng.get() < 0.95) {
-    //             expected_probability *= 0.5;
-    //         }
-    //     }
-
-    //     if (this->game_depth == 1) {
-    //         if (this->rng.get() < 0.95) {
-    //             expected_probability *= 0.75;
-    //         }
-    //     }
-
-    //     K273::l_debug("temperature %.2f, expected_probability %.2f",
-    //                   temperature, expected_probability);
-    // }
-
     float seen_probability = 0;
     for (const PuctNodeChild* c : dist) {
         seen_probability += c->next_prob;
@@ -798,7 +756,7 @@ Children PuctEvaluator::getProbabilities(PuctNode* node, float temperature, bool
     ASSERT(node->num_children > 0);
 
     // since we add 0.1 to each our children (this is so the percentage does don't drop too low)
-    float node_visits = node->visits + 0.1 * node->num_children;
+    float node_visits = node->visits + 0.001 * node->num_children;
 
     // add some smoothness.  This also works for the case when doing no evaluations (ie
     // onNextMove(0)), as the node_visits == 0 and be uniform.
@@ -807,7 +765,7 @@ Children PuctEvaluator::getProbabilities(PuctNode* node, float temperature, bool
     float total_probability = 0.0f;
     for (int ii=0; ii<node->num_children; ii++) {
         PuctNodeChild* child = node->getNodeChild(this->sm->getRoleCount(), ii);
-        float child_visits = child->to_node ? child->to_node->visits + 0.1f : 0.1f;
+        float child_visits = child->to_node ? child->to_node->visits + 0.001f : 0.001f;
         if (use_linger) {
             child->next_prob = linger_pct * child->policy_prob + (1 - linger_pct) * (child_visits / node_visits);
 

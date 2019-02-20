@@ -31,10 +31,10 @@ namespace GGPZero {
         float depth_temperature_max;
 
         float fpu_prior_discount;
+        float fpu_prior_discount_root;
 
-        // XXX add / remove features
-        float top_visits_best_guess_converge_ratio = 0.8;
-        double evaluation_multipler_to_convergence = 2.5;
+        float top_visits_best_guess_converge_ratio;
+        float evaluation_multipler_to_convergence;
 
         bool matchmode = false;
     };
