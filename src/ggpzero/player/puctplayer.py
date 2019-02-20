@@ -95,6 +95,9 @@ class PUCTPlayer(MatchPlayer):
         self.last_node_count = node_count
         return move
 
+    def __repr__(self):
+        return self.get_name()
+
 
 class PUCTPlayerV2(PUCTPlayer):
     poller_clz = PlayPollerV2
