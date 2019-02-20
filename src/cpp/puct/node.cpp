@@ -64,6 +64,7 @@ static PuctNode* createNode(const GGPLib::BaseState* base_state,
     node->num_children_expanded = 0;
 
     node->is_finalised = is_finalised;
+    node->dirichlet_noise_set = false;
 
     node->lead_role_index = lead_role_index;
 
@@ -110,7 +111,6 @@ static int initialiseChildHelper(PuctNode* node, int role_index, int child_index
             // by default set to 1.0, will be overridden
             child->policy_prob = 1.0f;
             child->next_prob = 0.0f;
-            child->dirichlet_noise = 0.0f;
 
             child->debug_node_score = 0.0;
             child->debug_puct_score = 0.0;

@@ -25,8 +25,6 @@ namespace GGPZero {
         float policy_prob;
         float next_prob;
 
-        float dirichlet_noise;
-
         Score debug_node_score;
         Score debug_puct_score;
         GGPLib::JointMove move;
@@ -54,6 +52,7 @@ namespace GGPZero {
 
         // whether this node has a finalised scores or not (can also release children if so)
         bool is_finalised;
+        bool dirichlet_noise_set;
 
         // we don't really know which player it really it is for each node, but this is our best guess
         int16_t lead_role_index;
