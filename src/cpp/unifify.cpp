@@ -31,6 +31,11 @@ float PuctEvaluator::priorScore(PuctNode* node, int depth) const {
 
 
 void PuctEvaluator::setDirichletNoise(PuctNode* node) {
+
+    if (node->num_children < 2) {
+        return;
+    }
+
     if (this->conf->dirichlet_noise_alpha < 0) {
         return;
     }
@@ -78,7 +83,7 @@ void PuctEvaluator::setDirichletNoise(PuctNode* node) {
 
     // re-normalize node (XXX shouldn't need to... look into later):
     for (int ii=0; ii<node->num_children; ii++) {
-        PuctNodeChild* c = this->root->getNodeChild(this->sm->getRoleCount(), ii);
+        PuctNodeChild* c = node->getNodeChild(this->sm->getRoleCount(), ii);
         c->policy_prob /= total_policy;
     }
 
