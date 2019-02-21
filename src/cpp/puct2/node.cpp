@@ -76,6 +76,7 @@ static PuctNode* createNode(const GGPLib::BaseState* base_state,
     node->puct_constant = 1.44;
 
     node->is_finalised = is_finalised;
+    node->dirichlet_noise_set = false;
 
     node->lead_role_index = lead_role_index;
 

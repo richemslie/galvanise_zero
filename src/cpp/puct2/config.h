@@ -11,14 +11,9 @@ namespace GGPZero::PuctV2 {
     struct PuctConfig {
         bool verbose;
 
-        float puct_constant = 0.75f;
-        float puct_constant_root = 2.5f;
-        float puct_multiplier = 1.0f;
-
-        //int puct_before_expansions;
-        //int puct_before_root_expansions;
-
-        //int root_expansions_preset_visits;
+        float puct_constant;
+        float puct_constant_root;
+        float puct_multiplier;
 
         float dirichlet_noise_pct;
         float dirichlet_noise_alpha;
@@ -34,18 +29,19 @@ namespace GGPZero::PuctV2 {
         float depth_temperature_max;
 
         float fpu_prior_discount;
+        float fpu_prior_discount_root;
 
         // < 0, off
-        float minimax_backup_ratio = 0.75;
-        uint32_t minimax_threshold_visits = 200;
+        float minimax_backup_ratio;
+        uint32_t minimax_threshold_visits;
 
         // < 0, off
-        float top_visits_best_guess_converge_ratio = 0.8;
+        float top_visits_best_guess_converge_ratio;
 
-        float think_time = 10.0;
-        int converge_relaxed = 5000;
+        float think_time;
+        int converge_relaxed;
 
-        int batch_size = 32;
+        int batch_size;
     };
 
 }

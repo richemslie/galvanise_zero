@@ -23,6 +23,8 @@
 
 using namespace GGPZero::PuctV2;
 
+#include "unifify.cpp"
+
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -71,8 +73,9 @@ void PuctEvaluator::updateConf(const PuctConfig* conf) {
         K273::l_verbose("puct constant %.2f, root: %.2f, multiplier: %.2f",
                         conf->puct_constant, conf->puct_constant_root, conf->puct_multiplier);
 
-        K273::l_verbose("dirichlet_noise (alpha: %.2f, pct: %.2f), fpu_prior_discount: %.2f",
-                        conf->dirichlet_noise_alpha, conf->dirichlet_noise_pct, conf->fpu_prior_discount);
+        K273::l_verbose("dirichlet_noise (alpha: %.2f, pct: %.2f), fpu_prior_discount: %.2f/%.2f",
+                        conf->dirichlet_noise_alpha, conf->dirichlet_noise_pct,
+                        conf->fpu_prior_discount, conf->fpu_prior_discount_root);
 
         K273::l_verbose("temperature: %.2f, start(%d), stop(%d), incr(%.2f), max(%.2f) scale(%.2f)",
                         conf->temperature, conf->depth_temperature_start, conf->depth_temperature_stop,
@@ -220,59 +223,6 @@ PuctNode* PuctEvaluator::expandChild(PuctNode* parent, PuctNodeChild* child) {
     return child->to_node;
 }
 
-///////////////////////////////////////////////////////////////////////////////
-// selection - move to new class, should have no side effects.  in/out path:
-
-std::vector <float> PuctEvaluator::getDirichletNoise(PuctNode* node, int depth) {
-
-    // set dirichlet noise on root?
-
-    if (depth != 0) {
-        return std::vector <float>();
-    }
-
-    if (this->conf->dirichlet_noise_alpha < 0) {
-        return std::vector <float>();
-    }
-
-    std::gamma_distribution <float> gamma(this->conf->dirichlet_noise_alpha, 1.0f);
-
-    std::vector <float> res;
-    res.resize(node->num_children, 0.0f);
-
-    float total_noise = 0.0f;
-    for (int ii=0; ii<node->num_children; ii++) {
-        res[ii] = gamma(this->rng);
-        total_noise += res[ii];
-    }
-
-    // fail if we didn't produce any noise
-    if (total_noise < std::numeric_limits<float>::min()) {
-        return std::vector <float>();
-    }
-
-    // normalize:
-    for (int ii=0; ii<node->num_children; ii++) {
-       res[ii] /= total_noise;
-    }
-
-    // It is a good idea to keep this code, knowing what our noise looks like for different games is
-    // an important configuration step
-    // if (this->conf->verbose) {
-    //     std::string debug_dirichlet_noise = "dirichlet_noise = ";
-    //     for (int ii=0; ii<node->num_children; ii++) {
-    //         debug_dirichlet_noise += K273::fmtString("%.3f", res[ii]);
-    //         if (ii != node->num_children - 1) {
-    //             debug_dirichlet_noise += ", ";
-    //         }
-    //     }
-
-    //     K273::l_info(debug_dirichlet_noise);
-    // }
-
-    return res;
-}
-
 void PuctEvaluator::setPuctConstant(PuctNode* node, int depth) const {
     // XXX configurable
     const float cpuct_base_id = 19652.0f;
@@ -323,30 +273,11 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
         return child;
     }
 
-    std::vector <float> dirichlet_noise = this->getDirichletNoise(node, depth);
-    const bool do_dirichlet_noise = !dirichlet_noise.empty();
-
-    // prior... (alpha go zero said 0 but there score ranges from [-1,1])
-    // original value from network / or terminal value
-    float prior_score = node->getFinalScore(node->lead_role_index, true);
-
-    int total_traversals = 0;
-    if (!do_dirichlet_noise && this->conf->fpu_prior_discount > 0) {
-        float total_policy_visited = 0.0;
-        for (int ii=0; ii<node->num_children; ii++) {
-            PuctNodeChild* c = node->getNodeChild(this->sm->getRoleCount(), ii);
-            if (c->to_node != nullptr) {
-                if (c->traversals > 0) {
-                    total_traversals += c->traversals;
-                    total_policy_visited += c->policy_prob;
-                }
-            }
-        }
-
-        float fpu_reduction = this->conf->fpu_prior_discount * std::sqrt(total_policy_visited);
-        prior_score -= fpu_reduction;
+    if (depth < 2) {
+        this->setDirichletNoise(node);
     }
 
+    float prior_score = this->priorScore(node, depth);
     const float sqrt_node_visits = std::sqrt(node->visits + 1);
 
     // get best
@@ -382,15 +313,8 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
         // add inflight_visits to exploration score
         const double inflight_visits = c->to_node != nullptr ? c->to_node->inflight_visits : 0;
 
-        double child_pct = c->policy_prob;
-
-        if (do_dirichlet_noise) {
-            float noise_pct = this->conf->dirichlet_noise_pct;
-            child_pct = (1.0f - noise_pct) * child_pct + noise_pct * dirichlet_noise[ii];
-        }
-
         // standard PUCT as per AG0 paper
-        double exploration_score = child_pct * sqrt_node_visits / (traversals + inflight_visits);
+        double exploration_score = c->policy_prob * sqrt_node_visits / (traversals + inflight_visits);
 
         // always base exploration_score on constant
         exploration_score *= node->puct_constant;
@@ -432,17 +356,17 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
         // exploring then there isn't any point in doing any search (this is for cases where it
         // exploits 99% on one child).
         // XXX hard coded to 70%
-        if (depth == 0 && this->rng.get() > 0.1) {
-            if (c->traversals > 16 &&
-                c->traversals > total_traversals * 0.7) {
-                best_fallback = c;
-                continue;
-            }
-        }
+        //if (depth == 0 && this->rng.get() > 0.1) {
+        //    if (c->traversals > 16 &&
+        //        c->traversals > total_traversals * 0.7) {
+        //        best_fallback = c;
+        //        continue;
+        //    }
+        //}
 
         // (more exploration) apply score discount for massive number of inflight visits
-        const double discounted_visits = inflight_visits * this->rng.get();
-        if (discounted_visits > 0.1) {
+        if (c->traversals > 0 && inflight_visits > 0) {
+            const double discounted_visits = inflight_visits * this->rng.get() + 0.25;
             child_score = (child_score * c->traversals) / (c->traversals + discounted_visits);
         }
 
@@ -714,7 +638,7 @@ void PuctEvaluator::playoutWorker() {
     }
 }
 
-void PuctEvaluator::playoutMain(double end_time) {
+void PuctEvaluator::playoutMain(int max_evaluations, double end_time) {
     const double start_time = K273::get_time();
     if (this->conf->verbose) {
         K273::l_debug("enter playoutMain() for max %.1f seconds", end_time - start_time);
@@ -744,6 +668,11 @@ void PuctEvaluator::playoutMain(double end_time) {
     int iterations = 0;
     while (true) {
         const int our_role_index = this->root->lead_role_index;
+
+        if (this->stats.num_evaluations > max_evaluations) {
+            K273::l_warning("Breaking max evaluations");
+            break;
+        }
 
         if (this->root->is_finalised && iterations > 1000) {
             K273::l_warning("Breaking early as finalised");
@@ -976,7 +905,7 @@ const PuctNodeChild* PuctEvaluator::onNextMove(int max_evaluations, double end_t
 
         if (this->root != nullptr && !this->root->is_finalised) {
 
-            if (max_evaluations < 0 || max_evaluations > 1000) {
+            if (max_evaluations < 0 || max_evaluations > 100) {
                 for (int ii=0; ii<this->conf->batch_size - 1; ii++) {
                     worker_count++;
                     this->scheduler->addRunnable(f);
@@ -986,7 +915,7 @@ const PuctNodeChild* PuctEvaluator::onNextMove(int max_evaluations, double end_t
     }
 
     if (max_evaluations != 0) {
-        this->playoutMain(end_time);
+        this->playoutMain(max_evaluations, end_time);
     }
 
     // collect workers
@@ -1047,7 +976,7 @@ const PuctNodeChild* PuctEvaluator::choose(const PuctNode* node) {
     return choice;
 }
 
-const PuctNodeChild* PuctEvaluator::chooseTopVisits(const PuctNode* node) {
+const PuctNodeChild* PuctEvaluator::chooseTopVisits(const PuctNode* node) const {
     if (node == nullptr) {
         node = this->root;
     }

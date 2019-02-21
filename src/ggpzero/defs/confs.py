@@ -72,7 +72,8 @@ class PUCTEvaluatorV2Config(object):
     # popular leela-zero feature: First Play Urgency.  When the policy space is large - this might
     # be neccessary.  If > 0, applies the prior of the parent, minus a discount to unvisited nodes
     # < 0 is off.
-    fpu_prior_discount = attribute(-1)
+    fpu_prior_discount = attribute(-1.0)
+    fpu_prior_discount_root = attribute(-1.0)
 
     minimax_backup_ratio = attribute(0.75)
     minimax_threshold_visits = attribute(200)

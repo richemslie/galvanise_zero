@@ -64,16 +64,6 @@ static PyObject* Player2_updateConfig(PyObject_Player2* self, PyObject* args) {
     Py_RETURN_NONE;
 }
 
-static PyObject* Player2_setDirichletNoise(PyObject_Player2* self, PyObject* args) {
-    double alpha = 0.0f;
-    if (! ::PyArg_ParseTuple(args, "d", &alpha)) {
-        return nullptr;
-    }
-
-    self->impl->setDirichletNoise(alpha);
-    Py_RETURN_NONE;
-}
-
 static PyObject* Player2_poll(PyObject_Player2* self, PyObject* args) {
     return doPoll(self->impl, args);
 }
@@ -81,7 +71,6 @@ static PyObject* Player2_poll(PyObject_Player2* self, PyObject* args) {
 static struct PyMethodDef Player2_methods[] = {
     {"player_reset", (PyCFunction) Player2_reset, METH_VARARGS, "player_reset"},
     {"player_update_config", (PyCFunction) Player2_updateConfig, METH_VARARGS, "player_update_config"},
-    {"player_set_dirichlet_noise", (PyCFunction) Player2_setDirichletNoise, METH_VARARGS, "player_set_dirichlet_noise"},
     {"player_apply_move", (PyCFunction) Player2_apply_move, METH_VARARGS, "player_apply_move"},
     {"player_move", (PyCFunction) Player2_move, METH_VARARGS, "player_move"},
     {"player_get_move", (PyCFunction) Player2_get_move, METH_VARARGS, "player_get_move"},

@@ -139,6 +139,7 @@ static GGPZero::PuctV2::PuctConfig* createPuctConfigV2(PyObject* dict) {
     config->depth_temperature_max = asFloat("depth_temperature_max");
 
     config->fpu_prior_discount = asFloat("fpu_prior_discount");
+    config->fpu_prior_discount_root = asFloat("fpu_prior_discount_root");
 
     config->minimax_backup_ratio = asFloat("minimax_backup_ratio");
     config->minimax_threshold_visits = asInt("minimax_threshold_visits");

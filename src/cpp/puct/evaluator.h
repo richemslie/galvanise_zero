@@ -51,6 +51,7 @@ namespace GGPZero {
 
         // set dirichlet noise on node
         void setDirichletNoise(PuctNode* node);
+        float priorScore(PuctNode* node, int depth) const;
         float getPuctConstant(PuctNode* node, int depth) const;
 
     public:
@@ -72,7 +73,7 @@ namespace GGPZero {
 
         const PuctNodeChild* choose(const PuctNode* node=nullptr);
         bool converged(const PuctNode* node) const;
-        const PuctNodeChild* chooseTopVisits(const PuctNode* node);
+        const PuctNodeChild* chooseTopVisits(const PuctNode* node) const;
         const PuctNodeChild* chooseTemperature(const PuctNode* node);
 
         Children getProbabilities(PuctNode* node, float temperature, bool use_linger=true);

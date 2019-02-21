@@ -29,7 +29,6 @@ namespace GGPZero::PuctV2 {
     public:
         // python side
         void updateConfig(float think_time, int converge_relaxed, bool verbose);
-        void setDirichletNoise(float alpha);
 
         void puctPlayerReset(int game_depth);
         void puctApplyMove(const GGPLib::JointMove* move);

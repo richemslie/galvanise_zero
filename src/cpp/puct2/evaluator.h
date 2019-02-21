@@ -48,10 +48,8 @@ namespace GGPZero::PuctV2 {
         PuctNode* expandChild(PuctNode* parent, PuctNodeChild* child);
 
         void setPuctConstant(PuctNode* node, int depth) const;
-
-        // set dirichlet noise on node
-        // note can't be const method as rng state modified
-        std::vector<float> getDirichletNoise(PuctNode* node, int depth);
+        float priorScore(PuctNode* node, int depth) const;
+        void setDirichletNoise(PuctNode* node);
 
         bool converged(int count) const;
         PuctNodeChild* selectChild(PuctNode* node, Path& path);
@@ -62,7 +60,7 @@ namespace GGPZero::PuctV2 {
         int treePlayout();
 
         void playoutWorker();
-        void playoutMain(double end_time);
+        void playoutMain(int max_evaluations, double end_time);
         void logDebug(const PuctNodeChild* choice_root);
 
     public:
@@ -76,7 +74,7 @@ namespace GGPZero::PuctV2 {
         float getTemperature() const;
 
         const PuctNodeChild* choose(const PuctNode* node=nullptr);
-        const PuctNodeChild* chooseTopVisits(const PuctNode* node);
+        const PuctNodeChild* chooseTopVisits(const PuctNode* node) const;
         const PuctNodeChild* chooseTemperature(const PuctNode* node);
 
         Children getProbabilities(PuctNode* node, float temperature, bool use_linger=true);

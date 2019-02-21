@@ -48,10 +48,6 @@ void Player::updateConfig(float think_time, int converge_relaxed, bool verbose) 
     this->evaluator->updateConf(this->config);
 }
 
-void Player::setDirichletNoise(float alpha) {
-    this->config->dirichlet_noise_alpha = alpha;
-}
-
 void Player::puctPlayerReset(int game_depth) {
     K273::l_verbose("V2 Player::puctPlayerReset()");
     this->evaluator->reset(game_depth);
