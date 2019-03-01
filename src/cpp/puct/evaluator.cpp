@@ -182,7 +182,6 @@ void PuctEvaluator::checkDrawStates(const PuctNode* node, PuctNode* next) {
         }
 
         next->is_finalised = true;
-        //K273::l_verbose("setting node to finalised for repeated state @ depth %d", next->game_depth);
     }
 }
 
@@ -545,14 +544,14 @@ const PuctNodeChild* PuctEvaluator::onNextMove(int max_evaluations, double end_t
     return choice;
 }
 
-float PuctEvaluator::getTemperature() const {
-    if (this->game_depth >= this->conf->depth_temperature_stop) {
+float PuctEvaluator::getTemperature(int depth) const {
+    if (depth >= this->conf->depth_temperature_stop) {
         return -1;
     }
 
     ASSERT(this->conf->temperature > 0);
 
-    float multiplier = 1.0f + ((this->game_depth - this->conf->depth_temperature_start) *
+    float multiplier = 1.0f + ((depth - this->conf->depth_temperature_start) *
                                this->conf->depth_temperature_increment);
 
     multiplier = std::max(1.0f, multiplier);
@@ -642,16 +641,17 @@ const PuctNodeChild* PuctEvaluator::chooseTopVisits(const PuctNode* node) const 
 }
 
 const PuctNodeChild* PuctEvaluator::chooseTemperature(const PuctNode* node) {
-    float temperature = this->getTemperature();
+    float temperature = this->getTemperature(node->game_depth);
     if (temperature < 0) {
         return this->chooseTopVisits(node);
     }
 
-    // subtle: when the visits is low (like 0), we want to use the policy part of the
-    // distribution. By using linger here, we get that behaviour.
+    // subtle: when the visits is very low, we want to use the policy part of the
+    // distribution - not the visits.
     Children dist;
-    if (!this->conf->dirichlet_noise_alpha && root->visits < root->num_children) {
+    if (this->conf->dirichlet_noise_alpha < 0 && node->visits < 3) {
         dist = this->getProbabilities(this->root, temperature, true);
+
     } else {
         dist = this->getProbabilities(this->root, temperature, false);
     }
@@ -674,24 +674,20 @@ const PuctNodeChild* PuctEvaluator::chooseTemperature(const PuctNode* node) {
     return dist.back();
 }
 
-Children PuctEvaluator::getProbabilities(PuctNode* node, float temperature, bool use_linger) {
+Children PuctEvaluator::getProbabilities(PuctNode* node, float temperature, bool use_policy) {
     // XXX this makes the assumption that our legals are unique for each child.
 
     ASSERT(node->num_children > 0);
 
-    // since we add 0.1 to each our children (this is so the percentage does don't drop too low)
+    // we add 0.001 to each our children, so zero chance doesn't happen
     float node_visits = node->visits + 0.001 * node->num_children;
-
-    // add some smoothness.  This also works for the case when doing no evaluations (ie
-    // onNextMove(0)), as the node_visits == 0 and be uniform.
-    float linger_pct = 0.01f;
 
     float total_probability = 0.0f;
     for (int ii=0; ii<node->num_children; ii++) {
         PuctNodeChild* child = node->getNodeChild(this->sm->getRoleCount(), ii);
         float child_visits = child->to_node ? child->to_node->visits + 0.001f : 0.001f;
-        if (use_linger) {
-            child->next_prob = linger_pct * child->policy_prob + (1 - linger_pct) * (child_visits / node_visits);
+        if (use_policy) {
+            child->next_prob = child->policy_prob + 0.001f;
 
         } else {
             child->next_prob = child_visits / node_visits;
@@ -744,10 +740,11 @@ void PuctEvaluator::logDebug(const PuctNodeChild* choice_root) {
         // for side effects of displaying probabilities
         Children dist;
         if (cur->num_children > 0 && cur->visits > 0) {
-            if (cur->visits < cur->num_children) {
-                dist = this->getProbabilities(cur, 1.2, true);
+            if (cur->visits < 3) {
+                dist = this->getProbabilities(cur, this->getTemperature(cur->game_depth), true);
+
             } else {
-                dist = this->getProbabilities(cur, 1.2, false);
+                dist = this->getProbabilities(cur, this->getTemperature(cur->game_depth), false);
             }
         }
 
