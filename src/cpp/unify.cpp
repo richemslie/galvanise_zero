@@ -94,3 +94,49 @@ void PuctEvaluator::setDirichletNoise(PuctNode* node) {
     node->dirichlet_noise_set = true;
 }
 
+
+void PuctEvaluator::setPuctConstant(PuctNode* node, int depth) const {
+    // XXX configurable
+    const float cpuct_base_id = 19652.0f;
+    const float puct_constant = depth == 0 ? this->conf->puct_constant_root : this->conf->puct_constant;
+
+    node->puct_constant = std::log((1 + node->visits + cpuct_base_id) / cpuct_base_id);
+    node->puct_constant += puct_constant;
+}
+
+float PuctEvaluator::getTemperature(int depth) const {
+    if (depth >= this->conf->depth_temperature_stop) {
+        return -1;
+    }
+
+    ASSERT(this->conf->temperature > 0);
+
+    float multiplier = 1.0f + ((depth - this->conf->depth_temperature_start) *
+                               this->conf->depth_temperature_increment);
+
+    multiplier = std::max(1.0f, multiplier);
+
+    return std::min(this->conf->temperature * multiplier, this->conf->depth_temperature_max);
+}
+
+const PuctNodeChild* PuctEvaluator::choose(const PuctNode* node) {
+    if (node == nullptr) {
+        node = this->root;
+    }
+
+    const PuctNodeChild* choice = nullptr;
+    switch (this->conf->choose) {
+        case ChooseFn::choose_top_visits:
+            choice = this->chooseTopVisits(node);
+            break;
+        case ChooseFn::choose_temperature:
+            choice = this->chooseTemperature(node);
+            break;
+        default:
+            K273::l_warning("this->conf->choose unsupported - falling back to choose_top_visits");
+            choice = this->chooseTopVisits(node);
+            break;
+    }
+
+    return choice;
+}
