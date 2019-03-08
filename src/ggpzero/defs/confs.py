@@ -112,7 +112,15 @@ class SelfPlayConfig(object):
     temperature_for_policy = attribute(1.0)
 
     # percentage of games to play from beginning to end (using sample_xxx config)
+    # these games a full playouts, and not using expert iteration style play out.
     play_full_game_pct = attribute(-1)
+
+    # in each full game played out (and not expert iteration style play outs) will oscillate
+    # between using sample_iterations and n < sample_iterations.  so if set to 10% will take 10% of
+    # samples, and 90% will be skipped using n iterations.  XXX this idea is adopted from KataGo and is NOT a full implementation of the idea there.
+    # This is just the simplest way to introduce concept without changing much code.
+    # Considered a temporary feature.  < 0, off.
+    oscillate_sampling_pct = attribute(-1)
 
     # select will get to the point where we start sampling
     select_puct_config = attribute(default=attr_factory(PUCTEvaluatorConfig))
