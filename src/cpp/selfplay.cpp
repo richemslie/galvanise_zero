@@ -193,9 +193,27 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
 
         const PuctNodeChild* choice = nullptr;
 
-        // not atomic, but good enough
+
+        bool do_skip = false;
         if (man.isUnique(node->getBaseState(), node->game_depth)) {
+            // not atomic, but good enough
             man.add(node->getBaseState());
+
+            // test whether to honour oscillate_sampling_pct
+            if (this->play_full_game &&
+                this->conf->oscillate_sampling_pct > 0 &&
+                this->rng.get() > this->conf->oscillate_sampling_pct) {
+                do_skip = true;
+                //K273::l_verbose("Skip oscillate");
+            }
+
+        } else {
+            this->manager->incrDupes();
+            //K273::l_verbose("Skip dupe");
+            do_skip = true;
+        }
+
+        if (!do_skip) {
 
             // run the simulations
             choice = this->pe->onNextMove(iterations);
@@ -214,11 +232,12 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
             this->game_samples.push_back(s);
 
         } else {
-            this->manager->incrDupes();
+            const int rng_amount = std::min(10, iterations / 2 - 42);
+            const int skip_iterations = 42 + this->rng.getWithMax(rng_amount);
 
-            // use the score iterations to advance state
-            //const int score_iterations = this->conf->score_iterations;
-            choice = this->pe->onNextMove(iterations);
+            //K273::l_verbose("Skipping with %d iterations", skip_iterations);
+
+            choice = this->pe->onNextMove(skip_iterations);
         }
 
         // apply the move

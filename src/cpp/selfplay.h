@@ -20,6 +20,8 @@ namespace GGPZero {
         int max_number_of_samples;
 
         float play_full_game_pct;
+        float oscillate_sampling_pct;
+
         float temperature_for_policy;
 
         PuctConfig* select_puct_config;
