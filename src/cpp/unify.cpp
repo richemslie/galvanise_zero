@@ -120,10 +120,6 @@ float PuctEvaluator::getTemperature(int depth) const {
 }
 
 const PuctNodeChild* PuctEvaluator::choose(const PuctNode* node) {
-    if (node == nullptr) {
-        node = this->root;
-    }
-
     const PuctNodeChild* choice = nullptr;
     switch (this->conf->choose) {
         case ChooseFn::choose_top_visits:

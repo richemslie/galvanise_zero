@@ -21,7 +21,7 @@
 
 using namespace GGPZero;
 
-#include "unifify.cpp"
+#include "unify.cpp"
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -79,8 +79,8 @@ void PuctEvaluator::updateConf(const PuctConfig* conf) {
         K273::l_verbose("top_visits_best_guess_converge_ratio: %.2f",
                         conf->top_visits_best_guess_converge_ratio);
 
-        K273::l_verbose("evaluation_multipler convergence %.2f",
-                        conf->evaluation_multipler_to_convergence);
+        K273::l_verbose("evaluation_multiplier convergence %.2f",
+                        conf->evaluation_multiplier_to_convergence);
     }
 
     this->conf = conf;
@@ -185,11 +185,6 @@ void PuctEvaluator::checkDrawStates(const PuctNode* node, PuctNode* next) {
     }
 }
 
-float PuctEvaluator::getPuctConstant(PuctNode* node, int depth) const {
-    // XXX remove this method
-    return this->conf->puct_constant;
-}
-
 void PuctEvaluator::backPropagate(float* new_scores) {
     const int start_index = this->path.size() - 1;
 
@@ -212,16 +207,20 @@ void PuctEvaluator::backPropagate(float* new_scores) {
 
 PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, int depth) {
     ASSERT(!node->isTerminal());
+    ASSERT(node->num_children > 0);
+
+    // dynamically set the PUCT constant
+    this->setPuctConstant(node, depth);
 
     if (node->num_children == 1) {
         return node->getNodeChild(this->sm->getRoleCount(), 0);
     }
 
+    // XXX this is in temporary testing mode
     if (depth < 2) {
         this->setDirichletNoise(node);
     }
 
-    float puct_constant = this->conf->puct_constant;
     float sqrt_node_visits = std::sqrt(node->visits + 1);
     float prior_score = this->priorScore(node, depth);
 
@@ -251,7 +250,7 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, int depth) {
                         return c;
                     }
 
-                    node_score *= 1.0f + puct_constant;
+                    node_score *= 1.0f + node->puct_constant;
 
                 } else {
                     // no more exploration for you
@@ -261,7 +260,7 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, int depth) {
         }
 
         float cv = child_visits + 1;
-        float puct_score = puct_constant * child_pct * (sqrt_node_visits / cv);
+        float puct_score = node->puct_constant * child_pct * (sqrt_node_visits / cv);
 
         // end product
         float score = node_score + puct_score;
@@ -366,7 +365,7 @@ void PuctEvaluator::playoutLoop(int max_evaluations, double end_time) {
                 break;
 
             } else {
-                const int max_convergence_evaluations = max_evaluations * this->conf->evaluation_multipler_to_convergence;
+                const int max_convergence_evaluations = max_evaluations * this->conf->evaluation_multiplier_to_convergence;
                 if (this->evaluations > max_convergence_evaluations) {
                     break;
                 }
@@ -533,49 +532,12 @@ const PuctNodeChild* PuctEvaluator::onNextMove(int max_evaluations, double end_t
 
     this->playoutLoop(max_evaluations, end_time);
 
-    const PuctNodeChild* choice = this->choose();
+    const PuctNodeChild* choice = this->choose(this->root);
 
     // this is a hack to only show tree when it is our 'turn'.  Be better to use bypass opponent turn
     // flag than abuse this value (XXX).
     if (max_evaluations != 0 && this->conf->verbose) {
         this->logDebug(choice);
-    }
-
-    return choice;
-}
-
-float PuctEvaluator::getTemperature(int depth) const {
-    if (depth >= this->conf->depth_temperature_stop) {
-        return -1;
-    }
-
-    ASSERT(this->conf->temperature > 0);
-
-    float multiplier = 1.0f + ((depth - this->conf->depth_temperature_start) *
-                               this->conf->depth_temperature_increment);
-
-    multiplier = std::max(1.0f, multiplier);
-
-    return std::min(this->conf->temperature * multiplier, this->conf->depth_temperature_max);
-}
-
-const PuctNodeChild* PuctEvaluator::choose(const PuctNode* node) {
-    if (node == nullptr) {
-        node = this->root;
-    }
-
-    const PuctNodeChild* choice = nullptr;
-    switch (this->conf->choose) {
-        case ChooseFn::choose_top_visits:
-            choice = this->chooseTopVisits(node);
-            break;
-        case ChooseFn::choose_temperature:
-            choice = this->chooseTemperature(node);
-            break;
-        default:
-            K273::l_warning("this->conf->choose unsupported - falling back to choose_top_visits");
-            choice = this->chooseTopVisits(node);
-            break;
     }
 
     return choice;
@@ -608,6 +570,40 @@ bool PuctEvaluator::converged(const PuctNode* node) const {
 
     return true;
 }
+
+Children PuctEvaluator::getProbabilities(PuctNode* node, float temperature, bool use_policy) {
+    // XXX this makes the assumption that our legals are unique for each child.
+
+    ASSERT(node->num_children > 0);
+
+    // we add 0.001 to each our children, so zero chance doesn't happen
+    float node_visits = node->visits + 0.001 * node->num_children;
+
+    float total_probability = 0.0f;
+    for (int ii=0; ii<node->num_children; ii++) {
+        PuctNodeChild* child = node->getNodeChild(this->sm->getRoleCount(), ii);
+        float child_visits = child->to_node ? child->to_node->visits + 0.001f : 0.001f;
+        if (use_policy) {
+            child->next_prob = child->policy_prob + 0.001f;
+
+        } else {
+            child->next_prob = child_visits / node_visits;
+        }
+
+        // apply temperature
+        child->next_prob = ::pow(child->next_prob, temperature);
+        total_probability += child->next_prob;
+    }
+
+    // normalise it
+    for (int ii=0; ii<node->num_children; ii++) {
+        PuctNodeChild* child = node->getNodeChild(this->sm->getRoleCount(), ii);
+        child->next_prob /= total_probability;
+    }
+
+    return PuctNode::sortedChildren(node, this->sm->getRoleCount(), true);
+}
+
 
 const PuctNodeChild* PuctEvaluator::chooseTopVisits(const PuctNode* node) const {
     if (node == nullptr) {
@@ -672,39 +668,6 @@ const PuctNodeChild* PuctEvaluator::chooseTemperature(const PuctNode* node) {
     }
 
     return dist.back();
-}
-
-Children PuctEvaluator::getProbabilities(PuctNode* node, float temperature, bool use_policy) {
-    // XXX this makes the assumption that our legals are unique for each child.
-
-    ASSERT(node->num_children > 0);
-
-    // we add 0.001 to each our children, so zero chance doesn't happen
-    float node_visits = node->visits + 0.001 * node->num_children;
-
-    float total_probability = 0.0f;
-    for (int ii=0; ii<node->num_children; ii++) {
-        PuctNodeChild* child = node->getNodeChild(this->sm->getRoleCount(), ii);
-        float child_visits = child->to_node ? child->to_node->visits + 0.001f : 0.001f;
-        if (use_policy) {
-            child->next_prob = child->policy_prob + 0.001f;
-
-        } else {
-            child->next_prob = child_visits / node_visits;
-        }
-
-        // apply temperature
-        child->next_prob = ::pow(child->next_prob, temperature);
-        total_probability += child->next_prob;
-    }
-
-    // normalise it
-    for (int ii=0; ii<node->num_children; ii++) {
-        PuctNodeChild* child = node->getNodeChild(this->sm->getRoleCount(), ii);
-        child->next_prob /= total_probability;
-    }
-
-    return PuctNode::sortedChildren(node, this->sm->getRoleCount(), true);
 }
 
 void PuctEvaluator::logDebug(const PuctNodeChild* choice_root) {

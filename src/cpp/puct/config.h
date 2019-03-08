@@ -15,6 +15,7 @@ namespace GGPZero {
         int root_expansions_preset_visits;
 
         float puct_constant;
+        float puct_constant_root;
 
         float dirichlet_noise_pct;
         float dirichlet_noise_alpha;
@@ -34,8 +35,9 @@ namespace GGPZero {
         float fpu_prior_discount_root;
 
         float top_visits_best_guess_converge_ratio;
-        float evaluation_multipler_to_convergence;
+        float evaluation_multiplier_to_convergence;
 
+        // XXX is this used?
         bool matchmode = false;
     };
 

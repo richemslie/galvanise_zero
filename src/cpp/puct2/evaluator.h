@@ -40,16 +40,15 @@ namespace GGPZero::PuctV2 {
         void updateConf(const PuctConfig* conf);
 
     private:
+        //tmp:
+        #include "unify.h"
+
         // tree manangement
         void removeNode(PuctNode*);
         void releaseNodes(PuctNode*);
         PuctNode* lookupNode(const GGPLib::BaseState* bs, int depth);
         PuctNode* createNode(PuctNode* parent, const GGPLib::BaseState* state);
         PuctNode* expandChild(PuctNode* parent, PuctNodeChild* child);
-
-        void setPuctConstant(PuctNode* node, int depth) const;
-        float priorScore(PuctNode* node, int depth) const;
-        void setDirichletNoise(PuctNode* node);
 
         bool converged(int count) const;
         PuctNodeChild* selectChild(PuctNode* node, Path& path);
@@ -71,9 +70,6 @@ namespace GGPZero::PuctV2 {
         const PuctNodeChild* onNextMove(int max_evaluations, double end_time);
         void applyMove(const GGPLib::JointMove* move);
 
-        float getTemperature() const;
-
-        const PuctNodeChild* choose(const PuctNode* node=nullptr);
         const PuctNodeChild* chooseTopVisits(const PuctNode* node) const;
         const PuctNodeChild* chooseTemperature(const PuctNode* node);
 

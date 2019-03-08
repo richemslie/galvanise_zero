@@ -125,6 +125,7 @@ static int initialiseChildHelper(PuctNode* node, int role_index, int child_index
 
             // by default set to 1.0, will be overridden
             child->policy_prob = 1.0f;
+            child->policy_probx = 1.0f;
             child->next_prob = 0.0f;
 
             child->debug_node_score = 0.0;
@@ -281,13 +282,14 @@ void PuctNode::dumpNode(const PuctNode* node,
             visits = child->to_node->visits;
         }
 
-        string msg = K273::fmtString("%s %s %d(%d):%s %.2f/%.2f   %s   %.3f/%.3f/%.3f",
+        string msg = K273::fmtString("%s %s %d(%d):%s %.2f/%.2f/%.2f   %s   %.3f/%.3f/%.3f",
                                      indent.c_str(),
                                      move.c_str(),
                                      child->traversals,
                                      visits - child->traversals,
                                      finalised.c_str(),
                                      child->policy_prob * 100,
+                                     child->policy_probx * 100,
                                      child->next_prob * 100,
                                      score.c_str(),
                                      child->debug_node_score,
@@ -323,7 +325,7 @@ Children PuctNode::sortedChildren(const PuctNode* node,
             if (next_probability) {
                 return a->next_prob > b->next_prob;
             } else {
-                return a->policy_prob > b->policy_prob;
+                return a->policy_probx > b->policy_probx;
             }
         }
 
@@ -353,7 +355,7 @@ Children PuctNode::sortedChildrenTraversals(const PuctNode* node,
             if (next_probability) {
                 return a->next_prob > b->next_prob;
             } else {
-                return a->policy_prob > b->policy_prob;
+                return a->policy_probx > b->policy_probx;
             }
         }
 
@@ -410,6 +412,7 @@ void PuctNodeRequest::reply(const ModelResult& result,
         for (int ii=0; ii<node->num_children; ii++) {
             PuctNodeChild* c = node->getNodeChild(role_count, ii);
             c->policy_prob /= total_prediction;
+            c->policy_probx = c->policy_prob;
         }
 
     } else {
@@ -417,6 +420,7 @@ void PuctNodeRequest::reply(const ModelResult& result,
         for (int ii=0; ii<node->num_children; ii++) {
             PuctNodeChild* c = node->getNodeChild(role_count, ii);
             c->policy_prob = 1.0 / node->num_children;
+            c->policy_probx = c->policy_prob;
         }
     }
 

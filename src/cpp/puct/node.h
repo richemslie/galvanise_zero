@@ -50,6 +50,8 @@ namespace GGPZero {
         uint16_t num_children;
         uint16_t num_children_expanded;
 
+        float puct_constant;
+
         // whether this node has a finalised scores or not (can also release children if so)
         bool is_finalised;
         bool dirichlet_noise_set;

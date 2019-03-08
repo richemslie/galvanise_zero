@@ -23,7 +23,7 @@
 
 using namespace GGPZero::PuctV2;
 
-#include "unifify.cpp"
+#include "unify.cpp"
 
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -70,8 +70,8 @@ void PuctEvaluator::updateConf(const PuctConfig* conf) {
                         conf->verbose, conf->max_dump_depth,
                         (conf->choose == ChooseFn::choose_top_visits) ? "choose_top_visits" : "choose_temperature");
 
-        K273::l_verbose("puct constant %.2f, root: %.2f, multiplier: %.2f",
-                        conf->puct_constant, conf->puct_constant_root, conf->puct_multiplier);
+        K273::l_verbose("puct constant %.2f, root: %.2f",
+                        conf->puct_constant, conf->puct_constant_root);
 
         K273::l_verbose("dirichlet_noise (alpha: %.2f, pct: %.2f), fpu_prior_discount: %.2f/%.2f",
                         conf->dirichlet_noise_alpha, conf->dirichlet_noise_pct,
@@ -223,17 +223,6 @@ PuctNode* PuctEvaluator::expandChild(PuctNode* parent, PuctNodeChild* child) {
     return child->to_node;
 }
 
-void PuctEvaluator::setPuctConstant(PuctNode* node, int depth) const {
-    // XXX configurable
-    const float cpuct_base_id = 19652.0f;
-    const float puct_constant = depth == 0 ? this->conf->puct_constant_root : this->conf->puct_constant;
-
-    node->puct_constant = std::log((1 + node->visits + cpuct_base_id) / cpuct_base_id);
-
-    node->puct_constant *= this->conf->puct_multiplier;
-    node->puct_constant += puct_constant;
-}
-
 bool PuctEvaluator::converged(int count) const {
     auto children = PuctNode::sortedChildren(this->root, this->sm->getRoleCount());
 
@@ -314,7 +303,7 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
         const double inflight_visits = c->to_node != nullptr ? c->to_node->inflight_visits : 0;
 
         // standard PUCT as per AG0 paper
-        double exploration_score = c->policy_prob * sqrt_node_visits / (traversals + inflight_visits);
+        double exploration_score = c->policy_probx * sqrt_node_visits / (traversals + inflight_visits);
 
         // always base exploration_score on constant
         exploration_score *= node->puct_constant;
@@ -554,6 +543,28 @@ void PuctEvaluator::backPropagate(float* new_scores, const Path& path) {
 
         if (cur.choice != nullptr) {
             cur.choice->traversals++;
+            // apply policy dilution (only when the score is between 0.05 < s < 0.95)
+            if (cur.node->getCurrentScore(cur.node->lead_role_index) < 0.95 &&
+                cur.node->getCurrentScore(cur.node->lead_role_index) > 0.05) {
+
+                // aggressive
+                //const float policy_dilute_apply = 0.998;
+
+                // reasonable
+                const float policy_dilute_apply = 0.9995;
+                const float policy_dilute_min = 0.01f;
+
+                if (cur.choice->policy_probx > policy_dilute_min) {
+                    //cur.choice->policy_probx *= 0.9995;
+                    cur.choice->policy_probx *= policy_dilute_apply;
+                    cur.choice->policy_probx = std::max(policy_dilute_min, cur.choice->policy_probx);
+                }
+            }
+        }
+
+        if (cur.node->visits % 1000 == 0) {
+            // normalise policy_probx
+            cur.node->normaliseX();
         }
 
         prev = &cur;
@@ -932,45 +943,12 @@ const PuctNodeChild* PuctEvaluator::onNextMove(int max_evaluations, double end_t
         K273::l_verbose("All workers collected.");
     }
 
-    const PuctNodeChild* choice = this->choose();
+    const PuctNodeChild* choice = this->choose(this->root);
 
     // this is a hack to only show tree when it is our 'turn'.  Be better to use bypass opponent turn
     // flag than abuse this value (XXX).
     if (max_evaluations != 0 && this->conf->verbose) {
         this->logDebug(choice);
-    }
-
-    return choice;
-}
-
-float PuctEvaluator::getTemperature() const {
-    if (this->game_depth >= this->conf->depth_temperature_stop) {
-        return -1;
-    }
-
-    ASSERT(this->conf->temperature > 0);
-
-    float multiplier = 1.0f + ((this->game_depth - this->conf->depth_temperature_start) *
-                               this->conf->depth_temperature_increment);
-
-    multiplier = std::max(1.0f, multiplier);
-
-    return std::min(this->conf->temperature * multiplier, this->conf->depth_temperature_max);
-}
-
-const PuctNodeChild* PuctEvaluator::choose(const PuctNode* node) {
-    const PuctNodeChild* choice = nullptr;
-    switch (this->conf->choose) {
-        case ChooseFn::choose_top_visits:
-            choice = this->chooseTopVisits(node);
-            break;
-        case ChooseFn::choose_temperature:
-            choice = this->chooseTemperature(node);
-            break;
-        default:
-            K273::l_warning("this->conf->choose unsupported - falling back to choose_top_visits");
-            choice = this->chooseTopVisits(node);
-            break;
     }
 
     return choice;
@@ -1025,7 +1003,7 @@ const PuctNodeChild* PuctEvaluator::chooseTemperature(const PuctNode* node) {
         node = this->root;
     }
 
-    float temperature = this->getTemperature();
+    float temperature = this->getTemperature(node->game_depth);
     if (temperature < 0) {
         return this->chooseTopVisits(node);
     }
@@ -1074,7 +1052,7 @@ Children PuctEvaluator::getProbabilities(PuctNode* node, float temperature, bool
         PuctNodeChild* child = node->getNodeChild(this->sm->getRoleCount(), ii);
         float child_visits = child->to_node ? child->traversals + 0.1f : 0.1f;
         if (use_linger) {
-            child->next_prob = linger_pct * child->policy_prob + (1 - linger_pct) * (child_visits / node_visits);
+            child->next_prob = linger_pct * child->policy_probx + (1 - linger_pct) * (child_visits / node_visits);
 
         } else {
             child->next_prob = child_visits / node_visits;

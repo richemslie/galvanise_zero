@@ -63,6 +63,9 @@ static PuctNode* createNode(const GGPLib::BaseState* base_state,
     node->num_children = num_children;
     node->num_children_expanded = 0;
 
+    // will be set in selectChild()
+    node->puct_constant = 1.44;
+
     node->is_finalised = is_finalised;
     node->dirichlet_noise_set = false;
 

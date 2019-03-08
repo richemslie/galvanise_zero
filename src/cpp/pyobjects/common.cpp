@@ -70,6 +70,9 @@ static PuctConfig* createPuctConfig(PyObject* dict) {
 
     config->puct_constant = asFloat("puct_constant");
 
+    // XXX temp
+    config->puct_constant_root = config->puct_constant;
+
     config->root_expansions_preset_visits = asInt("root_expansions_preset_visits");
     config->dirichlet_noise_pct = asFloat("dirichlet_noise_pct");
     config->dirichlet_noise_alpha = asFloat("dirichlet_noise_alpha");
@@ -86,7 +89,9 @@ static PuctConfig* createPuctConfig(PyObject* dict) {
     config->fpu_prior_discount_root = asFloat("fpu_prior_discount_root");
 
     config->top_visits_best_guess_converge_ratio = asFloat("top_visits_best_guess_converge_ratio");
-    config->evaluation_multipler_to_convergence = asFloat("evaluation_multipler_to_convergence");
+
+    // XXX FIX SPELLING
+    config->evaluation_multiplier_to_convergence = asFloat("evaluation_multipler_to_convergence");
 
     std::string choose_method = asString("choose");
     if (choose_method == "choose_top_visits") {
@@ -125,7 +130,6 @@ static GGPZero::PuctV2::PuctConfig* createPuctConfigV2(PyObject* dict) {
 
     config->puct_constant = asFloat("puct_constant");
     config->puct_constant_root = asFloat("puct_constant_root");
-    config->puct_multiplier = asFloat("puct_multiplier");
 
     config->dirichlet_noise_pct = asFloat("dirichlet_noise_pct");
     config->dirichlet_noise_alpha = asFloat("dirichlet_noise_alpha");
@@ -188,6 +192,8 @@ static SelfPlayConfig* createSelfPlayConfig(PyObject* dict) {
 
     config->max_number_of_samples = asInt("max_number_of_samples");
     config->play_full_game_pct = asFloat("play_full_game_pct");
+    config->oscillate_sampling_pct = asFloat("oscillate_sampling_pct");
+
     config->temperature_for_policy = asFloat("temperature_for_policy");
 
     config->resign0_score_probability = asFloat("resign0_score_probability");

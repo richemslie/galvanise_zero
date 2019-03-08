@@ -13,7 +13,6 @@ namespace GGPZero::PuctV2 {
 
         float puct_constant;
         float puct_constant_root;
-        float puct_multiplier;
 
         float dirichlet_noise_pct;
         float dirichlet_noise_alpha;

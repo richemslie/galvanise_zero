@@ -49,12 +49,9 @@ namespace GGPZero {
 
         void checkDrawStates(const PuctNode* node, PuctNode* next);
 
-        // set dirichlet noise on node
-        void setDirichletNoise(PuctNode* node);
-        float priorScore(PuctNode* node, int depth) const;
-        float getPuctConstant(PuctNode* node, int depth) const;
-
     public:
+#include "unify.h"
+
         // do_predictions
         PuctNodeChild* selectChild(PuctNode* node, int depth);
 
@@ -69,14 +66,11 @@ namespace GGPZero {
         const PuctNodeChild* onNextMove(int max_evaluations, double end_time=-1);
         void applyMove(const GGPLib::JointMove* move);
 
-        float getTemperature(int depth) const;
-
-        const PuctNodeChild* choose(const PuctNode* node=nullptr);
         bool converged(const PuctNode* node) const;
         const PuctNodeChild* chooseTopVisits(const PuctNode* node) const;
         const PuctNodeChild* chooseTemperature(const PuctNode* node);
 
-        Children getProbabilities(PuctNode* node, float temperature, bool use_linger=true);
+        Children getProbabilities(PuctNode* node, float temperature, bool use_policy=true);
 
         void logDebug(const PuctNodeChild* choice_root);
 

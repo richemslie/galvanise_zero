@@ -24,6 +24,7 @@ namespace GGPZero::PuctV2 {
         uint32_t traversals;
 
         float policy_prob;
+        float policy_probx;
         float next_prob;
 
         Score debug_node_score;
@@ -153,6 +154,31 @@ namespace GGPZero::PuctV2 {
 
         bool isTerminal() const {
             return this->num_children == 0;
+        }
+
+        // XXX temp
+        void normaliseX() {
+
+            float total_prediction = 0;
+            for (int ii=0; ii<this->num_children; ii++) {
+                PuctNodeChild* c = this->getNodeChild(2, ii);
+                total_prediction += c->policy_probx;
+            }
+
+            if (total_prediction > std::numeric_limits<float>::min()) {
+                // normalise:
+                for (int ii=0; ii<this->num_children; ii++) {
+                    PuctNodeChild* c = this->getNodeChild(2, ii);
+                    c->policy_probx /= total_prediction;
+                }
+
+            } else {
+                // well that sucks - absolutely no predictions, just make it uniform then...
+                for (int ii=0; ii<this->num_children; ii++) {
+                    PuctNodeChild* c = this->getNodeChild(2, ii);
+                    c->policy_prob = 1.0 / this->num_children;
+                }
+            }
         }
 
         static PuctNode* create(const GGPLib::BaseState* base_state,
