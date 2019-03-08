@@ -204,17 +204,14 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
                 this->conf->oscillate_sampling_pct > 0 &&
                 this->rng.get() > this->conf->oscillate_sampling_pct) {
                 do_skip = true;
-                //K273::l_verbose("Skip oscillate");
             }
 
         } else {
             this->manager->incrDupes();
-            //K273::l_verbose("Skip dupe");
             do_skip = true;
         }
 
         if (!do_skip) {
-
             // run the simulations
             choice = this->pe->onNextMove(iterations);
 
@@ -232,8 +229,8 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
             this->game_samples.push_back(s);
 
         } else {
-            const int rng_amount = std::min(10, iterations / 2 - 42);
-            const int skip_iterations = 42 + this->rng.getWithMax(rng_amount);
+            const int rng_amount = std::max(10, iterations / 3);
+            const int skip_iterations = this->rng.getWithMax(rng_amount);
 
             //K273::l_verbose("Skipping with %d iterations", skip_iterations);
 
