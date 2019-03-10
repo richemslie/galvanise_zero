@@ -44,7 +44,12 @@ void PuctEvaluator::setDirichletNoise(PuctNode* node) {
         return;
     }
 
-    std::gamma_distribution<float> gamma(this->conf->dirichlet_noise_alpha, 1.0f);
+    // XXX - try calculating, what I have manually been doing by hand anyway for max board size.
+    // Credit KataGo & LZ0
+    // magic number is 10.83f = 0.03 ∗ 361 - as per AG0 paper
+    const float dirichlet_noise_alpha = 10.83f / node->num_children;
+
+    std::gamma_distribution<float> gamma(dirichlet_noise_alpha, 1.0f);
 
     std::vector <float> dirichlet_noise;
     dirichlet_noise.resize(node->num_children, 0.0f);
