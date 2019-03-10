@@ -23,8 +23,8 @@ namespace GGPZero::PuctV2 {
         bool unselectable;
         uint32_t traversals;
 
+        float policy_prob_orig;
         float policy_prob;
-        float policy_probx;
         float next_prob;
 
         Score debug_node_score;
@@ -162,14 +162,14 @@ namespace GGPZero::PuctV2 {
             float total_prediction = 0;
             for (int ii=0; ii<this->num_children; ii++) {
                 PuctNodeChild* c = this->getNodeChild(2, ii);
-                total_prediction += c->policy_probx;
+                total_prediction += c->policy_prob;
             }
 
             if (total_prediction > std::numeric_limits<float>::min()) {
                 // normalise:
                 for (int ii=0; ii<this->num_children; ii++) {
                     PuctNodeChild* c = this->getNodeChild(2, ii);
-                    c->policy_probx /= total_prediction;
+                    c->policy_prob /= total_prediction;
                 }
 
             } else {

@@ -303,7 +303,7 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
         const double inflight_visits = c->to_node != nullptr ? c->to_node->inflight_visits : 0;
 
         // standard PUCT as per AG0 paper
-        double exploration_score = c->policy_probx * sqrt_node_visits / (traversals + inflight_visits);
+        double exploration_score = c->policy_prob * sqrt_node_visits / (traversals + inflight_visits);
 
         // always base exploration_score on constant
         exploration_score *= node->puct_constant;
@@ -468,15 +468,6 @@ void PuctEvaluator::backPropagate(float* new_scores, const Path& path) {
                     return c;
                 }
 
-                if (false && score < 0.01) {
-                    if (cur->getCurrentScore(cur->lead_role_index) < -0.005) {
-                        if (cur->visits > 500) {
-                            K273::l_debug("XXX");
-                            return c;
-                        }
-                    }
-                }
-
                 if (score > best_score) {
                     best_score = score;
                     best = c;
@@ -554,16 +545,15 @@ void PuctEvaluator::backPropagate(float* new_scores, const Path& path) {
                 const float policy_dilute_apply = 0.9995;
                 const float policy_dilute_min = 0.01f;
 
-                if (cur.choice->policy_probx > policy_dilute_min) {
-                    //cur.choice->policy_probx *= 0.9995;
-                    cur.choice->policy_probx *= policy_dilute_apply;
-                    cur.choice->policy_probx = std::max(policy_dilute_min, cur.choice->policy_probx);
+                if (cur.choice->policy_prob > policy_dilute_min) {
+                    cur.choice->policy_prob *= policy_dilute_apply;
+                    cur.choice->policy_prob = std::max(policy_dilute_min, cur.choice->policy_prob);
                 }
             }
         }
 
         if (cur.node->visits % 1000 == 0) {
-            // normalise policy_probx
+            // normalise policy_prob
             cur.node->normaliseX();
         }
 
@@ -1052,7 +1042,7 @@ Children PuctEvaluator::getProbabilities(PuctNode* node, float temperature, bool
         PuctNodeChild* child = node->getNodeChild(this->sm->getRoleCount(), ii);
         float child_visits = child->to_node ? child->traversals + 0.1f : 0.1f;
         if (use_linger) {
-            child->next_prob = linger_pct * child->policy_probx + (1 - linger_pct) * (child_visits / node_visits);
+            child->next_prob = linger_pct * child->policy_prob + (1 - linger_pct) * (child_visits / node_visits);
 
         } else {
             child->next_prob = child_visits / node_visits;

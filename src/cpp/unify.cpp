@@ -44,15 +44,17 @@ void PuctEvaluator::setDirichletNoise(PuctNode* node) {
         return;
     }
 
-    const auto debug_noise = false;
-
     std::gamma_distribution<float> gamma(this->conf->dirichlet_noise_alpha, 1.0f);
 
     std::vector <float> dirichlet_noise;
     dirichlet_noise.resize(node->num_children, 0.0f);
 
     float total_noise = 0.0f;
+    float highest_prob = 0.0f;
     for (int ii=0; ii<node->num_children; ii++) {
+        PuctNodeChild* c = node->getNodeChild(this->sm->getRoleCount(), ii);
+        highest_prob = std::max(c->policy_prob, highest_prob);
+
         const float noise = gamma(this->rng);
         dirichlet_noise[ii] = noise;
         total_noise += noise;
@@ -68,11 +70,10 @@ void PuctEvaluator::setDirichletNoise(PuctNode* node) {
         dirichlet_noise[ii] /= total_noise;
     }
 
-    const float noise_pct = this->conf->dirichlet_noise_pct;
+    // const float noise_pct = this->conf->dirichlet_noise_pct;
+    // ZZZ
 
-    if (debug_noise) {
-        PuctNode::dumpNode(node, nullptr, "before ... ", false, this->sm);
-    }
+    const float noise_pct = std::max(highest_prob, this->conf->dirichlet_noise_pct);
 
     float total_policy = 0;
     for (int ii=0; ii<node->num_children; ii++) {
@@ -85,10 +86,6 @@ void PuctEvaluator::setDirichletNoise(PuctNode* node) {
     for (int ii=0; ii<node->num_children; ii++) {
         PuctNodeChild* c = node->getNodeChild(this->sm->getRoleCount(), ii);
         c->policy_prob /= total_policy;
-    }
-
-    if (debug_noise) {
-        PuctNode::dumpNode(node, nullptr, "after ... ", false, this->sm);
     }
 
     node->dirichlet_noise_set = true;
