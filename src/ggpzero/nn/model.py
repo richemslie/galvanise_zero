@@ -258,27 +258,10 @@ def get_network_model(conf, generation_descr):
     value_v3 = conf.value_hidden_size == 0
     value_v2 = conf.value_hidden_size < 0
     if value_v3:
-        assert conf.input_columns == conf.input_rows
-        average_layer = layer
-        dims = conf.input_columns
-        while dims >= 5:
-            if dims % 2 == 1:
-                average_layer = klayers.AveragePooling2D(4, 1)(average_layer)
-                dims -= 3
-            else:
-                average_layer = klayers.AveragePooling2D(2, 2)(average_layer)
-                dims /= 2
-
-        assert dims < conf.input_columns
-
-        to_flatten1 = conv2d_block(32, 1,
-                                   name='value_flatten1',
-                                   activation=activation,
-                                   do_bn=False,
-                                   padding='valid')(average_layer)
-
+        x = klayers.GlobalAveragePooling2D(name="value_average")(layer)
+        to_flatten1 = klayers.Reshape((1, 1, conf.cnn_filter_size), name="value_reshape")(x)
         to_flatten2 = conv2d_block(1, 1,
-                                   name='value_flatten2',
+                                   name='value_flatten',
                                    activation=activation,
                                    do_bn=False,
                                    padding='valid')(layer)
@@ -286,11 +269,7 @@ def get_network_model(conf, generation_descr):
         flat = klayers.concatenate([klayers.Flatten()(to_flatten1),
                                     klayers.Flatten()(to_flatten2)])
 
-        # XXX
-        # if conf.dropout_rate_value > 0:
-        #    flat = klayers.Dropout(conf.dropout_rate_value)(flat)
-
-        hidden = klayers.Dense(256, name="value_hidden")(flat)
+        hidden = klayers.Dense(512, name="value_hidden")(flat)
         hidden = act(hidden, 'crelu', name="value_hidden_act")
 
         # XXX dropout here?
@@ -298,7 +277,7 @@ def get_network_model(conf, generation_descr):
             flat = klayers.Dropout(conf.dropout_rate_value)(flat)
 
         value_head = klayers.Dense(num_value_heads,
-                                   activation="sigmoid",
+                                   activation="softmax",
                                    name="value")(hidden)
 
     elif value_v2:

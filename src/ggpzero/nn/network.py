@@ -65,16 +65,16 @@ class NeuralNetwork(object):
         else:
             return self.predict_n([state])[0]
 
-    def compile(self, compile_strategy, learning_rate=None, value_weight=1.0, l2_loss=None):
+    def compile(self, compile_strategy, learning_rate=None, value_weight=1.0,
+                l2_loss=None, l2_non_residual=True):
         # XXX allow l2_loss on final layers.
 
         value_objective = "mean_squared_error"
         policy_objective = 'categorical_crossentropy'
         if compile_strategy == "SGD":
-            if learning_rate:
-                optimizer = SGD(lr=learning_rate, momentum=0.9)
-            else:
-                optimizer = SGD(lr=0.01, momentum=0.9)
+            if learning_rate is None:
+                learning_rate = 0.01
+            optimizer = SGD(lr=learning_rate, momentum=0.9)
 
         elif compile_strategy == "adam":
             if learning_rate:
@@ -119,20 +119,34 @@ class NeuralNetwork(object):
 
             if hasattr(layer, 'kernel_regularizer'):
 
-                # ignore l2 loss on squeeze
-                if "_se_" in layer.name:
-                    assert layer.kernel_regularizer is None
+                ignore = False
+                if l2_non_residual:
+                    ignore = True
+
+                    if "policy" in layer.name or "value" in layer.name:
+                        if "flatten" not in layer.name:
+                            ignore = False
+                else:
+                    ignore = "_se_" in layer.name
+
+                if ignore:
+                    if layer.kernel_regularizer is not None:
+                        log.warning("Ignoring but regularizer was set @ %s/%s.  Unsetting." % (layer.name, layer))
+                        layer.kernel_regularizer = None
+                        rebuild_model = True
+
                     if l2_loss is not None:
-                        log.warning("Ignoring applying l2 to %s/%s" % (layer.name, layer))
+                        log.verbose("Ignoring applying l2 to %s/%s" % (layer.name, layer))
+
                     continue
 
                 if l2_loss is not None and layer.kernel_regularizer is None:
                     rebuild_model = True
-                    log.verbose("Applying l2 loss to %s/%s" % (layer.name, layer))
+                    log.info("Applying l2 loss to %s/%s" % (layer.name, layer))
                     layer.kernel_regularizer = l2_loss
 
                 if layer.kernel_regularizer is not None and l2_loss is None:
-                    log.verbose("Unsetting l2 loss on %s/%s" % (layer.name, layer))
+                    log.info("Unsetting l2 loss on %s/%s" % (layer.name, layer))
                     rebuild_model = True
                     layer.kernel_regularizer = l2_loss
 

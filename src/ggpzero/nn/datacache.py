@@ -209,6 +209,7 @@ class ChunkIndexer(object):
 
         shuffle.
         '''
+
         # XXX add config option (actually best just an argument here)
         include_pct = 0.35
 
@@ -233,8 +234,12 @@ class ChunkIndexer(object):
             if sum(sizes) > max_size:
                 if include_all is not None:
                     assert include_all > 0
+
                     include_sizes = [int(include_pct * s) for s in sizes[:include_all]]
                     remaining_sizes = sizes[include_all:]
+
+                    # XXX Need to check isn't smaller than would of been normally.
+                    # XXX whole thing needs a rewrite...
 
                 else:
                     include_sizes = []
@@ -663,9 +668,10 @@ class DataCache(object):
 
                 # XXX highly experimental
                 if sample_is_draw and self.score_draw_as_random_hack:
-                    # the idea is just to randomly assing a win or loss to train on.  Then the
+                    # the idea is just to randomly asign a win or loss to train on.  Then the
                     # network can average out over a 'bazillion' draw samples and determine that
-                    # the value should be 0.5.  In theory.  XXX
+                    # the value should be 0.5.  In theory.  XXX Who knows?
+
                     if random.random() > 0.5:
                         sample.final_score = [1.0, 0]
                     else:

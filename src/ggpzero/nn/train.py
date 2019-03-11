@@ -1,4 +1,3 @@
-
 from builtins import super
 
 from ggplib.util import log
@@ -97,14 +96,19 @@ class TrainingLoggerCb(keras_callbacks.Callback):
 class TrainingController(keras_callbacks.Callback):
     ''' custom callback to do nice logging and early stopping '''
 
-    def __init__(self, num_policies):
+    def __init__(self, num_policies,
+                 stop_after_n_epochs_overfit=3,
+                 stop_after_n_epochs_improving=5):
+        self.num_policies = num_policies
+        self.stop_after_n_epochs_overfit = stop_after_n_epochs_overfit
+        self.stop_after_n_epochs_improving = stop_after_n_epochs_improving
+
         self.stop_training = False
         self.at_epoch = 0
 
         self.best = None
         self.best_val_policy_acc = -1
 
-        self.num_policies = num_policies
 
         self.epoch_last_set_at = None
         self.value_loss_diff = -1
@@ -150,24 +154,24 @@ class TrainingController(keras_callbacks.Callback):
         # store best weights as best val_policy_acc
 
         # allow small decrease
-        allow_policy_acc = self.best_val_policy_acc - 0.01
+        allow_acc = self.best_val_policy_acc - 0.001
         if (self.epoch_last_set_at is None or
-            (val_policy_acc > allow_policy_acc and not overfitting)):
+            (val_policy_acc > allow_acc and not overfitting)):
             log.debug("Setting best to last val_policy_acc %.4f" % val_policy_acc)
             self.best = self.model.get_weights()
             self.best_val_policy_acc = max(val_policy_acc, self.best_val_policy_acc)
             self.epoch_last_set_at = epoch
 
         # stop training:
-        if epoch >= 3:
-            if overfitting:
-                log.info("Early stopping... since policy accuracy overfitting")
-                self.stop_training = True
+        if overfitting and self.stop_after_n_epochs_overfit:
+            log.info("Early stopping... since policy accuracy overfitting")
+            self.stop_training = True
 
-            # if things havent got better (XXX hardcoded to 5) - STOP.  We can go on forever without improving.
-            if self.epoch_last_set_at is not None and epoch > self.epoch_last_set_at + 5:
-                log.info("Early stopping... since not improving (disabled)")
-                self.stop_training = True
+        # if things havent got better - STOP.  We can go on forever without improving.
+        if (self.epoch_last_set_at is not None and
+            epoch > self.epoch_last_set_at + self.stop_after_n_epochs_improving):
+            log.info("Early stopping... since not improving (disabled)")
+            self.stop_training = True
 
     def do_train_end(self):
         if self.best:
@@ -202,8 +206,10 @@ class TrainManager(object):
         self.train_config = train_config
         if next_generation_prefix is not None:
             self.next_generation = "%s_%s" % (next_generation_prefix, train_config.next_step)
+            self.next_generation_prefix = next_generation_prefix
         else:
             self.next_generation = "%s_%s" % (train_config.generation_prefix, train_config.next_step)
+            self.next_generation_prefix = train_config.generation_prefix
 
     def get_network(self, nn_model_config, generation_descr):
         # abbreviate, easier on the eyes
@@ -227,16 +233,21 @@ class TrainManager(object):
         nn = None
         retraining = False
         if conf.use_previous:
-            prev_generation = "%s_%s" % (conf.generation_prefix,
-                                         conf.next_step - 1)
+            # default to next_generation_prefix, otherwise use conf.generation_descr
+            candidates = [self.next_generation_prefix]
+            if conf.generation_prefix != self.next_generation_prefix:
+                candidates.append(conf.generation_prefix)
+            for gen in candidates:
+                prev_generation = "%s_%s" % (gen, conf.next_step - 1)
 
-            if man.can_load(conf.game, prev_generation):
-                log.info("Previous generation found: %s" % prev_generation)
-                nn = man.load_network(conf.game, prev_generation)
-                retraining = True
+                if man.can_load(conf.game, prev_generation):
+                    log.info("Previous generation found: %s" % prev_generation)
+                    nn = man.load_network(conf.game, prev_generation)
+                    retraining = True
+                    break
 
-            else:
-                log.warning("No previous generation to use...")
+                else:
+                    log.warning("Previous generation %s not found..." % (prev_generation))
 
         if nn is None:
             nn = man.create_new_network(conf.game, nn_model_config, generation_descr)
@@ -288,6 +299,10 @@ class TrainManager(object):
         # abbreviate, easier on the eyes
         conf = self.train_config
 
+        num_epochs = conf.epochs
+        #if self.train_config.next_step % 77 != 0:
+        #num_epochs = 0
+
         cache = datacache.DataCache(self.transformer, conf.generation_prefix,
                                     do_augment_data=self.do_data_augmentation)
         cache.sync()
@@ -318,7 +333,7 @@ class TrainManager(object):
 
         self.compile_nn(value_weight)
 
-        for i in range(conf.epochs):
+        for i in range(num_epochs):
             if self.controller.stop_training:
                 log.warning("Stop training early via controller")
                 break

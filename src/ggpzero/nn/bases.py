@@ -316,6 +316,8 @@ class GdlBasesTransformer(object):
 
 class GdlBasesTransformer_Draws(GdlBasesTransformer):
     def value_to_array(self, values):
+        assert abs(sum(values) - 1.0) < 0.01
+
         assert len(values) == 2
         if abs(values[0] - 0.5) < 0.01:
             assert abs(values[1] - 0.5) < 0.01
