@@ -1,4 +1,4 @@
-# XXX add support for new config : unique_identifier / number_of_polls_before_dumping_stats / cb
+# XXX add support for new config : number_of_polls_before_dumping_stats / cb
 
 from builtins import super
 
@@ -48,6 +48,9 @@ class Worker(Broker):
             assert isinstance(conf, confs.WorkerConfig)
         else:
             conf = default_conf()
+
+
+        assert conf.unique_identifier != "pleasesetme"
 
         self.conf = conf
         print "CONF", attrutil.pprint(conf)
@@ -146,7 +149,8 @@ class Worker(Broker):
         if self.supervisor is None:
             self.supervisor = cppinterface.Supervisor(self.sm, self.nn,
                                                       batch_size=self.conf.self_play_batch_size,
-                                                      sleep_between_poll=self.conf.sleep_between_poll)
+                                                      sleep_between_poll=self.conf.sleep_between_poll,
+                                                      identifier=self.conf.unique_identifier)
 
             self.supervisor.start_self_play(self.self_play_conf, self.conf.num_workers)
 

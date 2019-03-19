@@ -13,6 +13,7 @@
 #include <statemachine/jointmove.h>
 #include <statemachine/statemachine.h>
 
+#include <string>
 #include <vector>
 
 #include <k273/util.h>
@@ -72,7 +73,8 @@ namespace GGPZero {
     public:
         Supervisor(GGPLib::StateMachineInterface* sm,
                    const GdlBasesTransformer* transformer,
-                   int batch_size);
+                   int batch_size,
+                   std::string identifier);
         ~Supervisor();
 
     private:
@@ -93,6 +95,7 @@ namespace GGPZero {
         GGPLib::StateMachineInterface* sm;
         const GdlBasesTransformer* transformer;
         const int batch_size;
+        const std::string identifier;
 
         int slow_poll_counter;
 

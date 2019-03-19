@@ -10,6 +10,7 @@
 #include <statemachine/statemachine.h>
 
 #include <k273/logging.h>
+#include <k273/strutils.h>
 #include <k273/exception.h>
 
 #include <unistd.h>
@@ -18,10 +19,11 @@ using namespace GGPZero;
 
 Supervisor::Supervisor(GGPLib::StateMachineInterface* sm,
                        const GdlBasesTransformer* transformer,
-                       int batch_size) :
+                       int batch_size, std::string identifier) :
     sm(sm->dupe()),
     transformer(transformer),
     batch_size(batch_size),
+    identifier(identifier),
     slow_poll_counter(0),
     inline_sp_manager(nullptr),
     in_progress_manager(nullptr),
@@ -69,22 +71,23 @@ void Supervisor::createInline(const SelfPlayConfig* config) {
                                                   this->transformer,
                                                   this->batch_size,
                                                   &this->unique_states,
-                                                  "inline");
+                                                  this->identifier + "_inline");
 
     this->inline_sp_manager->startSelfPlayers(config);
 }
 
 void Supervisor::createWorkers(const SelfPlayConfig* config) {
+    int count = this->self_play_workers.size() * 2;
     SelfPlayWorker* spw = new SelfPlayWorker(new SelfPlayManager(this->sm,
                                                                  this->transformer,
                                                                  this->batch_size,
                                                                  &this->unique_states,
-                                                                 "sp0"),
+                                                                 this->identifier + K273::fmtString("_sp%d", count)),
                                              new SelfPlayManager(this->sm,
                                                                  this->transformer,
                                                                  this->batch_size,
                                                                  &this->unique_states,
-                                                                 "sp1"),
+                                                                 this->identifier + K273::fmtString("_sp%d", count + 1)),
                                              config);
     this->self_play_workers.push_back(spw);
 

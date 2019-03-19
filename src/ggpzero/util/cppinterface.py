@@ -173,14 +173,17 @@ class PlayPollerV2(PlayPoller):
 
 
 class Supervisor(PollerBase):
-    def __init__(self, sm, nn, batch_size=1024, sleep_between_poll=-1, workers=None):
+    def __init__(self, sm, nn, batch_size=1024,
+                 sleep_between_poll=-1, workers=None,
+                 identifier=""):
 
         transformer = nn.gdl_bases_transformer
         self.c_transformer = create_c_transformer(transformer)
 
         self.c_supervisor = ggpzero_interface.Supervisor(sm_to_ptr(sm),
                                                          self.c_transformer,
-                                                         batch_size)
+                                                         batch_size,
+                                                         identifier)
         if workers:
             self.c_supervisor.set_num_workers(workers)
 
