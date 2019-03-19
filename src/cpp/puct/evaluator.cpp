@@ -216,13 +216,12 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, int depth) {
         return node->getNodeChild(this->sm->getRoleCount(), 0);
     }
 
-    // XXX this is in temporary testing mode
-    if (depth < 2) {
+    if (depth == 0) {
         this->setDirichletNoise(node);
     }
 
-    float sqrt_node_visits = std::sqrt(node->visits + 1);
-    float prior_score = this->priorScore(node, depth);
+    const float sqrt_node_visits = std::sqrt(node->visits + 1);
+    const float prior_score = this->priorScore(node, depth);
 
     // get best:
     float best_score = -1;

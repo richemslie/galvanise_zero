@@ -75,10 +75,10 @@ void PuctEvaluator::setDirichletNoise(PuctNode* node) {
         dirichlet_noise[ii] /= total_noise;
     }
 
-    // const float noise_pct = this->conf->dirichlet_noise_pct;
-    // ZZZ
+    const float noise_pct = this->conf->dirichlet_noise_pct;
 
-    const float noise_pct = std::max(highest_prob, this->conf->dirichlet_noise_pct);
+    // ZZZ - experiment... try later
+    //const float noise_pct = std::max(highest_prob, this->conf->dirichlet_noise_pct);
 
     float total_policy = 0;
     for (int ii=0; ii<node->num_children; ii++) {
