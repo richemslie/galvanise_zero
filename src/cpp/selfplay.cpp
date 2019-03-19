@@ -229,11 +229,8 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
             this->game_samples.push_back(s);
 
         } else {
-            const int rng_amount = std::max(10, iterations / 3);
-            const int skip_iterations = this->rng.getWithMax(rng_amount);
-
-            //K273::l_verbose("Skipping with %d iterations", skip_iterations);
-
+            const int rng_amount = std::max(8, iterations / 3);
+            const int skip_iterations = std::max(8, (int) this->rng.getWithMax(rng_amount));
             choice = this->pe->onNextMove(skip_iterations);
         }
 
@@ -339,7 +336,7 @@ bool SelfPlay::checkFalsePositive(const std::vector <float>& false_positive_chec
         const float score = false_positive_check_scores[role_index];
 
         // 1.05 -> fixes rounding issues
-        if ((score < resign_probability * 1.05) && final_score > 0.99) {
+        if ((score < resign_probability * 1.05) && final_score > 0.49) {
             K273::l_verbose("False positive resign %.2f, final %.2f",
                             score, final_score);
             return true;
