@@ -57,8 +57,6 @@ void PuctEvaluator::setDirichletNoise(PuctNode* node) {
 
     float total_noise = 0.0f;
     for (int ii=0; ii<node->num_children; ii++) {
-        PuctNodeChild* c = node->getNodeChild(this->sm->getRoleCount(), ii);
-
         const float noise = gamma(this->rng);
         dirichlet_noise[ii] = noise;
         total_noise += noise;
