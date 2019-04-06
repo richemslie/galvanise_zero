@@ -11,7 +11,7 @@ Status
 All games are written in [GDL](https://en.wikipedia.org/wiki/Game_Description_Language) unless otherwise stated.  There is *no* game specific code other than 
 a single python file describing mappings for policy and state (see [here](https://github.com/richemslie/galvanise_zero/issues/1) for more information).
 
-Here are the games that with significant training.
+Games with significant training:
 
 * [breakthrough](https://github.com/richemslie/gzero_data/tree/master/breakthrough)
 * reversi (8 and 10 board sizes)
