@@ -164,6 +164,9 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
                                this->conf->repeat_states_score);
     }
 
+    const bool do_oscillate_sampling = (this->play_full_game &&
+                                        this->conf->oscillate_sampling_pct > 0);
+
     const int iterations = this->conf->sample_iterations;
 
     auto& man = *this->manager->getUniqueStates();
@@ -193,25 +196,23 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
 
         const PuctNodeChild* choice = nullptr;
 
-
         bool do_skip = false;
-        if (man.isUnique(node->getBaseState(), node->game_depth)) {
-            // not atomic, but good enough
-            man.add(node->getBaseState());
+        if (!man.isUnique(node->getBaseState(), node->game_depth)) {
+            this->manager->incrDupes();
+            do_skip = true;
 
+        } else {
             // test whether to honour oscillate_sampling_pct
-            if (this->play_full_game &&
-                this->conf->oscillate_sampling_pct > 0 &&
+            if (do_oscillate_sampling &&
                 this->rng.get() > this->conf->oscillate_sampling_pct) {
                 do_skip = true;
             }
-
-        } else {
-            this->manager->incrDupes();
-            do_skip = true;
         }
 
         if (!do_skip) {
+            // not atomic, but good enough
+            man.add(node->getBaseState());
+
             // run the simulations
             choice = this->pe->onNextMove(iterations);
 
