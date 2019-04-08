@@ -33,17 +33,19 @@ float PuctEvaluator::priorScore(PuctNode* node, int depth) const {
 void PuctEvaluator::setDirichletNoise(PuctNode* node) {
 
     // this->conf->dirichlet_noise_alpha < 0 - off
-    // node->dirichlet_noise_set - means set alreadt for this node
-    // node->num_children - not worth setting
+    // node->dirichlet_noise_set - means set already for this node
+    // node->num_children < 2 - not worth setting
     if (node->dirichlet_noise_set ||
         node->num_children < 2 ||
         this->conf->dirichlet_noise_alpha < 0) {
         return;
     }
 
-    // XXX - try calculating, what I have manually been doing by hand anyway for max board size.
-    // Credit KataGo & LZ0
+    // calculate noise_alpha based on number of children - credit KataGo & LZ0
+    // note this is what I have manually been doing by hand for max number of children
+
     // magic number is 10.83f = 0.03 ∗ 361 - as per AG0 paper
+
     // XXX conf->dirichlet_noise_alpha now deprecated
     const float dirichlet_noise_alpha = 10.83f / node->num_children;
 
@@ -64,7 +66,7 @@ void PuctEvaluator::setDirichletNoise(PuctNode* node) {
         return;
     }
 
-    // normalize:
+    // normalize to a distribution
     for (int ii=0; ii<node->num_children; ii++) {
         dirichlet_noise[ii] /= total_noise;
     }
@@ -75,6 +77,7 @@ void PuctEvaluator::setDirichletNoise(PuctNode* node) {
         noise_pct = 0.25f + this->rng.get() * (noise_pct - 0.25f);
     }
 
+    // replace the policy_prob on the node
     float total_policy = 0;
     for (int ii=0; ii<node->num_children; ii++) {
         PuctNodeChild* c = node->getNodeChild(this->sm->getRoleCount(), ii);
