@@ -32,15 +32,12 @@ float PuctEvaluator::priorScore(PuctNode* node, int depth) const {
 
 void PuctEvaluator::setDirichletNoise(PuctNode* node) {
 
-    if (node->num_children < 2) {
-        return;
-    }
-
-    if (this->conf->dirichlet_noise_alpha < 0) {
-        return;
-    }
-
-    if (node->dirichlet_noise_set) {
+    // this->conf->dirichlet_noise_alpha < 0 - off
+    // node->dirichlet_noise_set - means set alreadt for this node
+    // node->num_children - not worth setting
+    if (node->dirichlet_noise_set ||
+        node->num_children < 2 ||
+        this->conf->dirichlet_noise_alpha < 0) {
         return;
     }
 
@@ -72,7 +69,12 @@ void PuctEvaluator::setDirichletNoise(PuctNode* node) {
         dirichlet_noise[ii] /= total_noise;
     }
 
-    const float noise_pct = this->conf->dirichlet_noise_pct;
+    // variable noise percent between 0.25 and this->conf->dirichlet_noise_pct, of > 0.25 to start with
+    float noise_pct = this->conf->dirichlet_noise_pct;
+    if (noise_pct > 0.25f) {
+        noise_pct = 0.25f + this->rng.get() * (noise_pct - 0.25f);
+    }
+
     float total_policy = 0;
     for (int ii=0; ii<node->num_children; ii++) {
         PuctNodeChild* c = node->getNodeChild(this->sm->getRoleCount(), ii);
