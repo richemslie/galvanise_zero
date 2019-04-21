@@ -17,12 +17,11 @@
 namespace GGPZero::PuctV2 {
 
     struct PathElement {
-        PathElement(PuctNode* node, PuctNodeChild* choice, PuctNodeChild* best, int num_expanded_children);
+        PathElement(PuctNode* node, PuctNodeChild* choice, PuctNodeChild* best);
 
         PuctNode* node;
         PuctNodeChild* choice;
         PuctNodeChild* best;
-        int num_children_expanded;
     };
 
     using Path = std::vector <PathElement>;
@@ -58,7 +57,7 @@ namespace GGPZero::PuctV2 {
 
         int treePlayout();
 
-        void playoutWorker();
+        void playoutWorker(int worker_id);
         void playoutMain(int max_evaluations, double end_time);
         void logDebug(const PuctNodeChild* choice_root);
 

@@ -155,6 +155,8 @@ static GGPZero::PuctV2::PuctConfig* createPuctConfigV2(PyObject* dict) {
 
     config->batch_size = asInt("batch_size");
 
+    config->limit_latch_root = asFloat("limit_latch_root");
+
     std::string choose_method = asString("choose");
     if (choose_method == "choose_top_visits") {
         config->choose = GGPZero::PuctV2::ChooseFn::choose_top_visits;

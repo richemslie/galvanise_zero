@@ -41,6 +41,9 @@ namespace GGPZero::PuctV2 {
         int converge_relaxed;
 
         int batch_size;
+
+        // prevent latching at root %.. < 0 off.
+        float limit_latch_root = -1;
     };
 
 }

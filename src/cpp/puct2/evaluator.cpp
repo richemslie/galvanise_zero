@@ -29,11 +29,10 @@ using namespace GGPZero::PuctV2;
 ///////////////////////////////////////////////////////////////////////////////
 
 PathElement::PathElement(PuctNode* node, PuctNodeChild* choice,
-                         PuctNodeChild* best, int num_children_expanded) :
+                         PuctNodeChild* best) :
     node(node),
     choice(choice),
-    best(best),
-    num_children_expanded(num_children_expanded) {
+    best(best) {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -86,8 +85,9 @@ void PuctEvaluator::updateConf(const PuctConfig* conf) {
                         conf->minimax_backup_ratio,
                         conf->minimax_threshold_visits);
 
-        K273::l_verbose("think %.1f, converged %d, batch_size=%d",
-                        conf->think_time, conf->converge_relaxed, conf->batch_size);
+        K273::l_verbose("limit_latch_root %f, think %.1f, converged %d, batch_size=%d",
+                        conf->limit_latch_root, conf->think_time,
+                        conf->converge_relaxed, conf->batch_size);
     }
 
     this->conf = conf;
@@ -238,7 +238,7 @@ bool PuctEvaluator::converged(int count) const {
                     return true;
                 }
             }
-         }
+        }
 
         return false;
     }
@@ -258,7 +258,7 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
     // nothing to select
     if (node->num_children == 1) {
         PuctNodeChild* child = node->getNodeChild(this->sm->getRoleCount(), 0);
-        path.emplace_back(node, child, child, node->num_children_expanded);
+        path.emplace_back(node, child, child);
         return child;
     }
 
@@ -273,11 +273,13 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
     float best_score = -1;
     PuctNodeChild* best_child = nullptr;
 
-    float best_child_score_actual_score = -1;;
+    float best_child_score_actual_score = -1;
     PuctNodeChild* best_child_score = nullptr;
 
     PuctNodeChild* bad_fallback = nullptr;
+
     PuctNodeChild* best_fallback = nullptr;
+    float best_fallback_score = -1;
 
     int unselectables = 0;
     for (int ii=0; ii<node->num_children; ii++) {
@@ -317,7 +319,7 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
             if (cn->is_finalised) {
                 if (child_score > 0.99) {
                     if (depth > 0) {
-                        path.emplace_back(node, c, c, node->num_children_expanded);
+                        path.emplace_back(node, c, c);
                         return c;
                     }
 
@@ -341,18 +343,6 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
             }
         }
 
-        // XXX add this back in *again*.  Basically in words: at the root node, if we are not
-        // exploring then there isn't any point in doing any search (this is for cases where it
-        // exploits 99% on one child).
-        // XXX hard coded to 70%
-        //if (depth == 0 && this->rng.get() > 0.1) {
-        //    if (c->traversals > 16 &&
-        //        c->traversals > total_traversals * 0.7) {
-        //        best_fallback = c;
-        //        continue;
-        //    }
-        //}
-
         // (more exploration) apply score discount for massive number of inflight visits
         if (c->traversals > 0 && inflight_visits > 0) {
             const double discounted_visits = inflight_visits * this->rng.get() + 0.25;
@@ -365,6 +355,27 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
         c->debug_puct_score = exploration_score;
 
         const double score = child_score + exploration_score;
+
+
+        // XXX add this back in *again*.  Basically in words: at the root node, if we are not
+        // exploring then there isn't any point in doing any search (this is for cases where it
+        // exploits 99% on one child).
+
+        if (this->conf->limit_latch_root > 0 && depth == 0 && this->rng.get() > 0.1) {
+
+            // protection when num_children is low
+            float pct = node->num_children > (1 + 1.0 / this->conf->limit_latch_root) ? this->conf->limit_latch_root : 0.8;
+
+            if (c->traversals > 16 && c->traversals > node->visits * pct) {
+
+                if (best_fallback == nullptr || score > best_fallback_score) {
+                    best_fallback = c;
+                    best_fallback_score = score;
+                }
+
+                continue;
+            }
+        }
 
         if (score > best_score) {
             best_child = c;
@@ -402,7 +413,7 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
     }
 
     if (best_child != nullptr) {
-        path.emplace_back(node, best_child, best_child_score, node->num_children_expanded);
+        path.emplace_back(node, best_child, best_child_score);
     }
 
     return best_child;
@@ -519,8 +530,10 @@ void PuctEvaluator::backPropagate(float* new_scores, const Path& path) {
             // if configured, will minimax
             this->backUpMiniMax(new_scores, cur);
             for (int ii=0; ii<this->sm->getRoleCount(); ii++) {
-                float score = ((cur.node->visits * cur.node->getCurrentScore(ii) + new_scores[ii]) /
-                               (cur.node->visits + 1.0));
+                const float visits = std::min(cur.node->visits, 100000U);
+
+                float score = ((visits * cur.node->getCurrentScore(ii) + new_scores[ii]) /
+                               (visits + 1.0f));
 
                 cur.node->setCurrentScore(ii, score);
             }
@@ -542,7 +555,7 @@ void PuctEvaluator::backPropagate(float* new_scores, const Path& path) {
                 //const float policy_dilute_apply = 0.998;
 
                 // reasonable
-                const float policy_dilute_apply = 0.9995;
+                const float policy_dilute_apply = 0.999;
                 const float policy_dilute_min = 0.01f;
 
                 if (cur.choice->policy_prob > policy_dilute_min) {
@@ -577,8 +590,7 @@ int PuctEvaluator::treePlayout() {
         // End of the road
         // XXX this needs to be different if self play
         if (current->is_finalised) {
-            path.emplace_back(current, nullptr, nullptr,
-                              current->num_children_expanded);
+            path.emplace_back(current, nullptr, nullptr);
             break;
         }
 
@@ -599,7 +611,7 @@ int PuctEvaluator::treePlayout() {
             // select
             if (current->is_finalised || current->num_children > 1) {
                 // why do we add this?  There is no visits! XXX
-                path.emplace_back(current, nullptr, nullptr, current->num_children_expanded);
+                path.emplace_back(current, nullptr, nullptr);
                 break;
             }
         }
@@ -622,21 +634,25 @@ int PuctEvaluator::treePlayout() {
     return path.size();
 }
 
-void PuctEvaluator::playoutWorker() {
+void PuctEvaluator::playoutWorker(int worker_id) {
     // loops until done
     while (this->do_playouts) {
         if (this->root->is_finalised) {
+            K273::l_debug("PuctEvaluator::playoutWorker() this->root->is_finalised - break");
             break;
         }
 
         int depth = this->treePlayout();
         if (depth == 0) {
             K273::l_debug("worker depth == 0");
-
         }
+
         this->stats.playouts_max_depth = std::max(depth, this->stats.playouts_max_depth);
         this->stats.playouts_total_depth += depth;
     }
+
+
+    K273::l_debug("Worker %d done", worker_id);
 }
 
 void PuctEvaluator::playoutMain(int max_evaluations, double end_time) {
@@ -666,6 +682,10 @@ void PuctEvaluator::playoutMain(int max_evaluations, double end_time) {
         return false;
     };
 
+    if (this->root->is_finalised) {
+        K273::l_warning("In playoutMain() and root is finalised");
+    }
+
     int iterations = 0;
     while (true) {
         const int our_role_index = this->root->lead_role_index;
@@ -675,7 +695,12 @@ void PuctEvaluator::playoutMain(int max_evaluations, double end_time) {
             break;
         }
 
-        if (this->root->is_finalised && iterations > 1000) {
+        if (this->number_of_nodes > 2200000) {
+            K273::l_warning("Breaking max nodes");
+            break;
+        }
+
+        if (this->root->is_finalised && iterations > 100) {
             K273::l_warning("Breaking early as finalised");
             break;
         }
@@ -692,7 +717,7 @@ void PuctEvaluator::playoutMain(int max_evaluations, double end_time) {
             if (elapsed(1.0)) {
 
                 if (this->converged(this->conf->converge_relaxed)) {
-                    K273::l_warning("Breaking since converged (relaxed)");
+                    K273::l_warning("Breaking since converged");
                     break;
                 }
 
@@ -702,6 +727,7 @@ void PuctEvaluator::playoutMain(int max_evaluations, double end_time) {
                     break;
                 }
 
+                // XXX this needs to be configurable
                 if (elapsed(2.5)) {
                     K273::l_warning("Breaking - but never converged :(");
                     break;
@@ -719,8 +745,10 @@ void PuctEvaluator::playoutMain(int max_evaluations, double end_time) {
         if (do_report()) {
             const PuctNodeChild* best = this->chooseTopVisits(this->root);
             if (best->to_node != nullptr) {
+                bool const is_converged = this->converged(this->conf->converge_relaxed);
+
                 const int choice = best->move.get(our_role_index);
-                K273::l_info("Evals %d/%d/%d, depth %.2f/%d, n/t: %d/%d, best: %.4f, move: %s",
+                K273::l_info("Evals %d/%d/%d, depth %.2f/%d, n/t: %d/%d, best: %.4f, converged %s:, move: %s",
                              this->stats.num_evaluations,
                              this->stats.num_tree_playouts,
                              this->stats.playouts_finals,
@@ -729,6 +757,7 @@ void PuctEvaluator::playoutMain(int max_evaluations, double end_time) {
                              this->number_of_nodes,
                              this->stats.num_transpositions_attached,
                              best->to_node->getCurrentScore(our_role_index),
+                             is_converged ? "yes" : "no",
                              this->sm->legalToMove(our_role_index, choice));
             }
         }
@@ -898,7 +927,7 @@ const PuctNodeChild* PuctEvaluator::onNextMove(int max_evaluations, double end_t
     // this will be spawned as a coroutine (see addRunnable() below)
     int worker_count = 0;
     auto f = [this, &worker_count]() {
-        this->playoutWorker();
+        this->playoutWorker(worker_count);
         worker_count--;
     };
 

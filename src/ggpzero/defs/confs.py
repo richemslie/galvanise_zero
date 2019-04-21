@@ -86,6 +86,8 @@ class PUCTEvaluatorV2Config(object):
     # batches to GPU.  number of greenlets to run, along with virtual lossesa
     batch_size = attribute(32)
 
+    # experimental limit latching...
+    limit_latch_root = attribute(-1.0)
 
 @register_attrs
 class PUCTPlayerConfig(object):
