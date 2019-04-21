@@ -85,9 +85,9 @@ void PuctEvaluator::updateConf(const PuctConfig* conf) {
                         conf->minimax_backup_ratio,
                         conf->minimax_threshold_visits);
 
-        K273::l_verbose("limit_latch_root %f, think %.1f, converged %d, batch_size=%d",
+        K273::l_verbose("limit_latch_root %f, think %.1f, converged_visits=%d, batch_size=%d",
                         conf->limit_latch_root, conf->think_time,
-                        conf->converge_relaxed, conf->batch_size);
+                        conf->converged_visits, conf->batch_size);
     }
 
     this->conf = conf;
@@ -716,7 +716,7 @@ void PuctEvaluator::playoutMain(int max_evaluations, double end_time) {
 
             if (elapsed(1.0)) {
 
-                if (this->converged(this->conf->converge_relaxed)) {
+                if (this->converged(this->conf->converged_visits)) {
                     K273::l_warning("Breaking since converged");
                     break;
                 }
@@ -745,7 +745,7 @@ void PuctEvaluator::playoutMain(int max_evaluations, double end_time) {
         if (do_report()) {
             const PuctNodeChild* best = this->chooseTopVisits(this->root);
             if (best->to_node != nullptr) {
-                bool const is_converged = this->converged(this->conf->converge_relaxed);
+                bool const is_converged = this->converged(this->conf->converged_visits);
 
                 const int choice = best->move.get(our_role_index);
                 K273::l_info("Evals %d/%d/%d, depth %.2f/%d, n/t: %d/%d, best: %.4f, converged %s:, move: %s",

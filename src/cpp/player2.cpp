@@ -40,9 +40,9 @@ Player::~Player() {
     delete this->scheduler;
 }
 
-void Player::updateConfig(float think_time, int converge_relaxed, bool verbose) {
+void Player::updateConfig(float think_time, int converged_visits, bool verbose) {
     this->config->think_time = think_time;
-    this->config->converge_relaxed = converge_relaxed;
+    this->config->converged_visits = converged_visits;
     this->config->verbose = verbose;
 
     this->evaluator->updateConf(this->config);

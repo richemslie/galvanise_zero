@@ -38,7 +38,7 @@ namespace GGPZero::PuctV2 {
         float top_visits_best_guess_converge_ratio;
 
         float think_time;
-        int converge_relaxed;
+        int converged_visits;
 
         int batch_size;
 

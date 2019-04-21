@@ -50,7 +50,6 @@ class PUCTEvaluatorV2Config(object):
     puct_constant = attribute(0.75)
     puct_constant_root = attribute(2.5)
     puct_multiplier = attribute(1.0)
-    converge_non_relaxed = attribute(1000)
 
     # added to root child policy pct (alpha less than 0 is off)
     dirichlet_noise_pct = attribute(0.25)
@@ -81,7 +80,7 @@ class PUCTEvaluatorV2Config(object):
     top_visits_best_guess_converge_ratio = attribute(0.8)
 
     think_time = attribute(10.0)
-    converge_relaxed = attribute(5000)
+    converged_visits = attribute(5000)
 
     # batches to GPU.  number of greenlets to run, along with virtual lossesa
     batch_size = attribute(32)
