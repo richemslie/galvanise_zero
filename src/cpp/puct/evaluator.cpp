@@ -341,7 +341,7 @@ void PuctEvaluator::playoutLoop(int max_evaluations, double end_time) {
     // we exit in a small finite amount of time
 
     // XXX normally constrained by evaluations anyways
-    int max_iterations = max_evaluations * 100;
+    int max_iterations = max_evaluations * 2;
 
     if (max_evaluations < 0) {
         max_iterations = INT_MAX;
