@@ -360,7 +360,7 @@ void PuctEvaluator::playoutLoop(int max_evaluations, double end_time) {
     while (iterations < max_iterations) {
         if (max_evaluations > 0 && this->evaluations > max_evaluations) {
 
-            if (this->converged(this->root)) {
+            if (this->converged(8)) {
                 break;
 
             } else {
@@ -540,34 +540,6 @@ const PuctNodeChild* PuctEvaluator::onNextMove(int max_evaluations, double end_t
     }
 
     return choice;
-}
-
-bool PuctEvaluator::converged(const PuctNode* node) const {
-    if (node == nullptr) {
-        return true;
-    }
-
-    auto children = PuctNode::sortedChildren(node, this->sm->getRoleCount());
-
-    if (children.size() >= 2) {
-        PuctNode* n0 = children[0]->to_node;
-        PuctNode* n1 = children[1]->to_node;
-        if (n0 != nullptr && n1 != nullptr) {
-            const int role_index = node->lead_role_index;
-
-            if (n0->getCurrentScore(role_index) > n1->getCurrentScore(role_index)) {
-                // hardcode, but it is ok,  Just needs to actually move a little beyond 0.
-                if (n0->visits > n1->visits + 8) {
-                    return true;
-                }
-            }
-
-            return false;
-         }
-
-    }
-
-    return true;
 }
 
 Children PuctEvaluator::getProbabilities(PuctNode* node, float temperature, bool use_policy) {

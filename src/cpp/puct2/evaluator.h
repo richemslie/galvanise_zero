@@ -49,7 +49,6 @@ namespace GGPZero::PuctV2 {
         PuctNode* createNode(PuctNode* parent, const GGPLib::BaseState* state);
         PuctNode* expandChild(PuctNode* parent, PuctNodeChild* child);
 
-        bool converged(int count) const;
         PuctNodeChild* selectChild(PuctNode* node, Path& path);
 
         void backUpMiniMax(float* new_scores, const PathElement& cur);

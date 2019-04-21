@@ -100,7 +100,9 @@ void PuctEvaluator::setPuctConstant(PuctNode* node, int depth) const {
     const float cpuct_base_id = 19652.0f;
     const float puct_constant = depth == 0 ? this->conf->puct_constant_root : this->conf->puct_constant;
 
-    node->puct_constant = std::log((1 + node->visits + cpuct_base_id) / cpuct_base_id);
+    //node->puct_constant = std::log((1 + node->visits + cpuct_base_id) / cpuct_base_id);
+    float multiplier = std::max(1.0, (4.0 - depth) / 1.5);
+    node->puct_constant = multiplier * std::log((1 + node->visits + cpuct_base_id) / cpuct_base_id);
     node->puct_constant += puct_constant;
 }
 
@@ -135,4 +137,27 @@ const PuctNodeChild* PuctEvaluator::choose(const PuctNode* node) {
     }
 
     return choice;
+}
+
+bool PuctEvaluator::converged(int count) const {
+    auto children = PuctNode::sortedChildren(this->root, this->sm->getRoleCount());
+
+    if (children.size() >= 2) {
+        PuctNode* n0 = children[0]->to_node;
+        PuctNode* n1 = children[1]->to_node;
+
+        if (n0 != nullptr && n1 != nullptr) {
+            const int role_index = this->root->lead_role_index;
+
+            if (n0->getCurrentScore(role_index) > n1->getCurrentScore(role_index)) {
+                if (n0->visits > n1->visits + count) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    return true;
 }

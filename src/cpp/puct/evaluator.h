@@ -12,6 +12,10 @@
 #include <vector>
 
 
+// steps:
+// 1. make path same
+// 2. add transpositions
+
 namespace GGPZero {
 
     struct PathElement {
@@ -66,7 +70,6 @@ namespace GGPZero {
         const PuctNodeChild* onNextMove(int max_evaluations, double end_time=-1);
         void applyMove(const GGPLib::JointMove* move);
 
-        bool converged(const PuctNode* node) const;
         const PuctNodeChild* chooseTopVisits(const PuctNode* node) const;
         const PuctNodeChild* chooseTemperature(const PuctNode* node);
 

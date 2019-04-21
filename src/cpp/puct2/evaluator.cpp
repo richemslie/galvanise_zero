@@ -223,29 +223,6 @@ PuctNode* PuctEvaluator::expandChild(PuctNode* parent, PuctNodeChild* child) {
     return child->to_node;
 }
 
-bool PuctEvaluator::converged(int count) const {
-    auto children = PuctNode::sortedChildren(this->root, this->sm->getRoleCount());
-
-    if (children.size() >= 2) {
-        PuctNode* n0 = children[0]->to_node;
-        PuctNode* n1 = children[1]->to_node;
-
-        if (n0 != nullptr && n1 != nullptr) {
-            const int role_index = this->root->lead_role_index;
-
-            if (n0->getCurrentScore(role_index) > n1->getCurrentScore(role_index)) {
-                if (n0->visits > n1->visits + count) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
-    return true;
-}
-
 PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
     ASSERT(!node->isTerminal());
     ASSERT(node->num_children > 0);
