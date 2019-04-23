@@ -14,9 +14,9 @@ a single python file describing mappings for policy and state (see [here](https:
 Games with significant training:
 
 * [breakthrough](https://github.com/richemslie/gzero_data/tree/master/breakthrough)
+* [amazons](https://github.com/richemslie/gzero_data/tree/master/amazons_10x10)
 * reversi (8 and 10 board sizes)
 * hex (11 and 13 board sizes)
-* amazons
 * connect6
 * chess (with no 50 rule)
 * go(baduk) 9x9 (no super ko, statemachine in c++)
