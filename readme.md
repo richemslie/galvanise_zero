@@ -11,7 +11,7 @@ Status
 All games are written in [GDL](https://en.wikipedia.org/wiki/Game_Description_Language) unless otherwise stated.  There is *no* game specific code other than 
 a single python file describing mappings for policy and state (see [here](https://github.com/richemslie/galvanise_zero/issues/1) for more information).
 
-Games with significant training:
+Games/models with significant training:
 
 * [breakthrough](https://github.com/richemslie/gzero_data/tree/master/breakthrough)
 * [amazons](https://github.com/richemslie/gzero_data/tree/master/amazons_10x10)
@@ -28,7 +28,7 @@ Amazons and Breakthrough models were strong enough to win gold medals at ICGA 20
 
 Reversi is also strong relative to humans on LG, yet performs a bit worse than top AB programs (about ntest level 20 the last time I tested).
 
-Hex/Connect6 play around somewhere top human level on LG.
+Hex 13 / Connect6 play around somewhere top human level on LG.
 
 Chess and Baduk 9x9 are reasonably strong for the little time they were trained.  Baduk 9x9 had a rating ~2900 elo on CGOS after 2-3 week of training.  Chess was harder to test due to not having 50 rule, but somewhere about 2200-2600 elo would be a decent guess.
 
