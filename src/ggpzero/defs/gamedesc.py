@@ -455,6 +455,13 @@ class GameSymmetries(object):
                           apply_actions=[ApplySymmetry("move", [1, 3], [2, 4])],
                           do_reflection=True)
 
+    def breakthrough(self):
+        return Symmetries(skip_bases=["control"],
+                          apply_bases=[ApplySymmetry("cellHolds", 1, 2)],
+                          skip_actions=["noop"],
+                          apply_actions=[ApplySymmetry("move", [1, 3], [2, 4])],
+                          do_reflection=True)
+
     def reversi(self):
         return Symmetries(skip_bases=["control"],
                           apply_bases=[ApplySymmetry("cell", 1, 2)],
