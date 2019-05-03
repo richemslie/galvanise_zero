@@ -13,14 +13,15 @@ a single python file describing mappings for policy and state (see [here](https:
 
 Games/models with significant training:
 
+* [hex13](https://github.com/richemslie/gzero_data/tree/master/hexLG13)
 * [connect6](https://github.com/richemslie/gzero_data/tree/master/connect6)
 * [breakthrough](https://github.com/richemslie/gzero_data/tree/master/breakthrough)
 * [amazons](https://github.com/richemslie/gzero_data/tree/master/amazons_10x10)
 * reversi (8 and 10 board sizes)
-* hex (11 and 13 board sizes)
 * chess (with no 50 rule)
 * go(baduk) 9x9 (no super ko, statemachine in c++)
 * international draughts (statemachine in c++)
+* and [more](https://github.com/richemslie/gzero_data)
 
 LG Champion in last attempt @ Amazons, Breakthrough and Hex 13x13 (joint).
 
@@ -35,7 +36,6 @@ Chess and Baduk 9x9 are reasonably strong for the little time they were trained.
 Also, Chess and Connect6 "cheated" as experimented with adding data from historical games
 as well as the self play data.
 
-All the models can (eventually) be found [here](https://github.com/richemslie/gzero_data).
 
 --------------------
 
