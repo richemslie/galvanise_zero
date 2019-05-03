@@ -33,7 +33,7 @@ Hex 13 / Connect6 play around somewhere top human level on LG.
 
 Chess and Baduk 9x9 are reasonably strong for the little time they were trained.  Baduk 9x9 had a rating ~2900 elo on CGOS after 2-3 week of training.  Chess was harder to test due to not having 50 rule, but somewhere about 2200-2600 elo would be a decent guess.
 
-Also, Chess and Connect6 "cheated" as experimented with adding data from historical games
+Also, with Chess I cheated (from zero perspective) as experimented with adding data from historical games
 as well as the self play data.
 
 
