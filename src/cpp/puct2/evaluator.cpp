@@ -239,7 +239,7 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
         return child;
     }
 
-    if (depth < 2) {
+    if (depth == 0) {
         this->setDirichletNoise(node);
     }
 
@@ -627,9 +627,6 @@ void PuctEvaluator::playoutWorker(int worker_id) {
         this->stats.playouts_max_depth = std::max(depth, this->stats.playouts_max_depth);
         this->stats.playouts_total_depth += depth;
     }
-
-
-    K273::l_debug("Worker %d done", worker_id);
 }
 
 void PuctEvaluator::playoutMain(int max_evaluations, double end_time) {
@@ -672,7 +669,7 @@ void PuctEvaluator::playoutMain(int max_evaluations, double end_time) {
             break;
         }
 
-        if (this->number_of_nodes > 2200000) {
+        if (this->number_of_nodes > 3500000) {
             K273::l_warning("Breaking max nodes");
             break;
         }
@@ -900,6 +897,18 @@ const PuctNodeChild* PuctEvaluator::onNextMove(int max_evaluations, double end_t
 
     this->stats.reset();
     this->do_playouts = true;
+
+    // reset root node?  XXX a bunch of arbirtary checks to see if will reset it...
+    if (conf->think_time > 10 && !this->root->dirichlet_noise_set &&
+        !this->root->is_finalised && this->root->visits > 10000) {
+        K273::l_warning("Warning - reseting root node");
+        for (int ii=0; ii<this->root->num_children; ii++) {
+            PuctNodeChild* c = this->root->getNodeChild(this->sm->getRoleCount(), ii);
+            // reset policy_prob
+            c->policy_prob = c->policy_prob_orig;
+            c->traversals = std::min(2U, c->traversals);
+        }
+    }
 
     // this will be spawned as a coroutine (see addRunnable() below)
     int worker_count = 0;

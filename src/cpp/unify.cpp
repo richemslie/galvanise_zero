@@ -77,6 +77,42 @@ void PuctEvaluator::setDirichletNoise(PuctNode* node) {
         noise_pct = 0.25f + this->rng.get() * (noise_pct - 0.25f);
     }
 
+    // reset the policy with orig (with a temp)
+    // new_dist = [x ** temp for x in d]
+
+    if (node->num_children > 6) {
+
+        // safety net
+        for (int ii=0; ii<5; ii++) {
+
+            float max_prob = -1;
+            for (int ii=0; ii<node->num_children; ii++) {
+                PuctNodeChild* c = node->getNodeChild(this->sm->getRoleCount(), ii);
+                max_prob = std::max(max_prob, c->policy_prob);
+            }
+
+            if (max_prob < 0.15) {
+                break;
+            }
+
+            float total_policy = 0;
+
+            // apply temperature
+            const float TEMP = 0.75;
+            for (int ii=0; ii<node->num_children; ii++) {
+                PuctNodeChild* c = node->getNodeChild(this->sm->getRoleCount(), ii);
+                c->policy_prob = std::pow(c->policy_prob, TEMP);
+                total_policy += c->policy_prob;
+            }
+
+            // normalise
+            for (int ii=0; ii<node->num_children; ii++) {
+                PuctNodeChild* c = node->getNodeChild(this->sm->getRoleCount(), ii);
+                c->policy_prob /= total_policy;
+            }
+        }
+    }
+
     // replace the policy_prob on the node
     float total_policy = 0;
     for (int ii=0; ii<node->num_children; ii++) {

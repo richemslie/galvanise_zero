@@ -22,6 +22,8 @@ namespace GGPZero {
 
     struct PuctNodeChild {
         PuctNode* to_node;
+
+        float policy_prob_orig;
         float policy_prob;
         float next_prob;
 

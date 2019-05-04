@@ -112,6 +112,7 @@ static int initialiseChildHelper(PuctNode* node, int role_index, int child_index
             child->to_node = nullptr;
 
             // by default set to 1.0, will be overridden
+            child->policy_prob_orig = 1.0f;
             child->policy_prob = 1.0f;
             child->next_prob = 0.0f;
 
@@ -273,11 +274,12 @@ void PuctNode::dumpNode(const PuctNode* node,
             visits = child->to_node->visits;
         }
 
-        string msg = K273::fmtString("%s %s %d:%s %.2f/%.2f   %s   %.2f/%.2f",
+        string msg = K273::fmtString("%s %s %d:%s %.2f/%.2f/%.2f   %s   %.2f/%.2f",
                                      indent.c_str(),
                                      move.c_str(),
                                      visits,
                                      finalised.c_str(),
+                                     child->policy_prob_orig * 100,
                                      child->policy_prob * 100,
                                      child->next_prob * 100,
                                      score.c_str(),
@@ -350,11 +352,11 @@ void PuctNodeRequest::reply(const GGPZero::ModelResult& result,
     for (int ii=0; ii<node->num_children; ii++) {
         PuctNodeChild* c = node->getNodeChild(role_count, ii);
 
-        c->policy_prob = raw_policy[c->move.get(node->lead_role_index)];
+        c->policy_prob_orig = raw_policy[c->move.get(node->lead_role_index)];
 
         // give each time at least some probability
-        c->policy_prob = std::max(0.001f, c->policy_prob);
-        total_prediction += c->policy_prob;
+        c->policy_prob_orig = std::max(0.001f, c->policy_prob_orig);
+        total_prediction += c->policy_prob_orig;
     }
 
     // XXX well this can't happen (since we set a minimum for each child)
@@ -363,7 +365,8 @@ void PuctNodeRequest::reply(const GGPZero::ModelResult& result,
     // normalise:
     for (int ii=0; ii<node->num_children; ii++) {
         PuctNodeChild* c = node->getNodeChild(role_count, ii);
-        c->policy_prob /= total_prediction;
+        c->policy_prob_orig /= total_prediction;
+        c->policy_prob = c->policy_prob_orig;
     }
 
     for (int ri=0; ri<role_count; ri++) {
@@ -373,6 +376,7 @@ void PuctNodeRequest::reply(const GGPZero::ModelResult& result,
             s += mid;
         }
 
+        // clamp
         if (s > 1.0) {
             s = 1.0f;
 

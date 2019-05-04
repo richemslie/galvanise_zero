@@ -399,37 +399,34 @@ void PuctNodeRequest::reply(const ModelResult& result,
 
         c->policy_prob_orig = raw_policy[c->move.get(node->lead_role_index)];
 
-        if (c->policy_prob_orig < 0.001) {
-            // XXX stats?
-            c->policy_prob_orig = 0.001;
-        }
-
+        // give each time at least some probability
+        c->policy_prob_orig = std::max(0.001f, c->policy_prob_orig);
         total_prediction += c->policy_prob_orig;
     }
 
-    if (total_prediction > std::numeric_limits<float>::min()) {
-        // normalise:
-        for (int ii=0; ii<node->num_children; ii++) {
-            PuctNodeChild* c = node->getNodeChild(role_count, ii);
-            c->policy_prob_orig /= total_prediction;
-            c->policy_prob = c->policy_prob_orig;
-        }
+    // XXX well this can't happen (since we set a minimum for each child)
+    ASSERT(total_prediction > std::numeric_limits<float>::min());
 
-    } else {
-        // well that sucks - absolutely no predictions, just make it uniform then...
-        for (int ii=0; ii<node->num_children; ii++) {
-            PuctNodeChild* c = node->getNodeChild(role_count, ii);
-            c->policy_prob_orig = 1.0 / node->num_children;
-            c->policy_prob = c->policy_prob_orig;
-        }
+    // normalise:
+    for (int ii=0; ii<node->num_children; ii++) {
+        PuctNodeChild* c = node->getNodeChild(role_count, ii);
+        c->policy_prob_orig /= total_prediction;
+        c->policy_prob = c->policy_prob_orig;
     }
 
     for (int ri=0; ri<role_count; ri++) {
-
         float s = result.getReward(ri);
         if (transformer->getNumberRewards() == 3) {
             float mid = result.getReward(2) / 2.0f;
             s += mid;
+        }
+
+        // clamp
+        if (s > 1.0) {
+            s = 1.0f;
+
+        } else if (s < 0.0) {
+            s = 0.0f;
         }
 
         node->setFinalScore(ri, s);
