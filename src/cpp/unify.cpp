@@ -77,42 +77,6 @@ void PuctEvaluator::setDirichletNoise(PuctNode* node) {
         noise_pct = 0.25f + this->rng.get() * (noise_pct - 0.25f);
     }
 
-    // reset the policy with orig (with a temp)
-    // new_dist = [x ** temp for x in d]
-
-    if (node->num_children > 6) {
-
-        // safety net
-        for (int ii=0; ii<5; ii++) {
-
-            float max_prob = -1;
-            for (int ii=0; ii<node->num_children; ii++) {
-                PuctNodeChild* c = node->getNodeChild(this->sm->getRoleCount(), ii);
-                max_prob = std::max(max_prob, c->policy_prob);
-            }
-
-            if (max_prob < 0.15) {
-                break;
-            }
-
-            float total_policy = 0;
-
-            // apply temperature
-            const float TEMP = 0.75;
-            for (int ii=0; ii<node->num_children; ii++) {
-                PuctNodeChild* c = node->getNodeChild(this->sm->getRoleCount(), ii);
-                c->policy_prob = std::pow(c->policy_prob, TEMP);
-                total_policy += c->policy_prob;
-            }
-
-            // normalise
-            for (int ii=0; ii<node->num_children; ii++) {
-                PuctNodeChild* c = node->getNodeChild(this->sm->getRoleCount(), ii);
-                c->policy_prob /= total_policy;
-            }
-        }
-    }
-
     // replace the policy_prob on the node
     float total_policy = 0;
     for (int ii=0; ii<node->num_children; ii++) {
@@ -136,9 +100,7 @@ void PuctEvaluator::setPuctConstant(PuctNode* node, int depth) const {
     const float cpuct_base_id = 19652.0f;
     const float puct_constant = depth == 0 ? this->conf->puct_constant_root : this->conf->puct_constant;
 
-    //node->puct_constant = std::log((1 + node->visits + cpuct_base_id) / cpuct_base_id);
-    float multiplier = std::max(1.0, (4.0 - depth) / 1.5);
-    node->puct_constant = multiplier * std::log((1 + node->visits + cpuct_base_id) / cpuct_base_id);
+    node->puct_constant = std::log((1 + node->visits + cpuct_base_id) / cpuct_base_id);
     node->puct_constant += puct_constant;
 }
 
