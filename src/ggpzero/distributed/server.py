@@ -13,7 +13,10 @@ import sys
 import gzip
 import time
 import shutil
+import random
+
 import json
+from collections import Counter
 
 from twisted.internet import reactor
 
@@ -240,21 +243,29 @@ class ServerBroker(Broker):
             self.checkpoint()
 
     def add_new_samples(self, samples):
-        dupe_count = 0
+        dupe_counts = Counter()
+        dropped_count = 0
+
         for sample in samples:
             state = sample.state
 
             # need to check it isn't a duplicate and drop it
             if state in self.unique_states_set:
-                dupe_count += 1
+                dupe_counts[sample.depth] += 1
+
+                if dupe_counts[sample.depth] > 1:
+                    if random.random() > 2 / dupe_counts[sample.depth]:
+                        dropped_count += 1
+                        continue
+
             else:
                 self.unique_states_set.add(state)
                 self.unique_states.append(state)
 
             self.accumulated_samples.append(sample)
 
-        if dupe_count:
-            log.warning("seen %s duplicate state(s)" % dupe_count)
+        if dupe_counts:
+            log.warning("duplicate: %s, dropped %s" % (dupe_counts, dropped_count))
 
     def on_sample_response(self, worker, msg):
         info = self.workers[worker]

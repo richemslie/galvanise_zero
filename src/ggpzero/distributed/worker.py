@@ -229,7 +229,7 @@ class Worker(Broker):
             transformer = man.get_transformer(game, generation_description)
 
             # create the manager
-            self.trainer = TrainManager(train_config, transformer)
+            self.trainer = TrainManager(train_config, transformer, do_data_augmentation=True)
 
         self.trainer.update_config(train_config)
         self.trainer.get_network(network_model, generation_description)
