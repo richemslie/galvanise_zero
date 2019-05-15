@@ -135,8 +135,8 @@ class NeuralNetwork(object):
                         layer.kernel_regularizer = None
                         rebuild_model = True
 
-                    if l2_loss is not None:
-                        log.verbose("Ignoring applying l2 to %s/%s" % (layer.name, layer))
+                    #if l2_loss is not None:
+                    #    log.verbose("Ignoring applying l2 to %s/%s" % (layer.name, layer))
 
                     continue
 

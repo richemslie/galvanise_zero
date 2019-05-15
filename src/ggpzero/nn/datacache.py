@@ -70,6 +70,9 @@ from ggpzero.nn.manager import get_manager
 from ggpzero.util.state import fast_decode_state
 
 
+DEBUG = False
+
+
 class ElaspedTime(object):
     def __init__(self):
         self.at_time = time.time()
@@ -142,6 +145,7 @@ class Buckets(object):
             if depth < cut_off:
                 return pct
 
+        return -1
 
 class ChunkIndexer(object):
     def __init__(self, buckets, step_summaries):
@@ -155,29 +159,35 @@ class ChunkIndexer(object):
         ''' finds train_levels, validation_level
         where levels is a range is a list of (start, end].
 
-        starting_step: says ignore the first n levels
-        ignore_after_step: says ignore after a step is reached
+        starting_step: says ignore the first n levels (where first level is most recent)
+        ignore_after_step: says ignore after a step is reached (where first level is most recent)
         validation_split: the percentage to allocate to training
         '''
 
         self.train_levels = []
         self.validation_levels = []
 
+        # note: step_summaries : step is increasing from 0
+
         index = 0
         for step, summary in enumerate(self.step_summaries):
+            assert step == summary.step
+
+            # ignore the most recent levels?
             if starting_step is not None and step > starting_step:
                 break
 
+            # ignore the oldest levels?
+            add = True
             if ignore_after_step is not None and step < ignore_after_step:
-                continue
-
-            assert step == summary.step
+                add = False
 
             index_end = index + summary.num_samples
-            validation_start = index + int(summary.num_samples * validation_split)
 
-            self.train_levels.append((index, validation_start))
-            self.validation_levels.append((validation_start, index_end))
+            if add:
+                validation_start = index + int(summary.num_samples * validation_split)
+                self.train_levels.append((step, index, validation_start))
+                self.validation_levels.append((step, validation_start, index_end))
 
             index = index_end
 
@@ -188,7 +198,10 @@ class ChunkIndexer(object):
 
     def create_indices_for_level(self, level_index, validation=False, max_size=-1):
         ''' returns a shuffled list of indices '''
-        start, end = self.validation_levels[level_index] if validation else self.train_levels[level_index]
+        step, start, end = self.validation_levels[level_index] if validation else self.train_levels[level_index]
+        if DEBUG:
+            print "create_indices_for_level", step, start, end
+
         indices = range(start, end)
         random.shuffle(indices)
         if max_size > 0:
@@ -211,10 +224,10 @@ class ChunkIndexer(object):
         '''
 
         # XXX add config option (actually best just an argument here)
-        include_pct = 0.35
+        include_pct = 0.5
 
         levels = self.validation_levels if validation else self.train_levels
-        sizes = [end - start for start, end in levels]
+        sizes = [end - start for _, start, end in levels]
 
         # apply buckets
         bucket_sizes = []
@@ -231,19 +244,18 @@ class ChunkIndexer(object):
         print "sizes1", sizes
 
         if max_size is not None or max_size > 0:
+            # XXX whole thing needs a rewrite...
             if sum(sizes) > max_size:
+                include_sizes = []
+                remaining_sizes = sizes
+
                 if include_all is not None:
-                    assert include_all > 0
-
-                    include_sizes = [int(include_pct * s) for s in sizes[:include_all]]
-                    remaining_sizes = sizes[include_all:]
-
-                    # XXX Need to check isn't smaller than would of been normally.
-                    # XXX whole thing needs a rewrite...
-
-                else:
-                    include_sizes = []
-                    remaining_sizes = sizes
+                    assert include_all == 1, "include_all == 1 ... XXXX only 1 supported"
+                    scale = max_size / float(sum(sizes))
+                    s = sizes[0]
+                    if int(math.ceil(s * scale)) < int(include_pct * s):
+                        include_sizes = [int(include_pct * s) for s in sizes[:include_all]]
+                        remaining_sizes = sizes[include_all:]
 
                 include_total_size = sum(include_sizes)
                 remaining_total_size = sum(remaining_sizes)
@@ -255,11 +267,12 @@ class ChunkIndexer(object):
                     remaining_sizes = [int(math.ceil(s * scale)) for s in remaining_sizes]
 
                     if sum(remaining_sizes) > max_remaining_size:
-                        remaining_sizes[-1] -= sum(remaining_sizes) + - max_remaining_size
+                        remaining_sizes[-1] -= sum(remaining_sizes) - max_remaining_size
 
                         if remaining_sizes[-1] <= 0:
-                            print 'uggh XXX.... FIXME', remaining_sizes[-1]
-                            print "max_size = sum(sizes)", max_size, sum(sizes)
+                            if DEBUG:
+                                print 'uggh XXX.... FIXME', remaining_sizes[-1]
+                                print "max_size = sum(sizes)", max_size, sum(sizes)
                             remaining_sizes.pop(-1)
                             max_size = sum(sizes)
 
@@ -385,7 +398,7 @@ class StatsAccumulator(object):
 class DataCache(object):
     # XXX data_augment_pct to replace do_augment_data
     def __init__(self, transformer, gen_prefix, do_augment_data=False,
-                 data_augment_pct=0.35,
+                 data_augment_pct=1.0,
                  score_draw_as_random_hack=False):
 
         self.transformer = transformer

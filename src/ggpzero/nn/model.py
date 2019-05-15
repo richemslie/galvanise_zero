@@ -177,8 +177,9 @@ def get_network_model(conf, generation_descr):
         # XXX hacks galore (needs to go into config somehow)
         if conf.residual_layers < 0:
             res_layers = [2] * -conf.residual_layers
-            squeeze_excite = False
+            squeeze_excite = True
             dropout = None
+
         else:
             assert conf.residual_layers == 0
             res_layers = [1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1]
@@ -269,15 +270,13 @@ def get_network_model(conf, generation_descr):
         flat = klayers.concatenate([klayers.Flatten()(to_flatten1),
                                     klayers.Flatten()(to_flatten2)])
 
-        hidden = klayers.Dense(512, name="value_hidden")(flat)
-        hidden = act(hidden, 'crelu', name="value_hidden_act")
-
-        # XXX dropout here?
         if conf.dropout_rate_value > 0:
             flat = klayers.Dropout(conf.dropout_rate_value)(flat)
 
+        hidden = klayers.Dense(512, name="value_hidden", activation=activation)(flat)
+
         value_head = klayers.Dense(num_value_heads,
-                                   activation="softmax",
+                                   activation='softmax',
                                    name="value")(hidden)
 
     elif value_v2:
