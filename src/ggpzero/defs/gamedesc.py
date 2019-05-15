@@ -470,6 +470,14 @@ class GameSymmetries(object):
                           do_rotations_90=True,
                           do_reflection=True)
 
+    def reversi_10x10(self):
+        return Symmetries(skip_bases=["control"],
+                          apply_bases=[ApplySymmetry("cell", 1, 2)],
+                          skip_actions=["noop"],
+                          apply_actions=[ApplySymmetry("move", 1, 2)],
+                          do_rotations_90=True,
+                          do_reflection=True)
+
     def connect6(self):
         return Symmetries(skip_bases=["control"],
                           apply_bases=[ApplySymmetry("cell", 1, 2)],
