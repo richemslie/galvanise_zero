@@ -34,7 +34,7 @@ forlorn to use ggp-zero for training without a decent GPU).
 
 .. code-block:: shell
 
-   pip install requirements.txt
+   pip install -r requirements.txt
 
 
 other
