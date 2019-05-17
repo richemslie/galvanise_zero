@@ -72,9 +72,8 @@ void PuctEvaluator::updateConf(const PuctConfig* conf) {
         K273::l_verbose("puct constant %.2f, root: %.2f",
                         conf->puct_constant, conf->puct_constant_root);
 
-        K273::l_verbose("dirichlet_noise (alpha: %.2f, pct: %.2f), fpu_prior_discount: %.2f/%.2f",
-                        conf->dirichlet_noise_alpha, conf->dirichlet_noise_pct,
-                        conf->fpu_prior_discount, conf->fpu_prior_discount_root);
+        K273::l_verbose("dirichlet_noise (pct: %.2f), fpu_prior_discount: %.2f/%.2f",
+                        conf->dirichlet_noise_pct, conf->fpu_prior_discount, conf->fpu_prior_discount_root);
 
         K273::l_verbose("temperature: %.2f, start(%d), stop(%d), incr(%.2f), max(%.2f) scale(%.2f)",
                         conf->temperature, conf->depth_temperature_start, conf->depth_temperature_stop,

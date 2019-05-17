@@ -18,7 +18,6 @@ namespace GGPZero {
         float puct_constant_root;
 
         float dirichlet_noise_pct;
-        float dirichlet_noise_alpha;
 
         ChooseFn choose;
         int max_dump_depth;

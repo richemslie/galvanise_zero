@@ -32,12 +32,12 @@ float PuctEvaluator::priorScore(PuctNode* node, int depth) const {
 
 void PuctEvaluator::setDirichletNoise(PuctNode* node) {
 
-    // this->conf->dirichlet_noise_alpha < 0 - off
+    // this->conf->dirichlet_noise_pct < 0 - off
     // node->dirichlet_noise_set - means set already for this node
     // node->num_children < 2 - not worth setting
     if (node->dirichlet_noise_set ||
         node->num_children < 2 ||
-        this->conf->dirichlet_noise_alpha < 0) {
+        this->conf->dirichlet_noise_pct < 0) {
         return;
     }
 
@@ -46,7 +46,6 @@ void PuctEvaluator::setDirichletNoise(PuctNode* node) {
 
     // magic number is 10.83f = 0.03 ∗ 361 - as per AG0 paper
 
-    // XXX conf->dirichlet_noise_alpha now deprecated
     const float dirichlet_noise_alpha = 10.83f / node->num_children;
 
     std::gamma_distribution<float> gamma(dirichlet_noise_alpha, 1.0f);

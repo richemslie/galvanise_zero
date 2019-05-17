@@ -65,9 +65,8 @@ void PuctEvaluator::updateConf(const PuctConfig* conf) {
         K273::l_verbose("puct_constant: %f, root_expansions_preset_visits: %d",
                         conf->puct_constant, conf->root_expansions_preset_visits);
 
-        K273::l_verbose("dirichlet_noise (alpha: %.2f, pct: %.2f), fpu_prior_discount: %.2f/%.2f",
-                        conf->dirichlet_noise_alpha, conf->dirichlet_noise_pct,
-                        conf->fpu_prior_discount, conf->fpu_prior_discount_root);
+        K273::l_verbose("dirichlet_noise (pct: %.2f), fpu_prior_discount: %.2f/%.2f",
+                        conf->dirichlet_noise_pct, conf->fpu_prior_discount, conf->fpu_prior_discount_root);
 
         K273::l_verbose("choose: %s",
                         (conf->choose == ChooseFn::choose_top_visits) ? "choose_top_visits" : "choose_temperature");
@@ -616,7 +615,7 @@ const PuctNodeChild* PuctEvaluator::chooseTemperature(const PuctNode* node) {
     // subtle: when the visits is very low, we want to use the policy part of the
     // distribution - not the visits.
     Children dist;
-    if (this->conf->dirichlet_noise_alpha < 0 && node->visits < 3) {
+    if (this->conf->dirichlet_noise_pct < 0 && node->visits < 3) {
         dist = this->getProbabilities(this->root, temperature, true);
 
     } else {
