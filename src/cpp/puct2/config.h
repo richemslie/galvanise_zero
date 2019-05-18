@@ -15,7 +15,6 @@ namespace GGPZero::PuctV2 {
         float puct_constant_root;
 
         float dirichlet_noise_pct;
-        float dirichlet_noise_alpha;
 
         ChooseFn choose;
         int max_dump_depth;
@@ -32,7 +31,6 @@ namespace GGPZero::PuctV2 {
 
         // < 0, off
         float minimax_backup_ratio;
-        uint32_t minimax_threshold_visits;
 
         // < 0, off
         float top_visits_best_guess_converge_ratio;
@@ -42,8 +40,8 @@ namespace GGPZero::PuctV2 {
 
         int batch_size;
 
-        // prevent latching at root %.. < 0 off.
-        float limit_latch_root = -1;
+        // extra exploration
+        float extra_uct_exploration;
     };
 
 }

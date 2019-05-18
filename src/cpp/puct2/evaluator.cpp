@@ -79,14 +79,12 @@ void PuctEvaluator::updateConf(const PuctConfig* conf) {
                         conf->temperature, conf->depth_temperature_start, conf->depth_temperature_stop,
                         conf->depth_temperature_max, conf->depth_temperature_increment, conf->random_scale);
 
-        K273::l_verbose("converge_ratio: %.2f, minimax (ratio %.2f, thres %d)",
-                        conf->top_visits_best_guess_converge_ratio,
-                        conf->minimax_backup_ratio,
-                        conf->minimax_threshold_visits);
+        K273::l_verbose("converge_ratio: %.2f, minimax ratio: %.2f, extra_uct_exploration: %f",
+                        conf->top_visits_best_guess_converge_ratio, conf->minimax_backup_ratio,
+                        conf->extra_uct_exploration);
 
-        K273::l_verbose("limit_latch_root %f, think %.1f, converged_visits=%d, batch_size=%d",
-                        conf->limit_latch_root, conf->think_time,
-                        conf->converged_visits, conf->batch_size);
+        K273::l_verbose("think %.1f, converged_visits=%d, batch_size=%d",
+                        conf->think_time, conf->converged_visits, conf->batch_size);
     }
 
     this->conf = conf;
@@ -222,6 +220,32 @@ PuctNode* PuctEvaluator::expandChild(PuctNode* parent, PuctNodeChild* child) {
     return child->to_node;
 }
 
+
+typedef std::vector <PuctNodeChild*> SortedChildren;
+static SortedChildren sortedChildrenSelect(PuctNode* node, int role_count) {
+
+    SortedChildren children;
+    for (int ii=0; ii<node->num_children; ii++) {
+        PuctNodeChild* child = node->getNodeChild(role_count, ii);
+        children.push_back(child);
+    }
+
+    auto f = [node](const PuctNodeChild* a, const PuctNodeChild* b) {
+        float sa = a->to_node == nullptr ? -1 : a->to_node->getCurrentScore(node->lead_role_index);
+        float sb = b->to_node == nullptr ? -1 : b->to_node->getCurrentScore(node->lead_role_index);
+
+        if (sa < 0 && sb < 0) {
+            return a->policy_prob_orig > b->policy_prob_orig;
+        }
+
+        return sa > sb;
+    };
+
+    std::sort(children.begin(), children.end(), f);
+    return children;
+}
+
+
 PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
     ASSERT(!node->isTerminal());
     ASSERT(node->num_children > 0);
@@ -243,7 +267,7 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
     }
 
     float prior_score = this->priorScore(node, depth);
-    const float sqrt_node_visits = std::sqrt(node->visits + 1);
+    const double sqrt_node_visits = std::sqrt(node->visits + 1);
 
     // get best
     float best_score = -1;
@@ -255,11 +279,14 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
     PuctNodeChild* bad_fallback = nullptr;
 
     PuctNodeChild* best_fallback = nullptr;
-    float best_fallback_score = -1;
 
     int unselectables = 0;
-    for (int ii=0; ii<node->num_children; ii++) {
-        PuctNodeChild* c = node->getNodeChild(this->sm->getRoleCount(), ii);
+
+    auto children = sortedChildrenSelect(node, this->sm->getRoleCount());
+
+    int count = 0;
+    for (PuctNodeChild* c : children) {
+        count++;
 
         // skip unselectables
         if (c->unselectable) {
@@ -281,10 +308,13 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
         const double inflight_visits = c->to_node != nullptr ? c->to_node->inflight_visits : 0;
 
         // standard PUCT as per AG0 paper
-        double exploration_score = c->policy_prob * sqrt_node_visits / (traversals + inflight_visits);
+        double exploration_score = node->puct_constant * c->policy_prob * sqrt_node_visits / (traversals + inflight_visits);
 
-        // always base exploration_score on constant
-        exploration_score *= node->puct_constant;
+        // extra exploration for top nodes?  Note minimax_backup_ratio must be set for this.
+        if (this->conf->extra_uct_exploration > 0 && node->visits > 1000 && count < 5) {
+            exploration_score += this->conf->extra_uct_exploration * (std::sqrt(std::log(node->visits + 1) /
+                                                                                (traversals + inflight_visits)));
+        }
 
         if (c->to_node != nullptr) {
             PuctNode* cn = c->to_node;
@@ -299,6 +329,7 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
                         return c;
                     }
 
+                    // XXX do this with 1.05 ??
                     child_score *= 1.0f + node->puct_constant;
 
                 } else if (child_score < 0.01) {
@@ -312,8 +343,9 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
                 }
             }
 
-            // store the best child
-            if (child_score > best_child_score_actual_score) {
+            // store the best child (only if the number of visits is ok)
+            if ((cn->is_finalised || cn->visits > 42) &&
+                child_score > best_child_score_actual_score) {
                 best_child_score_actual_score = child_score;
                 best_child_score = c;
             }
@@ -321,7 +353,7 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
 
         // (more exploration) apply score discount for massive number of inflight visits
         if (c->traversals > 0 && inflight_visits > 0) {
-            const double discounted_visits = inflight_visits * this->rng.get() + 0.25;
+            const double discounted_visits = inflight_visits * (this->rng.get() + 0.5);
             child_score = (child_score * c->traversals) / (c->traversals + discounted_visits);
         }
 
@@ -331,27 +363,6 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
         c->debug_puct_score = exploration_score;
 
         const double score = child_score + exploration_score;
-
-
-        // XXX add this back in *again*.  Basically in words: at the root node, if we are not
-        // exploring then there isn't any point in doing any search (this is for cases where it
-        // exploits 99% on one child).
-
-        if (this->conf->limit_latch_root > 0 && depth == 0 && this->rng.get() > 0.1) {
-
-            // protection when num_children is low
-            float pct = node->num_children > (1 + 1.0 / this->conf->limit_latch_root) ? this->conf->limit_latch_root : 0.8;
-
-            if (c->traversals > 16 && c->traversals > node->visits * pct) {
-
-                if (best_fallback == nullptr || score > best_fallback_score) {
-                    best_fallback = c;
-                    best_fallback_score = score;
-                }
-
-                continue;
-            }
-        }
 
         if (score > best_score) {
             best_child = c;
@@ -416,19 +427,12 @@ void PuctEvaluator::backUpMiniMax(float* new_scores, const PathElement& cur) {
     }
 
     // nothing to do in this case
-    if (cur.node->visits == 0 ||
-        cur.node->visits > this->conf->minimax_threshold_visits) {
+    if (cur.node->visits == 0) {
         return;
     }
 
     PuctNode* best = cur.best->to_node;
     double ratio = this->conf->minimax_backup_ratio;
-
-    // scale the ratio towards zero as it visits approaches this->conf->minimax_required_visits.
-    ratio -= ratio * (cur.node->visits / (double) this->conf->minimax_threshold_visits);
-
-    // clamp to make sure no rounding issues
-    ratio = std::max(std::min(1.0, ratio), 0.0);
 
     for (int ii=0; ii<this->sm->getRoleCount(); ii++) {
         new_scores[ii] = (ratio * best->getCurrentScore(ii) +
@@ -506,7 +510,10 @@ void PuctEvaluator::backPropagate(float* new_scores, const Path& path) {
             // if configured, will minimax
             this->backUpMiniMax(new_scores, cur);
             for (int ii=0; ii<this->sm->getRoleCount(); ii++) {
-                const float visits = std::min(cur.node->visits, 100000U);
+                float visits = cur.node->visits;
+                if (visits > 25000) {
+                    visits = 25000 + 0.1f * (visits - 25000);
+                }
 
                 float score = ((visits * cur.node->getCurrentScore(ii) + new_scores[ii]) /
                                (visits + 1.0f));
@@ -565,6 +572,51 @@ int PuctEvaluator::treePlayout() {
 
         // End of the road
         // XXX this needs to be different if self play
+
+        if (current->isTerminal()) {
+            path.emplace_back(current, nullptr, nullptr);
+            break;
+        }
+
+        bool do_fake_resign = false;
+        if (current->visits > 1000 && current->getCurrentScore(current->lead_role_index) < 0.10) {
+            do_fake_resign = true;
+
+            // ok check all children, if all are under 0.1 - resign (unexpanded, tough luck)
+            for (int ii=0; ii<current->num_children; ii++) {
+                PuctNodeChild* c = current->getNodeChild(this->sm->getRoleCount(), ii);
+                if (c->to_node != nullptr && c->to_node->getCurrentScore(current->lead_role_index) > 0.1) {
+                    do_fake_resign = false;
+                    break;
+                }
+            }
+
+        } else if (current->visits > 20 && current->getCurrentScore(current->lead_role_index) < 0.10) {
+            do_fake_resign = true;
+
+            // ok check all children, if all are under 0.05 - resign (unexpanded, tough luck)
+            for (int ii=0; ii<current->num_children; ii++) {
+                PuctNodeChild* c = current->getNodeChild(this->sm->getRoleCount(), ii);
+                if (c->to_node != nullptr && c->to_node->getCurrentScore(current->lead_role_index) > 0.05) {
+                    do_fake_resign = false;
+                    break;
+                }
+            }
+        }
+
+        if (do_fake_resign) {
+            //K273::l_debug("resign hack");
+            for (int ii=0; ii<this->sm->getRoleCount(); ii++) {
+                if (ii == current->lead_role_index) {
+                    current->setCurrentScore(ii, -0.05);
+                } else {
+                    current->setCurrentScore(ii, 1.05);
+                }
+            }
+
+            current->is_finalised = true;
+        }
+
         if (current->is_finalised) {
             path.emplace_back(current, nullptr, nullptr);
             break;
@@ -668,7 +720,7 @@ void PuctEvaluator::playoutMain(int max_evaluations, double end_time) {
             break;
         }
 
-        if (this->number_of_nodes > 3500000) {
+        if (this->number_of_nodes > 5000000) {
             K273::l_warning("Breaking max nodes");
             break;
         }
