@@ -152,9 +152,9 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
         }
 
         // some of the time actually resign (if we have at least one sample)
-        // note, that this is done every turn, so over n time steps, more likely to actually resign
         if (this->has_resigned && this->game_samples.size() > 1) {
             this->manager->incrResigns();
+            break;
         }
     }
 
