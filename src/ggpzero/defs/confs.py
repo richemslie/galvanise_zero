@@ -16,9 +16,8 @@ class PUCTEvaluatorConfig(object):
 
     puct_constant = attribute(0.85)
 
-    # added to root child policy pct (less than 0 is off)
+    # added to root child policy pct (< 0 is off)
     dirichlet_noise_pct = attribute(0.25)
-    dirichlet_noise_alpha = attribute(0.1)
 
     # looks up method() to use.  one of (choose_top_visits | choose_temperature)
     choose = attribute("choose_top_visits")
@@ -51,9 +50,8 @@ class PUCTEvaluatorV2Config(object):
     puct_constant_root = attribute(2.5)
     puct_multiplier = attribute(1.0)
 
-    # added to root child policy pct (alpha less than 0 is off)
+    # added to root child policy pct (< 0 is off)
     dirichlet_noise_pct = attribute(0.25)
-    dirichlet_noise_alpha = attribute(-1)
 
     # looks up method() to use.  one of (choose_top_visits | choose_temperature)
     choose = attribute("choose_top_visits")
@@ -75,7 +73,6 @@ class PUCTEvaluatorV2Config(object):
     fpu_prior_discount_root = attribute(-1.0)
 
     minimax_backup_ratio = attribute(0.75)
-    minimax_threshold_visits = attribute(200)
 
     top_visits_best_guess_converge_ratio = attribute(0.8)
 
@@ -85,8 +82,9 @@ class PUCTEvaluatorV2Config(object):
     # batches to GPU.  number of greenlets to run, along with virtual lossesa
     batch_size = attribute(32)
 
-    # experimental limit latching...
-    limit_latch_root = attribute(-1.0)
+    # experimental for long running searches: extra_uct_exploration
+    extra_uct_exploration = attribute(-1.0)
+
 
 @register_attrs
 class PUCTPlayerConfig(object):
@@ -106,63 +104,50 @@ class PUCTPlayerConfig(object):
 
 @register_attrs
 class SelfPlayConfig(object):
-    # -1 is off, and defaults to alpha-zero style
-    max_number_of_samples = attribute(4)
+    # In each full game played out will oscillate between using sample_iterations and
+    # n < evals_per_move.  so if set to 25% will take 25% of samples, and 75% will be skipped using
+    # n evals.  XXX this idea is adopted from KataGo and is NOT a full implementation of the
+    # idea there.  This is just the simplest way to introduce concept without changing much code.
+    # < 0, off.
+    oscillate_sampling_pct = attribute(-1)
 
     # temperature for policy
     temperature_for_policy = attribute(1.0)
 
-    # percentage of games to play from beginning to end (using sample_xxx config)
-    # these games a full playouts, and not using expert iteration style play out.
-    play_full_game_pct = attribute(-1)
-
-    # In each full game played out (and not expert iteration style play outs) will oscillate
-    # between using sample_iterations and n < sample_iterations.  so if set to 10% will take 10% of
-    # samples, and 90% will be skipped using n iterations.  XXX this idea is adopted from KataGo
-    # and is NOT a full implementation of the idea there.  This is just the simplest way to
-    # introduce concept without changing much code.  Considered a temporary feature.  < 0, off.
-    oscillate_sampling_pct = attribute(-1)
-
-    # select will get to the point where we start sampling
-    select_puct_config = attribute(default=attr_factory(PUCTEvaluatorConfig))
-    select_iterations = attribute(100)
-
     # sample is the actual sample we take to train for.  The focus is on good policy distribution.
-    sample_puct_config = attribute(default=attr_factory(PUCTEvaluatorConfig))
-    sample_iterations = attribute(800)
+    puct_config = attribute(default=attr_factory(PUCTEvaluatorConfig))
+    evals_per_move = attribute(800)
 
-    # after samples, will play to the end using this config
-    score_puct_config = attribute(default=attr_factory(PUCTEvaluatorConfig))
-    score_iterations = attribute(100)
-
-    # if the probability of losing drops below - then resign
-    # and ignore resignation - and continue to end
+    # resign
     # two levels, resign0 should have more freedom than resign1
     resign0_score_probability = attribute(0.9)
-    resign0_false_positive_retry_percentage = attribute(0.5)
+    resign0_pct = attribute(0.5)
+
     resign1_score_probability = attribute(0.975)
-    resign1_false_positive_retry_percentage = attribute(0.1)
+    resign1_pct = attribute(0.1)
+
+    # run to end after resign - pct -> chance to actually run, score to exit on
+    run_to_end_pct = attribute(0.2)
+    run_to_end_evals = attribute(42)
+    run_to_end_puct_config = attribute(default=attr_factory(PUCTEvaluatorConfig))
+    run_to_end_early_score = attribute(0.01)
+    run_to_end_minimum_game_depth = attribute(30)
 
     # aborts play if play depth exceeds this max_length (-1 off)
     abort_max_length = attribute(-1)
 
-    # lookback to see if states are draw
+    # look back to see if states are draw
     number_repeat_states_draw = attribute(-1)
 
     # score to back prop, to try and avoid repeat states
-    repeat_states_score = attribute(0.45)
-
-    # chance of really resigning.  Will exit collecting.
-    pct_actually_resign = attribute(0.4)
-
-    # run to end (or scoring) - pct -> chance to actually run, score to exit on
-    run_to_end_early_pct = attribute(0.2)
-    run_to_end_early_score = attribute(0.01)
-    run_to_end_minimum_game_depth = attribute(30)
+    repeat_states_score = attribute(0.49)
 
 
 @register_attrs
 class NNModelConfig(object):
+    # XXX residual network type
+    # flag for dropout
+    # 
     role_count = attribute(2)
 
     input_rows = attribute(8)
@@ -175,9 +160,11 @@ class NNModelConfig(object):
 
     value_hidden_size = attribute(256)
 
+    # XXX remove this (only default)
     multiple_policies = attribute(False)
 
-    # the size of policy distribution.  The size of the list will be 1 if not multiple_policies.
+    # the size of policy distribution.
+    # XXX remove comment The size of the list will be 1 if not multiple_policies.
     policy_dist_count = attribute(default=attr_factory(list))
 
     # XXX move to TrainNNConfig, not part of model
@@ -213,11 +200,13 @@ class TrainNNConfig(object):
     compile_strategy = attribute("adam")
     learning_rate = attribute(None)
 
-    # experimental:
+    # XXX better comment
     # list of tuple.  Idea is that at epoch we take a percentage of the samples to train.
     # [(5, 1.0), (10, 0.8), (0, 0.5), (-5, 0.2)]
     # which translates into, take all samples of first 5, 80% of next 10, 50% of next n, and 20% of
     # the last 5.  also assert number of gens is more than sum(abs(k) for k,_ in resample_buckets)
+
+    # XXX rename to replay_buckets
     resample_buckets = attribute(default=attr_factory(list))
 
     # set the maximum size for an epoch.  buckets will be scaled accordingly.
@@ -238,13 +227,13 @@ class WorkerConfig(object):
     # passed into Supervisor, used instead of hard coded value.
     number_of_polls_before_dumping_stats = attribute(1024)
 
-    # use to create SelfPlayManager
+    # use to create SelfPlayManager. 
     unique_identifier = attribute("pleasesetme")
 
-    # slow things down
+    # slow things down (this is to prevent overheating GPU)
     sleep_between_poll = attribute(-1)
 
-    # send back whatever samples we have gather at this - sort of application level keep alive
+    # send back all the samples we have gathered after n seconds - like an application level keep alive
     server_poll_time = attribute(10)
 
     # the minimum number of samples gathered before sending to the server
@@ -253,12 +242,14 @@ class WorkerConfig(object):
     # if this is set to zero, will do inline
     num_workers = attribute(0)
 
+    # ZZZ remove
     # run system commands to get the neural network isn't in data
     run_cmds_if_no_nn = attribute(default=attr_factory(list))
 
     # will exit if there is an update to the config
     exit_on_update_config = attribute(False)
 
+    # XXX remove
     # dont replace the network every new network, instead wait n generations
     replace_network_every_n_gens = attribute(1)
 
@@ -293,5 +284,6 @@ class ServerConfig(object):
     # save the samples every n seconds
     checkpoint_interval = attribute(60.0 * 5)
 
+    # XXX remove
     # this forces the network to be reset to random weights, every n generations
     reset_network_every_n_generations = attribute(-1)
