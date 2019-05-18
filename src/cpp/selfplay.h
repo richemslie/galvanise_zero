@@ -17,34 +17,25 @@ namespace GGPZero {
     class SelfPlayManager;
 
     struct SelfPlayConfig {
-        int max_number_of_samples;
-
-        float play_full_game_pct;
         float oscillate_sampling_pct;
 
         float temperature_for_policy;
 
-        PuctConfig* select_puct_config;
-        int select_iterations;
-
-        PuctConfig* sample_puct_config;
-        int sample_iterations;
-
-        PuctConfig* score_puct_config;
-        int score_iterations;
+        PuctConfig* puct_config;
+        int evals_per_move;
 
         float resign0_score_probability;
-        float resign0_false_positive_retry_percentage;
+        float resign0_pct;
         float resign1_score_probability;
-        float resign1_false_positive_retry_percentage;
+        float resign1_pct;
 
         int abort_max_length;
         int number_repeat_states_draw;
         float repeat_states_score;
 
-        float pct_actually_resign;
-
-        float run_to_end_early_pct;
+        float run_to_end_pct;
+        int run_to_end_evals;
+        PuctConfig* run_to_end_puct_config;
         float run_to_end_early_score;
         int run_to_end_minimum_game_depth;
     };
@@ -57,8 +48,6 @@ namespace GGPZero {
         ~SelfPlay();
 
     private:
-        PuctNode* selectNodeBak();
-        PuctNode* selectNode();
         bool resign(const PuctNode* node);
         PuctNode* collectSamples(PuctNode* node);
         int runToEnd(PuctNode* node, std::vector <float>& final_scores);
@@ -93,8 +82,6 @@ namespace GGPZero {
         bool has_resigned;
         bool can_resign0;
         bool can_resign1;
-        bool play_full_game;
-        bool run_to_end_resigned;
 
         std::vector <float> resign0_false_positive_check_scores;
         std::vector <float> resign1_false_positive_check_scores;

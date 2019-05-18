@@ -128,7 +128,7 @@ void SelfPlayManager::startSelfPlayers(const SelfPlayConfig* config) {
     for (int ii=0; ii<this->batch_size; ii++) {
         // the statemachine is shared between all puctevaluators of this mananger.  Just be careful.
         PuctEvaluator* pe = new PuctEvaluator(this->sm,
-                                              config->select_puct_config,
+                                              config->puct_config,
                                               this->scheduler,
                                               this->transformer);
 

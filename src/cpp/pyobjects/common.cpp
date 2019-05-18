@@ -75,7 +75,6 @@ static PuctConfig* createPuctConfig(PyObject* dict) {
 
     config->root_expansions_preset_visits = asInt("root_expansions_preset_visits");
     config->dirichlet_noise_pct = asFloat("dirichlet_noise_pct");
-    config->dirichlet_noise_alpha = asFloat("dirichlet_noise_alpha");
     config->max_dump_depth = asInt("max_dump_depth");
 
     config->random_scale = asFloat("random_scale");
@@ -132,7 +131,6 @@ static GGPZero::PuctV2::PuctConfig* createPuctConfigV2(PyObject* dict) {
     config->puct_constant_root = asFloat("puct_constant_root");
 
     config->dirichlet_noise_pct = asFloat("dirichlet_noise_pct");
-    config->dirichlet_noise_alpha = asFloat("dirichlet_noise_alpha");
     config->max_dump_depth = asInt("max_dump_depth");
 
     config->random_scale = asFloat("random_scale");
@@ -146,7 +144,6 @@ static GGPZero::PuctV2::PuctConfig* createPuctConfigV2(PyObject* dict) {
     config->fpu_prior_discount_root = asFloat("fpu_prior_discount_root");
 
     config->minimax_backup_ratio = asFloat("minimax_backup_ratio");
-    config->minimax_threshold_visits = asInt("minimax_threshold_visits");
 
     config->top_visits_best_guess_converge_ratio = asFloat("top_visits_best_guess_converge_ratio");
 
@@ -155,7 +152,7 @@ static GGPZero::PuctV2::PuctConfig* createPuctConfigV2(PyObject* dict) {
 
     config->batch_size = asInt("batch_size");
 
-    config->limit_latch_root = asFloat("limit_latch_root");
+    config->extra_uct_exploration = asFloat("extra_uct_exploration");
 
     std::string choose_method = asString("choose");
     if (choose_method == "choose_top_visits") {
@@ -192,39 +189,30 @@ static SelfPlayConfig* createSelfPlayConfig(PyObject* dict) {
         return borrowed;
     };
 
-    config->max_number_of_samples = asInt("max_number_of_samples");
-    config->play_full_game_pct = asFloat("play_full_game_pct");
     config->oscillate_sampling_pct = asFloat("oscillate_sampling_pct");
-
     config->temperature_for_policy = asFloat("temperature_for_policy");
 
+    config->puct_config = ::createPuctConfig(asDict("puct_config"));
+    config->evals_per_move = asInt("evals_per_move");
+
     config->resign0_score_probability = asFloat("resign0_score_probability");
-    config->resign0_false_positive_retry_percentage = asFloat("resign0_false_positive_retry_percentage");
+    config->resign0_pct = asFloat("resign0_pct");
 
     config->resign1_score_probability = asFloat("resign1_score_probability");
-    config->resign1_false_positive_retry_percentage = asFloat("resign1_false_positive_retry_percentage");
+    config->resign1_pct = asFloat("resign1_pct");
 
-    config->select_puct_config = ::createPuctConfig(asDict("select_puct_config"));
-    config->select_iterations = asInt("select_iterations");
-
-    config->sample_puct_config = ::createPuctConfig(asDict("sample_puct_config"));
-    config->sample_iterations = asInt("sample_iterations");
-
-    config->score_puct_config = ::createPuctConfig(asDict("score_puct_config"));
-    config->score_iterations = asInt("score_iterations");
+    config->run_to_end_pct = asFloat("run_to_end_pct");
+    config->run_to_end_evals = asInt("run_to_end_evals");
+    config->run_to_end_puct_config = ::createPuctConfig(asDict("run_to_end_puct_config"));
+    config->run_to_end_early_score = asFloat("run_to_end_early_score");
+    config->run_to_end_minimum_game_depth = asInt("run_to_end_minimum_game_depth");
 
     config->abort_max_length = asInt("abort_max_length");
     config->number_repeat_states_draw = asInt("number_repeat_states_draw");
     config->repeat_states_score = asFloat("repeat_states_score");
 
-    config->pct_actually_resign = asFloat("pct_actually_resign");
-    config->run_to_end_early_pct = asFloat("run_to_end_early_pct");
-    config->run_to_end_early_score = asFloat("run_to_end_early_score");
-    config->run_to_end_minimum_game_depth = asInt("run_to_end_minimum_game_depth");
-
     return config;
 }
-
 
 template <typename T>
 static PyObject* doPoll(T* parent_caller, PyObject* args) {
