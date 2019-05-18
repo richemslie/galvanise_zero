@@ -413,8 +413,6 @@ PuctNode* PuctEvaluator::fastApplyMove(const PuctNodeChild* next) {
     ASSERT(this->initial_root != nullptr);
     ASSERT(this->root != nullptr);
 
-    this->all_chained_nodes.push_back(this->root);
-
     PuctNode* new_root = nullptr;
     for (int ii=0; ii<this->root->num_children; ii++) {
         PuctNodeChild* c = this->root->getNodeChild(this->sm->getRoleCount(), ii);
@@ -488,7 +486,6 @@ void PuctEvaluator::reset(int game_depth) {
 
     // these dont own the memory, so can just clear
     this->moves.clear();
-    this->all_chained_nodes.clear();
 
     // this is the only place we set game_depth
     this->game_depth = game_depth;
@@ -689,10 +686,4 @@ void PuctEvaluator::logDebug(const PuctNodeChild* choice_root) {
 
         cur = next_choice->to_node;
     }
-}
-
-PuctNode* PuctEvaluator::jumpRoot(int depth) {
-    ASSERT(depth >=0 && depth < (int) this->all_chained_nodes.size());
-    this->root = this->all_chained_nodes[depth];
-    return this->root;
 }

@@ -55,8 +55,8 @@ namespace GGPZero {
             this->number_early_run_to_ends++;
         }
 
-        void incrActualResigns() {
-            this->number_actual_resigns++;
+        void incrResigns() {
+            this->number_resigns++;
         }
 
         void incrAbortsGameLength() {
@@ -108,7 +108,7 @@ namespace GGPZero {
         int false_positive_resigns0;
         int false_positive_resigns1;
         int number_early_run_to_ends;
-        int number_actual_resigns;
+        int number_resigns;
         int number_aborts_game_length;
     };
 }

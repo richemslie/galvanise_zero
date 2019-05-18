@@ -77,8 +77,6 @@ namespace GGPZero {
 
         void logDebug(const PuctNodeChild* choice_root);
 
-        PuctNode* jumpRoot(int depth);
-
         int nodeCount() const {
             return this->number_of_nodes;
         }
@@ -104,7 +102,6 @@ namespace GGPZero {
         PuctNode* initial_root;
 
         // not const PuctNodeChild, as we may need to fix tree
-        std::vector <PuctNode*> all_chained_nodes;
         std::vector <PuctNodeChild*> moves;
 
         // root for evaluation

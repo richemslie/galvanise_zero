@@ -154,7 +154,7 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
         // some of the time actually resign (if we have at least one sample)
         // note, that this is done every turn, so over n time steps, more likely to actually resign
         if (this->has_resigned && this->game_samples.size() > 1) {
-            this->manager->incrActualResigns();
+            this->manager->incrResigns();
         }
     }
 
@@ -307,6 +307,9 @@ void SelfPlay::playOnce() {
 
     this->resign0_false_positive_check_scores.clear();
     this->resign1_false_positive_check_scores.clear();
+
+    // reset the puct evaluator and establish root
+    this->pe->reset(0);
 
     // Initial node
     PuctNode* node = this->pe->establishRoot(this->initial_state);

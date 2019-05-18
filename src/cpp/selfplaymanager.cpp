@@ -31,7 +31,7 @@ SelfPlayManager::SelfPlayManager(GGPLib::StateMachineInterface* sm,
     false_positive_resigns0(0),
     false_positive_resigns1(0),
     number_early_run_to_ends(0),
-    number_actual_resigns(0),
+    number_resigns(0),
     number_aborts_game_length(0) {
 
     this->scheduler = new NetworkScheduler(this->transformer, this->batch_size);
@@ -183,9 +183,9 @@ void SelfPlayManager::reportAndResetStats() {
         this->number_early_run_to_ends = 0;
     }
 
-    if (this->number_actual_resigns) {
-        K273::l_info("Number of actual resigns %d", this->number_actual_resigns);
-        this->number_actual_resigns = 0;
+    if (this->number_resigns) {
+        K273::l_info("Number of resigns %d", this->number_resigns);
+        this->number_resigns = 0;
     }
 
     if (this->number_aborts_game_length) {
