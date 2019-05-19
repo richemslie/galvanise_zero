@@ -217,12 +217,6 @@ class TrainManager(object):
 
         attrutil.pprint(nn_model_config)
 
-        # ZZZ XXX hack in for now
-        self.l2_loss = None
-        if nn_model_config.l2_regularisation:
-            assert isinstance(nn_model_config.l2_regularisation, float)
-            self.l2_loss = nn_model_config.l2_regularisation
-
         man = get_manager()
         if man.can_load(conf.game, self.next_generation):
             msg = "Generation already exists %s / %s" % (conf.game, self.next_generation)
@@ -292,7 +286,7 @@ class TrainManager(object):
         self.nn.compile(self.train_config.compile_strategy,
                         self.train_config.learning_rate,
                         value_weight,
-                        l2_loss=self.l2_loss)
+                        self.train_config.l2_regularisation)
 
     def do_epochs(self, num_epochs_include_all=-1):
 
@@ -300,8 +294,6 @@ class TrainManager(object):
         conf = self.train_config
 
         num_epochs = conf.epochs
-        #if self.train_config.next_step % 77 != 0:
-        #num_epochs = 0
 
         cache = datacache.DataCache(self.transformer, conf.generation_prefix,
                                     do_augment_data=self.do_data_augmentation)
