@@ -1,5 +1,7 @@
 from builtins import super
 
+from datetime import datetime
+
 from ggplib.util import log
 from ggplib.db import lookup
 
@@ -27,6 +29,8 @@ class TrainingLoggerCb(keras_callbacks.Callback):
         self.at_epoch = 0
         self.num_epochs = num_epochs
         self.batch_size = batch_size
+        self.last_losses_str = "not set"
+        self.last_val_losses_str = "not set"
 
     def on_batch_begin(self, batch, logs=None):
         if self.seen < self.target:
@@ -71,8 +75,10 @@ class TrainingLoggerCb(keras_callbacks.Callback):
         loss_names = [n for n in logs.keys() if 'loss' in n and 'val_' not in n]
         val_loss_names = [n for n in logs.keys() if 'loss' in n and 'val_' in n]
 
-        log.info(str_by_name(loss_names, 4))
-        log.info(str_by_name(val_loss_names, 4))
+        self.last_losses_str = str_by_name(loss_names, 4)
+        self.last_val_losses_str = str_by_name(val_loss_names, 4)
+        log.info(self.last_losses_str)
+        log.info(self.last_val_losses_str)
 
         # accuracy:
         for output in "policy value".split():
@@ -109,9 +115,11 @@ class TrainingController(keras_callbacks.Callback):
         self.best = None
         self.best_val_policy_acc = -1
 
-
         self.epoch_last_set_at = None
         self.value_loss_diff = -1
+
+        self.last_policy_accuracy = "not set"
+        self.last_value_accuracy = "not set"
 
     def policy_acc(self, logs):
         if self.num_policies == 1:
@@ -146,7 +154,10 @@ class TrainingController(keras_callbacks.Callback):
         # deals with more than one head
         policy_acc, val_policy_acc = self.policy_acc(logs)
 
-        log.debug("combined policy accuracy %.4f/%.4f" % (policy_acc, val_policy_acc))
+        self.last_policy_accuracy = "combined policy accuracy %.4f/%.4f" % (policy_acc, val_policy_acc)
+        log.debug(self.last_policy_accuracy)
+
+        self.last_value_accuracy = "score accuracy %.4f / %.4f" % (logs["value_acc"], logs["val_value_acc"])
 
         # are we overitting?
         overfitting = policy_acc - 0.02 > val_policy_acc
@@ -286,7 +297,7 @@ class TrainManager(object):
         self.nn.compile(self.train_config.compile_strategy,
                         self.train_config.learning_rate,
                         value_weight,
-                        self.train_config.l2_regularisation)
+                        l2_loss=self.train_config.l2_regularisation)
 
     def do_epochs(self, num_epochs_include_all=-1):
 
@@ -357,9 +368,16 @@ class TrainManager(object):
 
         self.controller.do_train_end()
 
-    def save(self):
-        # XXX set generation attributes
+        # update GenerationDesc
+        desc = self.nn.generation_descr
+        desc.date_created = datetime.now().strftime("%Y/%m/%d %H:%M")
 
+        desc.trained_losses = training_logger.last_losses_str
+        desc.trained_validation_losses = training_logger.last_val_losses_str
+        desc.trained_policy_accuracy = self.controller.last_policy_accuracy
+        desc.trained_value_accuracy = self.controller.last_value_accuracy
+
+    def save(self):
         man = get_manager()
 
         man.save_network(self.nn, generation_name=self.next_generation)
