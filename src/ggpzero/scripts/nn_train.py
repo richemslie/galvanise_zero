@@ -22,7 +22,7 @@ def get_train_config(game, gen_prefix, next_step, starting_step):
     config.overwrite_existing = False
     config.use_previous = True
     config.validation_split = 0.90000
-    config.resample_buckets = [[100, 1.0], [-1, 0.8]]
+    config.replay_buffer_buckets = [[100, 1.0], [-1, 0.8]]
     config.max_epoch_size = 1048576
 
     return config
@@ -30,9 +30,7 @@ def get_train_config(game, gen_prefix, next_step, starting_step):
 
 def get_nn_model(game, transformer, size="small"):
     config = templates.nn_model_config_template(game, size, transformer)
-    assert config.multiple_policies
     assert config.cnn_kernel_size == 3
-    assert not config.l2_regularisation
 
     # v1
     # config.cnn_filter_size = 64

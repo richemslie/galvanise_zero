@@ -99,8 +99,8 @@ def residual_block_v2(filter_size, kernel_size, num_convs,
         return act(x, activation, prefix + "act_%s" % step)
 
     def se_block(in_block, ratio=4):
-        # XXX code modified:
-        # from https://github.com/titu1994/keras-squeeze-excite-network
+        # code modified from:
+        # https://github.com/titu1994/keras-squeeze-excite-network
         assert is_channels_first()
 
         x = klayers.GlobalAveragePooling2D(name=prefix + "se_average")(in_block)
@@ -166,46 +166,32 @@ def get_network_model(conf, generation_descr):
                                             conf.input_channels),
                                      name="inputs_board")
 
-    # XXX lots of config abuse:
-    v2 = conf.residual_layers <= 0
-    if v2:
+    # choose between resnet_v2 and resnet_v1
+    if conf.resnet_v2:
         layer = klayers.Conv2D(conf.cnn_filter_size, 1,
                                padding="same",
                                use_bias=False,
                                name='initial-conv')(inputs_board)
 
-        # XXX hacks galore (needs to go into config somehow)
-        if conf.residual_layers < 0:
-            res_layers = [2] * -conf.residual_layers
+        if conf.squeeze_excite_layers:
             squeeze_excite = True
             dropout = None
-
         else:
-            assert conf.residual_layers == 0
-            res_layers = [1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1]
-            squeeze_excite = True
-            dropout = 0.25
+            squeeze_excite = False
+            dropout = 0.2
 
-        for i, c in enumerate(res_layers):
-            if c == 2:
-                layer = residual_block_v2(conf.cnn_filter_size,
-                                          conf.cnn_kernel_size,
-                                          c,
-                                          prefix="ResLayer_%s_" % i,
-                                          squeeze_excite=squeeze_excite,
-                                          dropout=None,
-                                          activation=activation)(layer)
-            else:
-                layer = residual_block_v2(conf.cnn_filter_size,
-                                          conf.cnn_kernel_size,
-                                          c,
-                                          prefix="ResLayer_%s_" % i,
-                                          squeeze_excite=False,
-                                          dropout=0.25,
-                                          activation=activation)(layer)
+        for i in range(conf.residual_layers):
+            layer = residual_block_v2(conf.cnn_filter_size,
+                                      conf.cnn_kernel_size,
+                                      2,
+                                      prefix="ResLayer_%s_" % i,
+                                      squeeze_excite=squeeze_excite,
+                                      dropout=dropout,
+                                      activation=activation)(layer)
 
     else:
         # AG0 way:
+        assert not conf.squeeze_excite_layers
 
         # initial conv2d/Resnet on cords
         layer = conv2d_block(conf.cnn_filter_size, conf.cnn_kernel_size,
@@ -223,7 +209,6 @@ def get_network_model(conf, generation_descr):
     # policy
     ########
     # similar to AG0, but with multiple policy heads
-    assert conf.multiple_policies
     number_of_policies = conf.role_count
     assert number_of_policies == len(conf.policy_dist_count)
 
@@ -249,16 +234,13 @@ def get_network_model(conf, generation_descr):
 
     # value
     #######
-    # XXX config abuse:
 
     if generation_descr.draw_head:
         num_value_heads = 3
     else:
         num_value_heads = 2
 
-    value_v3 = conf.value_hidden_size == 0
-    value_v2 = conf.value_hidden_size < 0
-    if value_v3:
+    if conf.global_pooling_value:
         x = klayers.GlobalAveragePooling2D(name="value_average")(layer)
         to_flatten1 = klayers.Reshape((1, 1, conf.cnn_filter_size), name="value_reshape")(x)
         to_flatten2 = conv2d_block(1, 1,
@@ -279,32 +261,6 @@ def get_network_model(conf, generation_descr):
                                    activation='softmax',
                                    name="value")(hidden)
 
-    elif value_v2:
-        assert conf.input_columns == conf.input_rows
-        output_layer = layer
-        dims = conf.input_columns
-        while dims > 5:
-            if dims % 2 == 1:
-                output_layer = klayers.AveragePooling2D(4, 1)(output_layer)
-                dims -= 3
-            else:
-                output_layer = klayers.AveragePooling2D(2, 2)(output_layer)
-                dims /= 2
-
-        # XXX 16 - hardcoded
-        to_flatten = klayers.Conv2D(16, 1,
-                                    name='to_flatten_value_head',
-                                    padding='valid',
-                                    activation=activation)(output_layer)
-
-        if conf.dropout_rate_value > 0:
-            to_flatten = klayers.Dropout(conf.dropout_rate_value)(to_flatten)
-
-        flat = klayers.Flatten()(to_flatten)
-
-        value_head = klayers.Dense(num_value_heads,
-                                   activation="sigmoid", name="value")(flat)
-
     else:
         # old way, as per AG0
         to_flatten = conv2d_block(1, 1,
@@ -313,11 +269,11 @@ def get_network_model(conf, generation_descr):
                                   activation=activation)(layer)
         flat = klayers.Flatten()(to_flatten)
 
+        if conf.dropout_rate_value > 0:
+            flat = klayers.Dropout(conf.dropout_rate_value)(flat)
+
         hidden = klayers.Dense(conf.value_hidden_size, name="value_hidden_layer",
                                activation="relu")(flat)
-
-        if conf.dropout_rate_value > 0:
-            hidden = klayers.Dropout(conf.dropout_rate_value)(hidden)
 
         value_head = klayers.Dense(num_value_heads,
                                    activation="sigmoid", name="value")(hidden)

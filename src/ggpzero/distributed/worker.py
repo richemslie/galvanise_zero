@@ -1,5 +1,3 @@
-# XXX add support for new config : number_of_polls_before_dumping_stats / cb
-
 from builtins import super
 
 import os
@@ -72,8 +70,6 @@ class Worker(Broker):
         # will be created on demand
         self.trainer = None
 
-        self.cmds_running = []
-
         if False and self.conf.callback:
             fn_py_path = self.conf.callback
             mod_name, func_name = fn_py_path.rsplit('.', 1)
@@ -127,17 +123,7 @@ class Worker(Broker):
             for l in traceback.format_exc().splitlines():
                 log.error(l)
 
-            self.cmds_running = runprocs.RunCmds(self.conf.run_post_training_cmds,
-                                                 cb_on_completion=self.finished_cmds_running,
-                                                 max_time=180.0)
-            self.cmds_running.spawn()
-
         return msgs.Ok("configured")
-
-    def finished_cmds_running(self):
-        self.cmds_running = None
-        log.info("commands done")
-        self.configure_self_play()
 
     def configure_self_play(self):
         assert self.self_play_conf is not None

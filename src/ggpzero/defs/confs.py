@@ -48,7 +48,6 @@ class PUCTEvaluatorV2Config(object):
 
     puct_constant = attribute(0.75)
     puct_constant_root = attribute(2.5)
-    puct_multiplier = attribute(1.0)
 
     # added to root child policy pct (< 0 is off)
     dirichlet_noise_pct = attribute(0.25)
@@ -104,12 +103,11 @@ class PUCTPlayerConfig(object):
 
 @register_attrs
 class SelfPlayConfig(object):
-    # In each full game played out will oscillate between using sample_iterations and
-    # n < evals_per_move.  so if set to 25% will take 25% of samples, and 75% will be skipped using
-    # n evals.  XXX this idea is adopted from KataGo and is NOT a full implementation of the
-    # idea there.  This is just the simplest way to introduce concept without changing much code.
-    # < 0, off.
-    oscillate_sampling_pct = attribute(-1)
+    # In each full game played out will oscillate between using sample_iterations and n <
+    # evals_per_move.  so if set to 25% will take 25% of samples, and 75% will be skipped using n
+    # evals.  This idea is adopted from KataGo and is NOT a full implementation of the idea there.
+    # This is just the simplest way to introduce concept without changing much code.  < 0, off.
+    oscillate_sampling_pct = attribute(0.25)
 
     # temperature for policy
     temperature_for_policy = attribute(1.0)
@@ -145,9 +143,6 @@ class SelfPlayConfig(object):
 
 @register_attrs
 class NNModelConfig(object):
-    # XXX residual network type
-    # flag for dropout
-    # 
     role_count = attribute(2)
 
     input_rows = attribute(8)
@@ -160,21 +155,17 @@ class NNModelConfig(object):
 
     value_hidden_size = attribute(256)
 
-    # XXX remove this (only default)
-    multiple_policies = attribute(False)
-
     # the size of policy distribution.
-    # XXX remove comment The size of the list will be 1 if not multiple_policies.
     policy_dist_count = attribute(default=attr_factory(list))
-
-    # XXX move to TrainNNConfig, not part of model
-    l2_regularisation = attribute(0.0001)
 
     # < 0 - no dropout
     dropout_rate_policy = attribute(0.333)
     dropout_rate_value = attribute(0.5)
 
     leaky_relu = attribute(False)
+    squeeze_excite_layers = attribute(False)
+    resnet_v2 = attribute(False)
+    global_pooling_value = attribute(False)
 
 
 @register_attrs
@@ -197,22 +188,25 @@ class TrainNNConfig(object):
     starting_step = attribute(0)
 
     # one of adam / amsgrad/ SGD
-    compile_strategy = attribute("adam")
-    learning_rate = attribute(None)
+    compile_strategy = attribute("SGD")
+    learning_rate = attribute(0.03)
+    l2_regularisation = attribute(0.0001)
 
-    # XXX better comment
-    # list of tuple.  Idea is that at epoch we take a percentage of the samples to train.
-    # [(5, 1.0), (10, 0.8), (0, 0.5), (-5, 0.2)]
-    # which translates into, take all samples of first 5, 80% of next 10, 50% of next n, and 20% of
-    # the last 5.  also assert number of gens is more than sum(abs(k) for k,_ in resample_buckets)
+    # list of tuple.  This is the replay buffer.
 
-    # XXX rename to replay_buckets
+    # [(5, 1.0), (10, 0.8)]
+    # Will take the first 5 generations with all data and 80% of the next 10 generations.  Every generation after is ignored.
+
+    # [(-1, 1.0)]
+    # Will take all generations with 100% data.
+
     resample_buckets = attribute(default=attr_factory(list))
 
     # set the maximum size for an epoch.  buckets will be scaled accordingly.
     max_epoch_size = attribute(-1)
 
-    # set the initial weight before for the first epoch between training
+    # set the initial weight before for the first epoch between training on the next epoch the
+    # value weight will automatically adjust based on whether overfitting occurs
     initial_value_weight = attribute(1.0)
 
 
@@ -227,30 +221,27 @@ class WorkerConfig(object):
     # passed into Supervisor, used instead of hard coded value.
     number_of_polls_before_dumping_stats = attribute(1024)
 
-    # use to create SelfPlayManager. 
+    # use to create SelfPlayManager.
     unique_identifier = attribute("pleasesetme")
 
-    # slow things down (this is to prevent overheating GPU)
+    # number of threads to use during self play.  if this is set to zero, will do inline (no threads).
+    num_workers = attribute(0)
+
+    # slow things down (this is to prevent overheating GPU) [only if inline, ie num_workers == 0]
     sleep_between_poll = attribute(-1)
 
-    # send back all the samples we have gathered after n seconds - like an application level keep alive
+    # send back all the samples we have gathered after n seconds -
+    # can also act like an application level keep alive
     server_poll_time = attribute(10)
 
     # the minimum number of samples gathered before sending to the server
     min_num_samples = attribute(128)
 
-    # if this is set to zero, will do inline
-    num_workers = attribute(0)
-
-    # ZZZ remove
-    # run system commands to get the neural network isn't in data
-    run_cmds_if_no_nn = attribute(default=attr_factory(list))
-
     # will exit if there is an update to the config
     exit_on_update_config = attribute(False)
 
-    # XXX remove
-    # dont replace the network every new network, instead wait n generations
+    # dont replace the network every new generation, instead wait n generations
+    # Note: lease this at 1.  XXX Remove this?  Not sure how useful it is.
     replace_network_every_n_gens = attribute(1)
 
 
