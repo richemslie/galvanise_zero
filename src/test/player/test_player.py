@@ -1,25 +1,20 @@
 import os
-import time
 
 from ggplib.player import get
 from ggplib.player.gamemaster import GameMaster
-from ggplib.db.helper import get_gdl_for_game
+from ggplib.db import lookup
 
-from ggpzero.defs import confs
-from ggpzero.player.puctplayer import PUCTPlayer
+from ggpzero.util import attrutil
+from ggpzero.defs import confs, templates
+from ggpzero.nn.manager import get_manager
 
-import py.test
+from ggpzero.player.puctplayer import PUCTPlayer, PUCTPlayerV2
 
-ITERATIONS = 1
+GAME = "breakthroughSmall"
+RANDOM_GEN = "rand_0"
 
-current_gen = "x6_111"
-
-# first in the run, completely random weights
-random_gen = "x5_0"
-
-default_puct_config = confs.PUCTPlayerConfig(generation=current_gen,
-                                             playouts_per_iteration=42,
-                                             playouts_per_iteration_noop=1)
+GOOD_GEN1 = "x1_132"
+GOOD_GEN2 = "x1_42"
 
 
 def setup():
@@ -37,93 +32,186 @@ def setup():
     import numpy as np
     np.set_printoptions(threshold=100000)
 
+    man = get_manager()
+    if not man.can_load(GAME, RANDOM_GEN):
+        network = man.create_new_network(GAME)
+        man.save_network(network, RANDOM_GEN)
 
-def test_puct_tournament():
-    gm = GameMaster(get_gdl_for_game("breakthrough"))
 
+def get_game_info(board_size):
+    # add players
+    if board_size == 8:
+        game = "breakthrough"
+    else:
+        assert board_size == 6
+        game = "breakthroughSmall"
+
+    return lookup.by_name(game)
+
+
+def pretty_board(board_size, sm):
+    ' pretty print board current state of match '
+
+    from ggplib.util.symbols import SymbolFactory
+    as_str = get_game_info(board_size).model.basestate_to_str(sm.get_current_state())
+    sf = SymbolFactory()
+    states = sf.to_symbols(as_str)
+    mapping = {}
+    control = None
+    for s in list(states):
+        if s[1][0] == "control":
+            control = s[1][1]
+        else:
+            if board_size == 8:
+                assert s[1][0] == "cellHolds"
+            else:
+                assert s[1][0] == "cell"
+
+            key = int(s[1][1]), int(s[1][2])
+            mapping[key] = s[1][3]
+
+    lines = []
+    line_len = board_size * 4 + 1
+    lines.append("    +" + "-" * (line_len - 2) + "+")
+    for i in reversed(range(1, board_size + 1)):
+        ll = [" %s  |" % i]
+        for j in reversed(range(1, board_size + 1)):
+            key = j, i
+            if key in mapping:
+                if mapping[key] == "black":
+                    ll.append(" %s |" % u"\u2659")
+                else:
+                    assert mapping[key] == "white"
+                    ll.append(" %s |" % u"\u265F")
+            else:
+                ll.append("   |")
+
+        lines.append("".join(ll))
+        if i > 1:
+            lines.append("    " + "-" * line_len)
+
+    lines.append("    +" + "-" * (line_len - 2) + "+")
+    if board_size == 8:
+        lines.append("     " + ' '.join(' %s ' % c for c in 'abcdefgh'))
+    else:
+        lines.append("     " + ' '.join(' %s ' % c for c in 'abcdef'))
+
+    print
+    print
+    print "\n".join(lines)
+    print "Control:", control
+
+
+def play(player_white, player_black, move_time=0.5):
+    gm = GameMaster(lookup.by_name(GAME), verbose=True)
+    gm.add_player(player_white, "white")
+    gm.add_player(player_black, "black")
+
+    gm.start(meta_time=15, move_time=move_time)
+
+    move = None
+    while not gm.finished():
+
+        # print out the board
+        pretty_board(6, gm.sm)
+
+        move = gm.play_single_move(last_move=move)
+
+    gm.finalise_match(move)
+
+
+def test_random():
     # add two players
-    pymcs = get.get_player("pymcs")
-    pymcs.max_run_time = 0.1
+    # simplemcts vs RANDOM_GEN
+    pymcs = get.get_player("simplemcts")
+    pymcs.max_run_time = 0.25
 
-    black = PUCTPlayer(conf=default_puct_config)
+    eval_config = templates.base_puct_config(verbose=True,
+                                             max_dump_depth=1)
+    puct_config = confs.PUCTPlayerConfig("gzero",
+                                         True,
+                                         100,
+                                         0,
+                                         RANDOM_GEN,
+                                         eval_config)
 
-    gm.add_player(pymcs, "white")
-    gm.add_player(black, "black")
+    attrutil.pprint(puct_config)
 
-    acc_black_score = 0
-    acc_red_score = 0
-    for _ in range(ITERATIONS):
-        gm.start(meta_time=30, move_time=15)
-        gm.play_to_end()
+    puct_player = PUCTPlayer(puct_config)
 
-        acc_black_score += gm.scores["black"]
-        acc_red_score += gm.scores["white"]
-
-    print "white_score", gm.players_map["white"].name, acc_red_score
-    print "black_score", gm.players_map["black"].name, acc_black_score
-
-
-def test_fast_plays():
-    ''' very fast rollouts, basically this config of puct player is a policy player '''
-    gm = GameMaster(get_gdl_for_game("breakthrough"))
-
-    import attr
-    conf = confs.PUCTPlayerConfig(**attr.asdict(default_puct_config))
-    conf.verbose = False
-
-    # just checking that we haven't modified default
-    assert not conf.verbose and default_puct_config.verbose
-
-    conf.playouts_per_iteration = 1
-    conf.playouts_per_iteration_noop = 0
-    conf.dirichlet_noise_alpha = -1
-    print conf
-
-    # add two players
-    white = PUCTPlayer(conf=conf)
-    black = PUCTPlayer(conf=conf)
-
-    gm.add_player(white, "white")
-    gm.add_player(black, "black")
-
-    acc_black_score = 0
-    acc_red_score = 0
-    s = time.time()
-    for _ in range(ITERATIONS):
-        gm.start(meta_time=30, move_time=15)
-        gm.play_to_end()
-
-        acc_black_score += gm.scores["black"]
-        acc_red_score += gm.scores["white"]
-
-        print gm.get_game_depth()
-
-    print "time taken", time.time() - s
-    print "white_score", gm.players_map["white"].name, acc_red_score
-    print "black_score", gm.players_map["black"].name, acc_black_score
+    play(pymcs, puct_player)
 
 
-def test_not_taking_win():
-    gm = GameMaster(get_gdl_for_game("breakthrough"))
 
-    # add two players
-    gm.add_player(PUCTPlayer(default_puct_config), "white")
-    gm.add_player(PUCTPlayer(default_puct_config), "black")
+def test_trained():
+    # simplemcts vs GOOD_GEN
+    pymcs = get.get_player("simplemcts")
+    pymcs.max_run_time = 0.25
 
-    str_state = """ (true (control black))
-    (true (cellHolds 8 8 black)) (true (cellHolds 8 7 black)) (true (cellHolds 8 2 white))
-    (true (cellHolds 8 1 white)) (true (cellHolds 7 8 black)) (true (cellHolds 6 7 white))
-    (true (cellHolds 6 2 white)) (true (cellHolds 6 1 white)) (true (cellHolds 5 4 black))
-    (true (cellHolds 5 3 black)) (true (cellHolds 5 2 white)) (true (cellHolds 5 1 white))
-    (true (cellHolds 4 8 black)) (true (cellHolds 4 7 black)) (true (cellHolds 4 1 white))
-    (true (cellHolds 3 8 black)) (true (cellHolds 3 6 black)) (true (cellHolds 3 2 white))
-    (true (cellHolds 2 8 black)) (true (cellHolds 2 7 black)) (true (cellHolds 2 2 white))
-    (true (cellHolds 2 1 white)) (true (cellHolds 1 8 black)) (true (cellHolds 1 7 black))
-    (true (cellHolds 1 2 white)) (true (cellHolds 1 1 white)) """
+    eval_config = templates.base_puct_config(verbose=True,
+                                             max_dump_depth=1)
+    puct_config = confs.PUCTPlayerConfig("gzero",
+                                         True,
+                                         100,
+                                         0,
+                                         GOOD_GEN1,
+                                         eval_config)
 
-    gm.start(meta_time=30, move_time=5,
-             initial_basestate=gm.convert_to_base_state(str_state))
+    attrutil.pprint(puct_config)
 
-    last_move = gm.play_single_move(last_move=None)
-    assert last_move[1] == "(move 7 8 6 7)"
+    puct_player = PUCTPlayer(puct_config)
 
+    play(pymcs, puct_player)
+    play(puct_player, pymcs)
+
+
+def test_puct_v2():
+    eval_config_v1 = templates.base_puct_config(verbose=True,
+                                                max_dump_depth=1)
+
+
+    gzero_v1 = PUCTPlayer(confs.PUCTPlayerConfig("gzero_v1",
+                                                 True,
+                                                 100000,
+                                                 0,
+                                                 GOOD_GEN2,
+                                                 eval_config_v1))
+
+    eval_config_v2 = confs.PUCTEvaluatorV2Config(verbose=True,
+                                                 puct_constant=0.85,
+                                                 puct_constant_root=3.0,
+
+                                                 dirichlet_noise_pct=-1,
+
+                                                 fpu_prior_discount=0.25,
+                                                 fpu_prior_discount_root=0.15,
+
+                                                 choose="choose_temperature",
+                                                 temperature=2.0,
+                                                 depth_temperature_max=10.0,
+                                                 depth_temperature_start=0,
+                                                 depth_temperature_increment=0.75,
+                                                 depth_temperature_stop=1,
+                                                 random_scale=1.0,
+
+                                                 max_dump_depth=1,
+
+                                                 minimax_backup_ratio=0.75,
+
+                                                 top_visits_best_guess_converge_ratio=0.8,
+
+                                                 think_time=2.0,
+                                                 converged_visits=2000,
+
+                                                 batch_size=32,
+                                                 extra_uct_exploration=-1.0)
+
+    gzero_v2 = PUCTPlayerV2(confs.PUCTPlayerConfig("gzero_v2",
+                                                   True,
+                                                   100000,
+                                                   0,
+                                                   GOOD_GEN2,
+                                                   eval_config_v2))
+
+    play(gzero_v1, gzero_v2, move_time=3)
+    play(gzero_v2, gzero_v1, move_time=3)
