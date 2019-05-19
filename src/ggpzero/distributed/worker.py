@@ -5,6 +5,8 @@ import sys
 import time
 import base64
 import shutil
+import string
+import random
 import importlib
 import traceback
 
@@ -31,6 +33,19 @@ def default_conf():
     conf.do_training = False
     conf.do_self_play = True
     conf.self_play_batch_size = 1024
+
+    conf.number_of_polls_before_dumping_stats = 1000
+
+    conf.unique_identifier = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(10))
+
+    conf.num_workers = 1
+    conf.sleep_between_poll = -1
+
+    conf.server_poll_time = 60
+    conf.min_num_samples = 100
+    conf.exit_on_update_config = False
+    conf.replace_network_every_n_gens = 1
+
     return conf
 
 
@@ -225,6 +240,16 @@ class Worker(Broker):
 
 
 def start_worker_factory():
+
+    if len(sys.argv) != 2:
+        print "$ python worker.py -c"
+        print "$ python server.py <config_file>"
+        sys.exit(1)
+
+    if sys.argv[1] == "-c":
+        print attrutil.attr_to_json(default_conf(), pretty=True)
+        return
+
     from ggplib.util.init import setup_once
     setup_once("worker")
 

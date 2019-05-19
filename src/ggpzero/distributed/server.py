@@ -465,25 +465,33 @@ class ServerBroker(Broker):
 
 
 def start_server_factory():
-    from ggplib.util.init import setup_once
-    setup_once("server")
+    def dump():
+        print "$ python server.py -c <game> <generation_name>"
+        print "$ python server.py <config_file>"
+        sys.exit(1)
 
-    from ggpzero.util.keras import init
-    init()
+    if len(sys.argv) != 2 and len(sys.argv) != 4:
+        dump()
 
-    if sys.argv[1] == "-c":
+    if len(sys.argv) == 4:
+        if sys.argv[1] != "-c":
+            dump()
+
         game, generation_prefix = sys.argv[2], sys.argv[3]
-        num_prev_states = int(sys.argv[4])
-        filename = sys.argv[5]
-        conf = templates.server_config_template(game, generation_prefix, num_prev_states)
-        ServerBroker(filename, conf)
+        conf = templates.server_config_template(game, generation_prefix, 1)
+        print attrutil.attr_to_json(conf, pretty=True)
 
     else:
+        from ggplib.util.init import setup_once
+        setup_once("server")
+
+        from ggpzero.util.keras import init
+        init()
+
         filename = sys.argv[1]
         assert os.path.exists(filename)
         ServerBroker(filename)
-
-    reactor.run()
+        reactor.run()
 
 
 if __name__ == "__main__":
