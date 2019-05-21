@@ -1,12 +1,8 @@
 from builtins import super
 
-import sys
-import attr
-
 from ggplib.util import log
 from ggplib.player.base import MatchPlayer
 
-from ggpzero.util import attrutil
 from ggpzero.defs import confs
 
 from ggpzero.util.cppinterface import joint_move_to_ptr, basestate_to_ptr, PlayPoller, PlayPollerV2

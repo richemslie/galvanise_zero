@@ -19,6 +19,13 @@ class PUCTEvaluatorConfig(object):
     # added to root child policy pct (< 0 is off)
     dirichlet_noise_pct = attribute(0.25)
 
+    # XXX experimental, feature likely to go away
+    # policy squashing during noise will squash any probabilities in policy over
+    # noise_policy_squash_prob to noise_policy_squash_prob.
+    # the pct is whether it will activate or not during setting noise (< 0 is off)
+    noise_policy_squash_pct = attribute(-1)
+    noise_policy_squash_prob = attribute(0.05)
+
     # looks up method() to use.  one of (choose_top_visits | choose_temperature)
     choose = attribute("choose_top_visits")
 
@@ -51,6 +58,13 @@ class PUCTEvaluatorV2Config(object):
 
     # added to root child policy pct (< 0 is off)
     dirichlet_noise_pct = attribute(0.25)
+
+    # XXX experimental, feature likely to go away
+    # policy squashing during noise will squash any probabilities in policy over
+    # noise_policy_squash_prob to noise_policy_squash_prob.
+    # the pct is whether it will activate or not during setting noise (< 0 is off)
+    noise_policy_squash_pct = attribute(-1)
+    noise_policy_squash_prob = attribute(0.05)
 
     # looks up method() to use.  one of (choose_top_visits | choose_temperature)
     choose = attribute("choose_top_visits")
@@ -195,7 +209,8 @@ class TrainNNConfig(object):
     # list of tuple.  This is the replay buffer.
 
     # [(5, 1.0), (10, 0.8)]
-    # Will take the first 5 generations with all data and 80% of the next 10 generations.  Every generation after is ignored.
+    # Will take the first 5 generations with all data and 80% of the next 10 generations.  Every
+    # generation after is ignored.
 
     # [(-1, 1.0)]
     # Will take all generations with 100% data.

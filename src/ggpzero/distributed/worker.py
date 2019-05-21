@@ -15,7 +15,7 @@ from twisted.internet import reactor
 from ggplib.util import log
 from ggplib.db import lookup
 
-from ggpzero.util import attrutil, runprocs
+from ggpzero.util import attrutil
 
 from ggpzero.defs import msgs, confs
 
@@ -61,7 +61,6 @@ class Worker(Broker):
             assert isinstance(conf, confs.WorkerConfig)
         else:
             conf = default_conf()
-
 
         assert conf.unique_identifier != "pleasesetme"
 

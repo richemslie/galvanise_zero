@@ -70,17 +70,26 @@ void PuctEvaluator::setDirichletNoise(PuctNode* node) {
         dirichlet_noise[ii] /= total_noise;
     }
 
-    // variable noise percent between 0.25 and this->conf->dirichlet_noise_pct, of > 0.25 to start with
-    float noise_pct = this->conf->dirichlet_noise_pct;
-    if (noise_pct > 0.25f) {
-        noise_pct = 0.25f + this->rng.get() * (noise_pct - 0.25f);
+    const float pct = this->conf->dirichlet_noise_pct;
+
+    bool policy_squash = (this->conf->noise_policy_squash_pct > 0 &&
+                          this->rng.get() > this->conf->noise_policy_squash_pct);
+    if (policy_squash && node->getCurrentScore(node->lead_role_index) > 0.9) {
+        policy_squash = false;
     }
 
     // replace the policy_prob on the node
     float total_policy = 0;
     for (int ii=0; ii<node->num_children; ii++) {
         PuctNodeChild* c = node->getNodeChild(this->sm->getRoleCount(), ii);
-        c->policy_prob = (1.0f - noise_pct) * c->policy_prob + noise_pct * dirichlet_noise[ii];
+
+        // randomly reduce high fliers
+        if (policy_squash) {
+            c->policy_prob = std::min(this->conf->noise_policy_squash_prob,
+                                      c->policy_prob);
+        }
+
+        c->policy_prob = (1.0f - pct) * c->policy_prob + pct * dirichlet_noise[ii];
         total_policy += c->policy_prob;
     }
 
@@ -146,10 +155,9 @@ bool PuctEvaluator::converged(int count) const {
         if (n0 != nullptr && n1 != nullptr) {
             const int role_index = this->root->lead_role_index;
 
-            if (n0->getCurrentScore(role_index) > n1->getCurrentScore(role_index)) {
-                if (n0->visits > n1->visits + count) {
-                    return true;
-                }
+            if (n0->getCurrentScore(role_index) > n1->getCurrentScore(role_index) &&
+                n0->visits > n1->visits + count) {
+                return true;
             }
         }
 

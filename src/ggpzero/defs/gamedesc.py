@@ -376,7 +376,6 @@ class Games(object):
                         "1 2 3 4 5 6 7 8 9 10 11".split(),
                         [cell], [control])
 
-
     def _draughts_helper(self):
         interim_status = simple_control("interim_status")
         control = binary_control("control", "white", "black")

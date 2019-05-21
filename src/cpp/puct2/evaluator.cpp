@@ -19,7 +19,7 @@
 #include <numeric>
 #include <string>
 #include <vector>
-#include <tuple>
+#include <algorithm>
 
 using namespace GGPZero::PuctV2;
 
@@ -74,6 +74,9 @@ void PuctEvaluator::updateConf(const PuctConfig* conf) {
 
         K273::l_verbose("dirichlet_noise (pct: %.2f), fpu_prior_discount: %.2f/%.2f",
                         conf->dirichlet_noise_pct, conf->fpu_prior_discount, conf->fpu_prior_discount_root);
+
+        K273::l_verbose("noise policy squash (pct: %.2f, prob: %.2f),",
+                        conf->noise_policy_squash_pct, conf->noise_policy_squash_prob);
 
         K273::l_verbose("temperature: %.2f, start(%d), stop(%d), incr(%.2f), max(%.2f) scale(%.2f)",
                         conf->temperature, conf->depth_temperature_start, conf->depth_temperature_stop,
@@ -262,7 +265,7 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
         return child;
     }
 
-    if (depth == 0) {
+    if (depth < 2) {
         this->setDirichletNoise(node);
     }
 
@@ -311,10 +314,12 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
         double exploration_score = node->puct_constant * c->policy_prob * sqrt_node_visits / (traversals + inflight_visits);
 
         // extra exploration for top nodes?  Note minimax_backup_ratio must be set for this.
-        if (this->conf->extra_uct_exploration > 0 && node->visits > 1000 && count < 5) {
-            exploration_score += this->conf->extra_uct_exploration * (std::sqrt(std::log(node->visits + 1) /
-                                                                                (traversals + inflight_visits)));
-        }
+        if (this->conf->extra_uct_exploration > 0 && node->visits > 10000 * depth && count < 5) {
+            const double extra = this->conf->extra_uct_exploration * (std::sqrt(std::log((double) node->visits + 1) /
+                                                                          (traversals + inflight_visits)));
+
+            exploration_score += extra;
+      }
 
         if (c->to_node != nullptr) {
             PuctNode* cn = c->to_node;
@@ -511,8 +516,8 @@ void PuctEvaluator::backPropagate(float* new_scores, const Path& path) {
             this->backUpMiniMax(new_scores, cur);
             for (int ii=0; ii<this->sm->getRoleCount(); ii++) {
                 float visits = cur.node->visits;
-                if (visits > 25000) {
-                    visits = 25000 + 0.1f * (visits - 25000);
+                if (visits > 100000) {
+                    visits = 100000 + 0.1f * (visits - 100000);
                 }
 
                 float score = ((visits * cur.node->getCurrentScore(ii) + new_scores[ii]) /
@@ -531,14 +536,12 @@ void PuctEvaluator::backPropagate(float* new_scores, const Path& path) {
         if (cur.choice != nullptr) {
             cur.choice->traversals++;
             // apply policy dilution (only when the score is between 0.05 < s < 0.95)
-            if (cur.node->getCurrentScore(cur.node->lead_role_index) < 0.95 &&
+            if (cur.node->visits > 1000 &&
+                cur.node->getCurrentScore(cur.node->lead_role_index) < 0.95 &&
                 cur.node->getCurrentScore(cur.node->lead_role_index) > 0.05) {
 
-                // aggressive
-                //const float policy_dilute_apply = 0.998;
-
-                // reasonable
-                const float policy_dilute_apply = 0.999;
+                // reasonable?
+                const float policy_dilute_apply = 0.99975;
                 const float policy_dilute_min = 0.01f;
 
                 if (cur.choice->policy_prob > policy_dilute_min) {
@@ -578,45 +581,47 @@ int PuctEvaluator::treePlayout() {
             break;
         }
 
-        bool do_fake_resign = false;
-        if (current->visits > 1000 && current->getCurrentScore(current->lead_role_index) < 0.10) {
-            do_fake_resign = true;
+        const bool DO_FAKE_RESIGN = true;
+        if (DO_FAKE_RESIGN) {
+            bool do_fake_resign = false;
+            if (current->visits > 1000 && current->getCurrentScore(current->lead_role_index) < 0.10) {
+                do_fake_resign = true;
 
-            // ok check all children, if all are under 0.1 - resign (unexpanded, tough luck)
-            for (int ii=0; ii<current->num_children; ii++) {
-                PuctNodeChild* c = current->getNodeChild(this->sm->getRoleCount(), ii);
-                if (c->to_node != nullptr && c->to_node->getCurrentScore(current->lead_role_index) > 0.1) {
-                    do_fake_resign = false;
-                    break;
+                // ok check all children, if all are under 0.1 - resign (unexpanded, tough luck)
+                for (int ii=0; ii<current->num_children; ii++) {
+                    PuctNodeChild* c = current->getNodeChild(this->sm->getRoleCount(), ii);
+                    if (c->to_node != nullptr && c->to_node->getCurrentScore(current->lead_role_index) > 0.1) {
+                        do_fake_resign = false;
+                        break;
+                    }
+                }
+
+            } else if (current->visits > 20 && current->getCurrentScore(current->lead_role_index) < 0.10) {
+                do_fake_resign = true;
+
+                // ok check all children, if all are under 0.05 - resign (unexpanded, tough luck)
+                for (int ii=0; ii<current->num_children; ii++) {
+                    PuctNodeChild* c = current->getNodeChild(this->sm->getRoleCount(), ii);
+                    if (c->to_node != nullptr && c->to_node->getCurrentScore(current->lead_role_index) > 0.05) {
+                        do_fake_resign = false;
+                        break;
+                    }
                 }
             }
 
-        } else if (current->visits > 20 && current->getCurrentScore(current->lead_role_index) < 0.10) {
-            do_fake_resign = true;
-
-            // ok check all children, if all are under 0.05 - resign (unexpanded, tough luck)
-            for (int ii=0; ii<current->num_children; ii++) {
-                PuctNodeChild* c = current->getNodeChild(this->sm->getRoleCount(), ii);
-                if (c->to_node != nullptr && c->to_node->getCurrentScore(current->lead_role_index) > 0.05) {
-                    do_fake_resign = false;
-                    break;
+            if (do_fake_resign) {
+                //K273::l_debug("resign hack");
+                for (int ii=0; ii<this->sm->getRoleCount(); ii++) {
+                    if (ii == current->lead_role_index) {
+                        current->setCurrentScore(ii, -0.05);
+                    } else {
+                        current->setCurrentScore(ii, 1.05);
+                    }
                 }
+
+                current->is_finalised = true;
             }
         }
-
-        if (do_fake_resign) {
-            //K273::l_debug("resign hack");
-            for (int ii=0; ii<this->sm->getRoleCount(); ii++) {
-                if (ii == current->lead_role_index) {
-                    current->setCurrentScore(ii, -0.05);
-                } else {
-                    current->setCurrentScore(ii, 1.05);
-                }
-            }
-
-            current->is_finalised = true;
-        }
-
         if (current->is_finalised) {
             path.emplace_back(current, nullptr, nullptr);
             break;

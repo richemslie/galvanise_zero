@@ -137,4 +137,3 @@ class GenDataSummary(object):
 
     # isinstance StepSummary
     step_summaries = attr.ib(attr.Factory(list))
-

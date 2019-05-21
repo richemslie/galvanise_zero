@@ -35,4 +35,3 @@ def fast_decode_state(s):
         return tuple(s)
 
     return ggpzero_interface.buf_to_tuple_reverse_bytes(base64.decodestring(s))
-

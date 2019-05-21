@@ -17,7 +17,6 @@
 #include <numeric>
 #include <string>
 #include <vector>
-#include <tuple>
 
 using namespace GGPZero;
 
@@ -67,6 +66,9 @@ void PuctEvaluator::updateConf(const PuctConfig* conf) {
 
         K273::l_verbose("dirichlet_noise (pct: %.2f), fpu_prior_discount: %.2f/%.2f",
                         conf->dirichlet_noise_pct, conf->fpu_prior_discount, conf->fpu_prior_discount_root);
+
+        K273::l_verbose("noise policy squash (pct: %.2f, prob: %.2f),",
+                        conf->noise_policy_squash_pct, conf->noise_policy_squash_prob);
 
         K273::l_verbose("choose: %s",
                         (conf->choose == ChooseFn::choose_top_visits) ? "choose_top_visits" : "choose_temperature");
@@ -215,7 +217,7 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, int depth) {
         return node->getNodeChild(this->sm->getRoleCount(), 0);
     }
 
-    if (depth == 0) {
+    if (depth < 2) {
         this->setDirichletNoise(node);
     }
 

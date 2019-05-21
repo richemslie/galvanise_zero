@@ -147,6 +147,7 @@ class Buckets(object):
 
         return -1
 
+
 class ChunkIndexer(object):
     def __init__(self, buckets, step_summaries):
         self.buckets = buckets
@@ -252,8 +253,8 @@ class ChunkIndexer(object):
                 if include_all is not None:
                     assert include_all == 1, "include_all == 1 ... XXXX only 1 supported"
                     scale = max_size / float(sum(sizes))
-                    s = sizes[0]
-                    if int(math.ceil(s * scale)) < int(include_pct * s):
+                    sz = sizes[0]
+                    if int(math.ceil(sz * scale)) < int(include_pct * sz):
                         include_sizes = [int(include_pct * s) for s in sizes[:include_all]]
                         remaining_sizes = sizes[include_all:]
 

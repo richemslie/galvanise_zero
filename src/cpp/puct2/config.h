@@ -15,6 +15,8 @@ namespace GGPZero::PuctV2 {
         float puct_constant_root;
 
         float dirichlet_noise_pct;
+        float noise_policy_squash_pct;
+        float noise_policy_squash_prob;
 
         ChooseFn choose;
         int max_dump_depth;

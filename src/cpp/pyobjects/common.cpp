@@ -75,6 +75,9 @@ static PuctConfig* createPuctConfig(PyObject* dict) {
 
     config->root_expansions_preset_visits = asInt("root_expansions_preset_visits");
     config->dirichlet_noise_pct = asFloat("dirichlet_noise_pct");
+    config->noise_policy_squash_pct = asFloat("noise_policy_squash_pct");
+    config->noise_policy_squash_prob = asFloat("noise_policy_squash_prob");
+
     config->max_dump_depth = asInt("max_dump_depth");
 
     config->random_scale = asFloat("random_scale");
@@ -131,6 +134,8 @@ static GGPZero::PuctV2::PuctConfig* createPuctConfigV2(PyObject* dict) {
     config->puct_constant_root = asFloat("puct_constant_root");
 
     config->dirichlet_noise_pct = asFloat("dirichlet_noise_pct");
+    config->noise_policy_squash_pct = asFloat("noise_policy_squash_pct");
+    config->noise_policy_squash_prob = asFloat("noise_policy_squash_prob");
     config->max_dump_depth = asInt("max_dump_depth");
 
     config->random_scale = asFloat("random_scale");
