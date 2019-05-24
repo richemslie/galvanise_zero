@@ -14,39 +14,29 @@ def get_train_config(game, gen_prefix, next_step, starting_step):
 
     config.generation_prefix = gen_prefix
     config.batch_size = 512
-    config.compile_strategy = "adam"
-    config.epochs = 8
+    config.compile_strategy = "SGD"
+    config.epochs = 20
 
-    config.learning_rate = 0.0005
+    config.learning_rate = 0.03
 
     config.overwrite_existing = False
-    config.use_previous = True
-    config.validation_split = 0.90000
-    config.replay_buffer_buckets = [[100, 1.0], [-1, 0.8]]
-    config.max_epoch_size = 1048576
+    config.use_previous = False
+    config.validation_split = 0.95000
+    config.resample_buckets = [[-1, 1.0]]
+    config.max_epoch_size = 1048576 * 2
 
     return config
 
 
 def get_nn_model(game, transformer, size="small"):
-    config = templates.nn_model_config_template(game, size, transformer)
-    assert config.cnn_kernel_size == 3
+    config = templates.nn_model_config_template(game, size, transformer, features=True)
 
-    # v1
-    # config.cnn_filter_size = 64
-    # config.residual_layers = 6
-    # config.value_hidden_size = 128
-
-    # abuse these for v2
     config.cnn_filter_size = 96
-    config.residual_layers = -1
-    config.value_hidden_size = 0
+    config.residual_layers = 6
+    config.value_hidden_size = 512
 
     config.dropout_rate_policy = 0.25
     config.dropout_rate_value = 0.5
-
-    config.role_count = 2
-    config.leaky_relu = False
 
     return config
 
@@ -81,11 +71,11 @@ if __name__ == "__main__":
         gen_prefix_next = sys.argv[1]
 
         # modify these >>>
-        game = "chess_200"
-        gen_prefix = "take2"
+        game = "reversi"
+        gen_prefix = "kt2"
 
-        next_step = 207
-        starting_step = 0
+        next_step = 93
+        starting_step = 3
         num_previous_states = 1
 
         do_training(game, gen_prefix, next_step, starting_step,
