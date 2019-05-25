@@ -66,6 +66,12 @@ class GameDesc(object):
     # list of list of ControlChannels
     control_channels = attribute(attr_factory(list))
 
+    # repeat state channels
+    #repeat_state_channel = attribute(attr_factory(list))
+
+    #number_of_repeat_states_draw = attribute(-1)
+    #number_of_repeat_states_illegal = attribute(-1)
+
 
 ###############################################################################
 
@@ -339,7 +345,13 @@ class Games(object):
         return self._chess_like("speedChess", 150)
 
     def chess_200(self):
-        return self._chess_like("chess_200")
+        return self._chess_like("chess_200", 200)
+
+    def chess_50d(self):
+        return self._chess_like("chess_50d", 101)
+
+    def chess_15d(self):
+        return self._chess_like("chess_15d", 32)
 
     def skirmishNew(self):
         assert False, "check steps"
