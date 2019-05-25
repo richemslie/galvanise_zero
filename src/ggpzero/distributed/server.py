@@ -482,6 +482,9 @@ def start_server_factory():
         print attrutil.attr_to_json(conf, pretty=True)
 
     else:
+        if sys.argv[1] == "-c":
+            dump()
+
         from ggplib.util.init import setup_once
         setup_once("server")
 

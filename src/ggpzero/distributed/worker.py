@@ -120,7 +120,7 @@ class Worker(Broker):
             self.sm = self.game_info.get_sm()
 
         else:
-            self.game_info.game == msg.game
+            assert self.game_info.game == msg.game
 
         self.self_play_conf = msg.self_play_conf
         self.latest_generation_name = msg.generation_name
