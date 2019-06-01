@@ -43,7 +43,7 @@ bool SelfPlay::resign(const PuctNode* node) {
     ASSERT(!this->has_resigned);
 
     // constraint, assumes we are in a choice node
-    float score = node->getCurrentScore(node->lead_role_index);
+    const float score = node->getCurrentScore(node->lead_role_index);
 
     // how are these even correct?  we don't know which one actually resigned to check these
     // values.  ANSWER: by abusing whether resignX_false_positive_check_scores is empty, we know.
@@ -133,9 +133,10 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
             this->game_samples.push_back(s);
 
         } else {
-            const int rng_amount = std::max(8, evals / 3);
-            const int skip_evals = std::max(8, (int) this->rng.getWithMax(rng_amount));
+            const int skip_evals = std::max(16, (int) this->rng.getWithMax(evals / 3 + 1));
+            this->pe->updateConf(this->conf->run_to_end_puct_config);
             choice = this->pe->onNextMove(skip_evals);
+            this->pe->updateConf(this->conf->puct_config);
         }
 
         // apply the move
