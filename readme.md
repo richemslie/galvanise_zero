@@ -6,6 +6,8 @@ Expert Iteration [paper](https://arxiv.org/abs/1705.08439). A number of Alpha*Ze
 The name gzero stems from the fact that this project was initially a spin off my galvanise player
 in [GGP](https://en.wikipedia.org/wiki/General_game_playing).
 
+* this is an extension of [ggplib](https://github.com/ggplib/ggplib)
+
 Status
 ------
 All games are written in [GDL](https://en.wikipedia.org/wiki/Game_Description_Language) unless otherwise stated.  There is *no* game specific code other than 
@@ -13,10 +15,10 @@ a single python file describing mappings for policy and state (see [here](https:
 
 Games/models with significant training:
 
-* [hex13](https://github.com/richemslie/gzero_data/tree/master/hexLG13)
-* [connect6](https://github.com/richemslie/gzero_data/tree/master/connect6)
-* [breakthrough](https://github.com/richemslie/gzero_data/tree/master/breakthrough)
-* [amazons](https://github.com/richemslie/gzero_data/tree/master/amazons_10x10)
+* [hex13](https://github.com/richemslie/gzero_data/tree/master/data/hexLG13)
+* [connect6](https://github.com/richemslie/gzero_data/tree/master/data/connect6)
+* [breakthrough](https://github.com/richemslie/gzero_data/tree/master/data/breakthrough)
+* [amazons](https://github.com/richemslie/gzero_data/tree/master/data/amazons_10x10)
 * reversi (8 and 10 board sizes)
 * chess (with no 50 rule)
 * go(baduk) 9x9 (no super ko, statemachine in c++)
@@ -73,15 +75,5 @@ Some game types which would be interesting to try:
 * games that are not easily represented as a 2D array of channels
 * simultaneous games
 
-
-Related repos (will be merged eventually here)
-----------------------------------------------
-* ggpzero is extension of [ggplib](https://github.com/ggplib/ggplib)
-* Custom games, game specific code (*) can be found [here](https://github.com/richemslie/gzero_games)
-
-
-(*)  Most game specific game is for testing purposes, printing the board to console, or connecting
-to platforms/programs, such as GTP in go and UCI in chess.  State machines for go(Baduk) and
-International Draughts are written in C++.
 
 
