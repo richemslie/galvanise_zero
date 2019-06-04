@@ -28,11 +28,11 @@ Amazons and Breakthrough won gold medals at ICGA 2018 Computer Olympiad. :clap: 
 
 LG Champion in last attempt @ Amazons, Breakthrough and Hex 13 (joint).
 
-Hex 13 / Connect6 are currently rated 2nd on active users on Litte Golem.
+Hex 13 / Connect6 are currently rated 2nd on active users on Little Golem.
 
 Chess and Baduk 9x9 are reasonably strong for the little time they were trained.  Baduk 9x9 had a rating ~2900 elo on CGOS after 2-3 week of training.
 
-Reversi is also strong relative to humans on LG, yet performs a bit worse than top AB programs (about ntest level 20 the last time I tested).
+Reversi is also strong relative to humans on Little Golem, yet performs a bit worse than top AB programs (about ntest level 20 the last time I tested).
 
 --------------------
 
