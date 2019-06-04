@@ -13,31 +13,26 @@ Status
 All games are written in [GDL](https://en.wikipedia.org/wiki/Game_Description_Language) unless otherwise stated.  There is *no* game specific code other than 
 a single python file describing mappings for policy and state (see [here](https://github.com/richemslie/galvanise_zero/issues/1) for more information).
 
-Games/models with significant training:
+For games with training > 1 week, models and elo graphs:
 
 * [hex13](https://github.com/richemslie/gzero_data/tree/master/data/hexLG13)
 * [connect6](https://github.com/richemslie/gzero_data/tree/master/data/connect6)
 * [breakthrough](https://github.com/richemslie/gzero_data/tree/master/data/breakthrough)
 * [amazons](https://github.com/richemslie/gzero_data/tree/master/data/amazons_10x10)
-* reversi (8 and 10 board sizes)
-* chess (with no 50 rule)
-* go(baduk) 9x9 (no super ko, statemachine in c++)
-* international draughts (statemachine in c++)
-* and [more](https://github.com/richemslie/gzero_data)
+* [chess](https://github.com/richemslie/gzero_data/tree/master/data/chess)
+* [reversi8](https://github.com/richemslie/gzero_data/tree/master/data/reversi_8x8)
+* [reversi10](https://github.com/richemslie/gzero_data/tree/master/data/reversi_10x10)
 
-LG Champion in last attempt @ Amazons, Breakthrough and Hex 13x13 (joint).
 
-Amazons and Breakthrough models were strong enough to win gold medals at ICGA 2018 Computer Olympiad. :clap: :clap:
+Amazons and Breakthrough won gold medals at ICGA 2018 Computer Olympiad. :clap: :clap:
+
+LG Champion in last attempt @ Amazons, Breakthrough and Hex 13 (joint).
+
+Hex 13 / Connect6 are currently rated 2nd on active users on Litte Golem.
+
+Chess and Baduk 9x9 are reasonably strong for the little time they were trained.  Baduk 9x9 had a rating ~2900 elo on CGOS after 2-3 week of training.
 
 Reversi is also strong relative to humans on LG, yet performs a bit worse than top AB programs (about ntest level 20 the last time I tested).
-
-Hex 13 / Connect6 play around somewhere top human level on LG.
-
-Chess and Baduk 9x9 are reasonably strong for the little time they were trained.  Baduk 9x9 had a rating ~2900 elo on CGOS after 2-3 week of training.  Chess was harder to test due to not having 50 rule, but somewhere about 2200-2600 elo would be a decent guess.
-
-Also, with Chess I cheated (from zero perspective) as experimented with adding data from historical games
-as well as the self play data.
-
 
 --------------------
 
@@ -49,14 +44,14 @@ for themselves.  Some notes:
 1. python is 2.7
 2. requires a GPU/tensorflow
 3. good starting point is https://github.com/richemslie/ggp-zero/blob/dev/src/ggpzero/defs
-4. the self play method is very different from A0, and not documented anywhere.  the code is here:
-    https://github.com/richemslie/ggp-zero/blob/dev/src/cpp/selfplay.cpp
-5. cpp puct/puct2 really needs to be combined.
+4. cpp puct/puct2 really needs to be combined.
+
+How to run and install instruction coming soon!
 
 
 Little Golem
 ------------
-Most trained games are available to play on Little Golem website.  Send an invite to play
+Some games are have had success on the Little Golem website
 [gzero_bot](http://littlegolem.net/jsp/info/player.jsp?plid=58835).
 
 
