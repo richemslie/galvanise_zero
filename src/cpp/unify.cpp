@@ -166,3 +166,61 @@ bool PuctEvaluator::converged(int count) const {
 
     return true;
 }
+
+void PuctEvaluator::checkDrawStates(const PuctNode* node, PuctNode* next) {
+    if (next->num_children == 0) {
+        return;
+    }
+
+    // only support 2 roles
+    ASSERT (this->sm->getRoleCount() == 2);
+
+    auto legalSet = [](const PuctNode* node) {
+        std::unordered_set <int> result;
+        for (int ii=0; ii<node->num_children; ii++) {
+            const PuctNodeChild* c = node->getNodeChild(2, ii);
+            result.insert(c->move.get(node->lead_role_index));
+        }
+
+        return result;
+    };
+
+    // const int repetition_lookback_max = this->conf->repetition_lookback_max;
+    const int repetition_lookback_max = 16;
+
+    // const int number_repeat_states_draw = this->conf->number_repeat_states_draw;
+    const int number_repeat_states_draw = 3;
+
+    auto next_legal_set = legalSet(next);
+
+    int repeat_count = 0;
+    for (int ii=0; ii<repetition_lookback_max; ii++) {
+        if (node == nullptr) {
+            break;
+        }
+
+        if (node->lead_role_index == next->lead_role_index &&
+            node->num_children == next->num_children &&
+            next_legal_set == legalSet(node)) {
+            repeat_count++;
+
+            if (repeat_count == number_repeat_states_draw) {
+
+                //K273::l_verbose("repeat state found at depth %d, legals %d",
+                //                next->game_depth, (int) next_legal_set.size());
+
+
+                for (int ii=0; ii<this->sm->getRoleCount(); ii++) {
+                    next->setCurrentScore(ii, 0.5);
+                }
+
+                next->is_finalised = true;
+                next->force_terminal = true;
+
+                return;
+            }
+        }
+
+        node = node->parent;
+    }
+}

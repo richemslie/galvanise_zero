@@ -6,3 +6,5 @@ float getTemperature(int depth) const;
 
 const PuctNodeChild* choose(const PuctNode* node);
 bool converged(int count) const;
+
+void checkDrawStates(const PuctNode* node, PuctNode* next);
