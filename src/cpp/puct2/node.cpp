@@ -76,6 +76,8 @@ static PuctNode* createNode(const GGPLib::BaseState* base_state,
     node->puct_constant = 1.44;
 
     node->is_finalised = is_finalised;
+    node->force_terminal = false;
+
     node->dirichlet_noise_set = false;
 
     node->lead_role_index = lead_role_index;
@@ -240,6 +242,8 @@ string PuctNode::moveString(const GGPLib::JointMove& move,
 string finalisedString(const PuctNodeChild* child) {
     if (child->to_node == nullptr) {
         return "?";
+    } else if (child->to_node->force_terminal) {
+        return "Z";
     } else if (child->to_node->isTerminal()) {
         return "T";
     } else if (child->to_node->is_finalised) {

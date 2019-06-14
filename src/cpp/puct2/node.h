@@ -68,6 +68,12 @@ namespace GGPZero::PuctV2 {
 
         // whether this node has a finalised scores or not (can also release children if so)
         bool is_finalised;
+
+
+        // very distinct from finalised, this means the game is over.  No further progress can be
+        // made.  Whereas finalised might not mean the game is over - even though the result is
+        // "finalised".
+        bool force_terminal;
         bool dirichlet_noise_set;
 
         // we don't really know which player it really it is for each node, but this is our best guess
@@ -153,7 +159,7 @@ namespace GGPZero::PuctV2 {
         }
 
         bool isTerminal() const {
-            return this->num_children == 0;
+            return this->force_terminal || this->num_children == 0;
         }
 
         // XXX temp
