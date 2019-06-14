@@ -1,4 +1,4 @@
-/* Note: there is no shape sizes here.  That is because we just return a continous numpy array to
+/* Note: there is no shape sizes here.  That is because we just return a continuous numpy array to
    python and let the python code reshape it how it likes. */
 
 #pragma once
