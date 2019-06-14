@@ -52,7 +52,7 @@ namespace GGPZero::PuctV2 {
         PuctNodeChild* selectChild(PuctNode* node, Path& path);
 
         void backUpMiniMax(float* new_scores, const PathElement& cur);
-        void backPropagate(float* new_scores, const Path& path);
+        void backup(float* new_scores, const Path& path);
 
         int treePlayout();
 

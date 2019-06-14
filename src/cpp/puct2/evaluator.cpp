@@ -1,5 +1,3 @@
-/* XXX does transpostions work with chess still? */
-
 #include "puct2/evaluator.h"
 #include "puct2/node.h"
 
@@ -445,7 +443,7 @@ void PuctEvaluator::backUpMiniMax(float* new_scores, const PathElement& cur) {
     }
 }
 
-void PuctEvaluator::backPropagate(float* new_scores, const Path& path) {
+void PuctEvaluator::backup(float* new_scores, const Path& path) {
     const int role_count = this->sm->getRoleCount();
 
     auto forceFinalise = [role_count](PuctNode* cur) -> const PuctNodeChild* {
@@ -535,10 +533,10 @@ void PuctEvaluator::backPropagate(float* new_scores, const Path& path) {
 
         if (cur.choice != nullptr) {
             cur.choice->traversals++;
-            // apply policy dilution (only when the score is between 0.05 < s < 0.95)
+            // apply policy dilution (only when the score is between 0.02 < s < 0.98)
             if (cur.node->visits > 1000 &&
-                cur.node->getCurrentScore(cur.node->lead_role_index) < 0.95 &&
-                cur.node->getCurrentScore(cur.node->lead_role_index) > 0.05) {
+                cur.node->getCurrentScore(cur.node->lead_role_index) < 0.98 &&
+                cur.node->getCurrentScore(cur.node->lead_role_index) > 0.02) {
 
                 // reasonable?
                 const float policy_dilute_apply = 0.99975;
@@ -581,47 +579,6 @@ int PuctEvaluator::treePlayout() {
             break;
         }
 
-        const bool DO_FAKE_RESIGN = true;
-        if (DO_FAKE_RESIGN) {
-            bool do_fake_resign = false;
-            if (current->visits > 1000 && current->getCurrentScore(current->lead_role_index) < 0.10) {
-                do_fake_resign = true;
-
-                // ok check all children, if all are under 0.1 - resign (unexpanded, tough luck)
-                for (int ii=0; ii<current->num_children; ii++) {
-                    PuctNodeChild* c = current->getNodeChild(this->sm->getRoleCount(), ii);
-                    if (c->to_node != nullptr && c->to_node->getCurrentScore(current->lead_role_index) > 0.1) {
-                        do_fake_resign = false;
-                        break;
-                    }
-                }
-
-            } else if (current->visits > 20 && current->getCurrentScore(current->lead_role_index) < 0.10) {
-                do_fake_resign = true;
-
-                // ok check all children, if all are under 0.05 - resign (unexpanded, tough luck)
-                for (int ii=0; ii<current->num_children; ii++) {
-                    PuctNodeChild* c = current->getNodeChild(this->sm->getRoleCount(), ii);
-                    if (c->to_node != nullptr && c->to_node->getCurrentScore(current->lead_role_index) > 0.05) {
-                        do_fake_resign = false;
-                        break;
-                    }
-                }
-            }
-
-            if (do_fake_resign) {
-                //K273::l_debug("resign hack");
-                for (int ii=0; ii<this->sm->getRoleCount(); ii++) {
-                    if (ii == current->lead_role_index) {
-                        current->setCurrentScore(ii, -0.05);
-                    } else {
-                        current->setCurrentScore(ii, 1.05);
-                    }
-                }
-
-                current->is_finalised = true;
-            }
-        }
         if (current->is_finalised) {
             path.emplace_back(current, nullptr, nullptr);
             break;
@@ -636,11 +593,12 @@ int PuctEvaluator::treePlayout() {
 
             this->scheduler->yield();
         }
+
         // if does not exist, then create it (will incur a nn prediction)
         if (child->to_node == nullptr) {
             current = this->expandChild(current, child);
 
-            // end of the road.  We don't continue if num_children == 1, since there is nothing to
+            // end of the road.  We continue if num_children == 1, since there is nothing to
             // select
             if (current->is_finalised || current->num_children > 1) {
                 // why do we add this?  There is no visits! XXX
@@ -661,15 +619,22 @@ int PuctEvaluator::treePlayout() {
         scores[ii] = current->getCurrentScore(ii);
     }
 
-    this->backPropagate(scores, path);
+    this->backup(scores, path);
 
     this->stats.num_tree_playouts++;
     return path.size();
 }
 
 void PuctEvaluator::playoutWorker(int worker_id) {
-    // loops until done
     while (this->do_playouts) {
+        // prevent race condition? XXX
+        // theory is if hitting terminal nodes during treePlayout(), but does not manage to
+        // finalise root - then this will become a tight loop - and this->do_playouts will never be
+        // set from playoutMain()
+        if (this->stats.num_tree_playouts % 10000 == 0) {
+            this->scheduler->yield();
+        }
+
         if (this->root->is_finalised) {
             K273::l_debug("PuctEvaluator::playoutWorker() this->root->is_finalised - break");
             break;
@@ -689,6 +654,10 @@ void PuctEvaluator::playoutMain(int max_evaluations, double end_time) {
     const double start_time = K273::get_time();
     if (this->conf->verbose) {
         K273::l_debug("enter playoutMain() for max %.1f seconds", end_time - start_time);
+
+        if (this->root->is_finalised) {
+            K273::l_warning("In playoutMain() and root is finalised");
+        }
     }
 
     const bool use_think_time = this->conf->think_time > 0;
@@ -712,11 +681,7 @@ void PuctEvaluator::playoutMain(int max_evaluations, double end_time) {
         return false;
     };
 
-    if (this->root->is_finalised) {
-        K273::l_warning("In playoutMain() and root is finalised");
-    }
-
-    int iterations = 0;
+    const int max_tree_playouts = 8 * max_evaluations;
     while (true) {
         const int our_role_index = this->root->lead_role_index;
 
@@ -725,12 +690,17 @@ void PuctEvaluator::playoutMain(int max_evaluations, double end_time) {
             break;
         }
 
+        if (this->stats.num_tree_playouts > max_tree_playouts) {
+            K273::l_warning("Breaking max iterations");
+            break;
+        }
+
         if (this->number_of_nodes > 5000000) {
             K273::l_warning("Breaking max nodes");
             break;
         }
 
-        if (this->root->is_finalised && iterations > 100) {
+        if (this->root->is_finalised && this->stats.num_tree_playouts > 100) {
             K273::l_warning("Breaking early as finalised");
             break;
         }
@@ -742,7 +712,7 @@ void PuctEvaluator::playoutMain(int max_evaluations, double end_time) {
 
         // use think time:
         // XXX hacked up so can run in reasonable times during ICGA
-        if (use_think_time && iterations % 20 == 0 && K273::get_time() > (start_time + 0.1)) {
+        if (use_think_time && this->stats.num_tree_playouts % 20 == 0 && K273::get_time() > (start_time + 0.1)) {
 
             if (elapsed(1.0)) {
 
@@ -769,8 +739,6 @@ void PuctEvaluator::playoutMain(int max_evaluations, double end_time) {
         int depth = this->treePlayout();
         this->stats.playouts_max_depth = std::max(depth, this->stats.playouts_max_depth);
         this->stats.playouts_total_depth += depth;
-
-        iterations++;
 
         if (do_report()) {
             const PuctNodeChild* best = this->chooseTopVisits(this->root);
