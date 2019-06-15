@@ -288,7 +288,9 @@ class ServerBroker(Broker):
 
         log.info("Rx'd matches %s" % num_matches)
         if dropped_dupe_count or dropped_draw_count:
-            log.warning("duplicate: %s, dropped dupe %s, dropped_draw %s" % (dupe_counts, dropped_dupe_count, dropped_draw_count))
+            log.warning("duplicate: %s, dropped dupe %s, dropped_draw %s" %(dupe_counts,
+                                                                            dropped_dupe_count,
+                                                                            dropped_draw_count))
 
     def on_sample_response(self, worker, msg):
         info = self.workers[worker]
