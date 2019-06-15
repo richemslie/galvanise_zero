@@ -4,6 +4,7 @@ import os
 import time
 
 import numpy as np
+import py.test
 
 import tensorflow as tf
 
@@ -32,11 +33,6 @@ def setup():
     np.set_printoptions(threshold=100000)
 
 
-def test_call_fn():
-    import ggpzero_interface
-    ggpzero_interface.hello_test('bobthebuilder')
-
-
 def do_transformer(num_previous_states):
     game = "breakthrough"
 
@@ -55,7 +51,7 @@ def do_transformer(num_previous_states):
     # create transformer wrapper object
     c_transformer = cppinterface.create_c_transformer(t)
 
-    nn = man.create_new_network(game, "tiny", generation_descr)
+    nn = man.create_new_network(game, "small", generation_descr)
     verbose = True
 
     total_predictions = 0
@@ -116,7 +112,7 @@ def test_inline_supervisor_creation():
         generation_descr = templates.default_generation_desc(game,
                                                              multiple_policy_heads=True)
 
-        nn = man.create_new_network(game, "tiny", generation_descr)
+        nn = man.create_new_network(game, "small", generation_descr)
 
         for batch_size in (1, 128, 1024):
             supervisor = cppinterface.Supervisor(sm, nn, batch_size=batch_size)
@@ -132,37 +128,13 @@ def setup_c4(batch_size=1024):
     generation_descr = templates.default_generation_desc(game,
                                                          multiple_policy_heads=True)
 
-    nn = man.create_new_network(game, "smaller", generation_descr)
+    nn = man.create_new_network(game, "small", generation_descr)
 
     game_info = lookup.by_name(game)
 
     supervisor = cppinterface.Supervisor(game_info.get_sm(), nn, batch_size=batch_size)
 
-    conf = confs.SelfPlayConfig()
-    conf.max_number_of_samples = 4
-    conf.resign_score_probability = 0.1
-    conf.resign_false_positive_retry_percentage = 0.5
-
-    conf.select_iterations = 0
-    conf.sample_iterations = 50
-    conf.score_iterations = 5
-
-    p = conf.select_puct_config = templates.puct_config_template("policy")
-    p.temperature = 0.5
-    p.depth_temperature_start = 1
-    p.depth_temperature_increment = 0.5
-    p.depth_temperature_stop = 40
-    p.random_scale = 0.85
-
-    p.choose = "choose_temperature"
-    p.verbose = False
-
-    conf.sample_puct_config = templates.puct_config_template("test")
-    conf.sample_puct_config.verbose = False
-
-    conf.score_puct_config = templates.puct_config_template("test")
-    conf.score_puct_config.verbose = False
-
+    conf = templates.selfplay_config_template()
     return supervisor, conf
 
 
@@ -211,6 +183,7 @@ def test_workers_batched():
 
 
 def test_inline_unique_states():
+    py.test.skip("too slow without GPU")
     get_sample_count = 250
     supervisor, conf = setup_c4(batch_size=1)
     supervisor.start_self_play(conf, num_workers=0)
