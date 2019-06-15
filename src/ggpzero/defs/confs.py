@@ -46,7 +46,10 @@ class PUCTEvaluatorConfig(object):
     fpu_prior_discount_root = attribute(-1.0)
 
     top_visits_best_guess_converge_ratio = attribute(0.85)
-    evaluation_multipler_to_convergence = attribute(2.0)
+    evaluation_multiplier_to_convergence = attribute(2.0)
+
+    # for repetition
+    use_legals_count_draw = attribute(-1)
 
 
 @register_attrs

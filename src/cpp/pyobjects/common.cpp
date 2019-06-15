@@ -92,8 +92,8 @@ static PuctConfig* createPuctConfig(PyObject* dict) {
 
     config->top_visits_best_guess_converge_ratio = asFloat("top_visits_best_guess_converge_ratio");
 
-    // XXX FIX SPELLING
-    config->evaluation_multiplier_to_convergence = asFloat("evaluation_multipler_to_convergence");
+    config->evaluation_multiplier_to_convergence = asFloat("evaluation_multiplier_to_convergence");
+    config->use_legals_count_draw = asInt("use_legals_count_draw");
 
     std::string choose_method = asString("choose");
     if (choose_method == "choose_top_visits") {
