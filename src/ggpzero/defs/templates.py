@@ -123,8 +123,6 @@ def selfplay_config_template():
     conf.run_to_end_minimum_game_depth = 30
 
     conf.abort_max_length = -1
-    conf.number_repeat_states_draw = -1
-    conf.repeat_states_score = 0.49
 
     return conf
 

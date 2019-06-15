@@ -151,12 +151,6 @@ class SelfPlayConfig(object):
     # aborts play if play depth exceeds this max_length (-1 off)
     abort_max_length = attribute(-1)
 
-    # look back to see if states are draw
-    number_repeat_states_draw = attribute(-1)
-
-    # score to back prop, to try and avoid repeat states
-    repeat_states_score = attribute(0.49)
-
 
 @register_attrs
 class NNModelConfig(object):
