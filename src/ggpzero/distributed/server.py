@@ -11,6 +11,7 @@ to's database, which can be painful.
 import os
 import sys
 import gzip
+import math
 import time
 import shutil
 import random
@@ -242,30 +243,52 @@ class ServerBroker(Broker):
             # force a checkpoint so save our leftover data straightaway
             self.checkpoint()
 
-    def add_new_samples(self, samples):
+    def add_new_samples(self, samples, dedupe=True):
         dupe_counts = Counter()
-        dropped_count = 0
+        dropped_dupe_count = 0
+        dropped_draw_count = 0
 
+        num_matches = 0
+        cur_match = None
+        cur_match_is_draw = False
         for sample in samples:
+            if sample.match_identifier != cur_match:
+                cur_match = sample.match_identifier
+                num_matches += 1
+                cur_match_is_draw = math.fabs(sample.final_score[0] - 0.5) < 0.01
+
             state = sample.state
+
+            if cur_match_is_draw:
+                if False and sample.depth > 150 and math.fabs(sample.resultant_puct_score[0] - 0.5) < 0.05:
+                    if random.random() > 0.33:
+                        dropped_draw_count += 1
+                        if dedupe:
+                            continue
+                else:
+                    if random.random() > 0.5:
+                        dropped_draw_count += 1
+                        if dedupe:
+                            continue
 
             # need to check it isn't a duplicate and drop it
             if state in self.unique_states_set:
                 dupe_counts[sample.depth] += 1
 
                 if dupe_counts[sample.depth] > 1:
-                    if random.random() > 2 / dupe_counts[sample.depth]:
-                        dropped_count += 1
-                        continue
-
+                    if random.random() > 1.25 / dupe_counts[sample.depth]:
+                        dropped_dupe_count += 1
+                        if dedupe:
+                            continue
             else:
                 self.unique_states_set.add(state)
                 self.unique_states.append(state)
 
             self.accumulated_samples.append(sample)
 
-        if dupe_counts:
-            log.warning("duplicate: %s, dropped %s" % (dupe_counts, dropped_count))
+        log.info("Rx'd matches %s" % num_matches)
+        if dropped_dupe_count or dropped_draw_count:
+            log.warning("duplicate: %s, dropped dupe %s, dropped_draw %s" % (dupe_counts, dropped_dupe_count, dropped_draw_count))
 
     def on_sample_response(self, worker, msg):
         info = self.workers[worker]
@@ -318,7 +341,7 @@ class ServerBroker(Broker):
             log.info("data exists, with generation: %s, adding %s samples" % (gen_samples.with_generation,
                                                                               gen_samples.num_samples))
 
-            self.add_new_samples(gen_samples.samples)
+            self.add_new_samples(gen_samples.samples, dedupe=False)
 
         except IOError as exc:
             log.info("Not such file for generation: %s" % exc)
