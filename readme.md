@@ -13,15 +13,15 @@ Status
 All games are written in [GDL](https://en.wikipedia.org/wiki/Game_Description_Language) unless otherwise stated.  There is *no* game specific code other than 
 a single python file describing mappings for policy and state (see [here](https://github.com/richemslie/galvanise_zero/issues/1) for more information).
 
-For games with training > 1 week, models and elo graphs:
+Games with significant training, links to elo graphs and models:
 
-* [hex13](https://github.com/richemslie/gzero_data/tree/master/data/hexLG13)
-* [connect6](https://github.com/richemslie/gzero_data/tree/master/data/connect6)
-* [breakthrough](https://github.com/richemslie/gzero_data/tree/master/data/breakthrough)
-* [amazons](https://github.com/richemslie/gzero_data/tree/master/data/amazons_10x10)
 * [chess](https://github.com/richemslie/gzero_data/tree/master/data/chess)
-* [reversi8](https://github.com/richemslie/gzero_data/tree/master/data/reversi_8x8)
+* [connect6](https://github.com/richemslie/gzero_data/tree/master/data/connect6)
+* [hex13](https://github.com/richemslie/gzero_data/tree/master/data/hexLG13)
 * [reversi10](https://github.com/richemslie/gzero_data/tree/master/data/reversi_10x10)
+* [reversi8](https://github.com/richemslie/gzero_data/tree/master/data/reversi_8x8)
+* [amazons](https://github.com/richemslie/gzero_data/tree/master/data/amazons_10x10)
+* [breakthrough](https://github.com/richemslie/gzero_data/tree/master/data/breakthrough)
 
 
 Amazons and Breakthrough won gold medals at ICGA 2018 Computer Olympiad. :clap: :clap:
@@ -30,9 +30,9 @@ LG Champion in last attempt @ Amazons, Breakthrough and Hex 13 (joint).
 
 Hex 13 / Connect6 are currently rated 2nd on active users on Little Golem.
 
-Chess and Baduk 9x9 are reasonably strong for the little time they were trained.  Baduk 9x9 had a rating ~2900 elo on CGOS after 2-3 week of training.
+Reversi is also strong relative to humans on LG, yet performs a bit worse than top AB programs (about ntest level 20 the last time I tested).
 
-Reversi is also strong relative to humans on Little Golem, yet performs a bit worse than top AB programs (about ntest level 20 the last time I tested).
+Also trained Baduk 9x9, it had a rating ~2900 elo on CGOS after 2-3 week of training.
 
 --------------------
 
