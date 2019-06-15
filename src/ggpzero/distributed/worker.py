@@ -7,7 +7,6 @@ import base64
 import shutil
 import string
 import random
-import importlib
 import traceback
 
 from twisted.internet import reactor
@@ -84,13 +83,6 @@ class Worker(Broker):
         # will be created on demand
         self.trainer = None
 
-        if False and self.conf.callback:
-            fn_py_path = self.conf.callback
-            mod_name, func_name = fn_py_path.rsplit('.', 1)
-            mod = importlib.import_module(mod_name)
-            func = getattr(mod, func_name)
-            func()
-
         # connect to server
         reactor.callLater(0, self.connect)
 
@@ -120,31 +112,31 @@ class Worker(Broker):
             self.sm = self.game_info.get_sm()
 
         else:
-            assert self.game_info.game == msg.game
+            if self.game_info.game != msg.game:
+                log.critical("Game changed to %s" % msg.game)
+                os.exit(1)
 
         self.self_play_conf = msg.self_play_conf
         self.latest_generation_name = msg.generation_name
 
         # refresh the neural network.  May have to run some commands to get it.
         self.nn = None
-        try:
-            self.nn = get_manager().load_network(self.game_info.game,
-                                                 self.latest_generation_name)
-            self.configure_self_play()
+        while self.nn is None:
+            try:
+                self.nn = get_manager().load_network(self.game_info.game,
+                                                     self.latest_generation_name)
 
-        except Exception as exc:
-            log.error("error in on_configure(): %s" % exc)
-            for l in traceback.format_exc().splitlines():
-                log.error(l)
+            except Exception as exc:
+                log.error("error in on_configure(): %s" % exc)
+                for l in traceback.format_exc().splitlines():
+                    log.error(l)
+                time.sleep(1.0)
 
+        self.configure_self_play()
         return msgs.Ok("configured")
 
     def configure_self_play(self):
-        assert self.self_play_conf is not None
-
-        if self.nn is None:
-            self.nn = get_manager().load_network(self.game_info.game,
-                                                 self.latest_generation_name)
+        assert self.nn is not None
 
         if self.supervisor is None:
             self.supervisor = cppinterface.Supervisor(self.sm, self.nn,
