@@ -38,6 +38,9 @@ namespace GGPZero {
         float top_visits_best_guess_converge_ratio;
         float evaluation_multiplier_to_convergence;
 
+        // <= 0, off
+        int use_legals_count_draw;
+
         // XXX is this used?
         bool matchmode = false;
     };

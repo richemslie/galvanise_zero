@@ -72,11 +72,6 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
     // sampling:
     this->pe->updateConf(this->conf->puct_config);
 
-    if (this->conf->number_repeat_states_draw != -1) {
-        pe->setRepeatStateDraw(this->conf->number_repeat_states_draw,
-                               this->conf->repeat_states_score);
-    }
-
     const bool do_oscillate_sampling = this->conf->oscillate_sampling_pct > 0;
 
     const int evals = this->conf->evals_per_move;

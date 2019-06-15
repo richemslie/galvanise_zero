@@ -1,3 +1,6 @@
+
+#include <unordered_set>
+
 float PuctEvaluator::priorScore(PuctNode* node, int depth) const {
 
     float prior_score = node->getFinalScore(node->lead_role_index);
@@ -186,10 +189,9 @@ void PuctEvaluator::checkDrawStates(const PuctNode* node, PuctNode* next) {
     };
 
     // const int repetition_lookback_max = this->conf->repetition_lookback_max;
-    const int repetition_lookback_max = 16;
+    const int repetition_lookback_max = 20;
 
-    // const int number_repeat_states_draw = this->conf->number_repeat_states_draw;
-    const int number_repeat_states_draw = 3;
+    const int number_repeat_states_draw = this->conf->use_legals_count_draw;
 
     auto next_legal_set = legalSet(next);
 

@@ -51,8 +51,6 @@ namespace GGPZero {
         void expandChild(PuctNode* parent, PuctNodeChild* child, bool expansion_time=false);
         PuctNode* createNode(PuctNode* parent, const GGPLib::BaseState* state, bool expansion_time=false);
 
-        void checkDrawStates(const PuctNode* node, PuctNode* next);
-
     public:
 #include "unify.h"
 
@@ -87,11 +85,6 @@ namespace GGPZero {
         GGPLib::BaseState* basestate_expand_node;
 
         const PuctConfig* conf;
-
-        // introduce a different way of doing things
-        int number_repeat_states_draw;
-        float repeat_states_score;
-        GGPLib::BaseState::EqualsMasked* masked_bs_equals;
 
         NetworkScheduler* scheduler;
 

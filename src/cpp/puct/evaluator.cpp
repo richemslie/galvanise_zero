@@ -30,8 +30,6 @@ PuctEvaluator::PuctEvaluator(GGPLib::StateMachineInterface* sm,
     sm(sm),
     basestate_expand_node(nullptr),
     conf(conf),
-    number_repeat_states_draw(-1),
-    repeat_states_score(-1.0f),
     scheduler(scheduler),
     game_depth(0),
     evaluations(0),
@@ -41,7 +39,6 @@ PuctEvaluator::PuctEvaluator(GGPLib::StateMachineInterface* sm,
     node_allocated_memory(0) {
 
     this->basestate_expand_node = this->sm->newBaseState();
-    this->masked_bs_equals = new GGPLib::BaseState::EqualsMasked(transformer->createHashMask(this->sm->newBaseState()));
 
     this->updateConf(this->conf);
 }
@@ -85,12 +82,6 @@ void PuctEvaluator::updateConf(const PuctConfig* conf) {
     }
 
     this->conf = conf;
-}
-
-void PuctEvaluator::setRepeatStateDraw(int number_repeat_states_draw,
-                                       float repeat_states_score) {
-    this->number_repeat_states_draw = number_repeat_states_draw;
-    this->repeat_states_score = repeat_states_score;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -159,31 +150,6 @@ PuctNode* PuctEvaluator::createNode(PuctNode* parent, const GGPLib::BaseState* s
     }
 
     return new_node;
-}
-
-void PuctEvaluator::checkDrawStates(const PuctNode* node, PuctNode* next) {
-    bool repeated = false;
-    for (int ii=0; ii<this->number_repeat_states_draw; ii++) {
-        if (node == nullptr) {
-            break;
-        }
-
-        if ((*this->masked_bs_equals)(node->getBaseState(),
-                                      next->getBaseState())) {
-            repeated = true;
-            break;
-        }
-
-        node = node->parent;
-    }
-
-    if (repeated) {
-        for (int ii=0; ii<this->sm->getRoleCount(); ii++) {
-            next->setCurrentScore(ii, this->repeat_states_score);
-        }
-
-        next->is_finalised = true;
-    }
 }
 
 void PuctEvaluator::backPropagate(float* new_scores) {
@@ -295,6 +261,7 @@ int PuctEvaluator::treePlayout() {
         this->path.emplace_back(child, current);
 
         // End of the road
+        // ZZZ isFinalised???
         if (current->isTerminal()) {
             break;
         }
@@ -306,7 +273,7 @@ int PuctEvaluator::treePlayout() {
         if (child->to_node == nullptr) {
             this->expandChild(current, child, true);
 
-            if (this->number_repeat_states_draw > 0) {
+            if (this->conf->use_legals_count_draw > 0) {
                 this->checkDrawStates(current, child->to_node);
             }
 

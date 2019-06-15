@@ -42,6 +42,9 @@ namespace GGPZero::PuctV2 {
 
         int batch_size;
 
+        // <= 0, off (XXX unused currently)
+        int use_legals_count_draw = -1;
+
         // extra exploration
         float extra_uct_exploration;
     };
