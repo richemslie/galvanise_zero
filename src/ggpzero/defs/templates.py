@@ -90,7 +90,8 @@ def base_puct_config(**kwds):
 
                                        max_dump_depth=0,
                                        top_visits_best_guess_converge_ratio=0.85,
-                                       evaluation_multipler_to_convergence=2.0)
+                                       evaluation_multiplier_to_convergence=2.0)
+    # ZZZ everyting else?
 
     for k, v in kwds.items():
         setattr(config, k, v)

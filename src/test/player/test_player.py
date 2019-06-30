@@ -8,13 +8,12 @@ from ggpzero.util import attrutil
 from ggpzero.defs import confs, templates
 from ggpzero.nn.manager import get_manager
 
-from ggpzero.player.puctplayer import PUCTPlayer, PUCTPlayerV2
+from ggpzero.player.puctplayer import PUCTPlayer
 
 GAME = "breakthroughSmall"
 RANDOM_GEN = "rand_0"
 
 GOOD_GEN1 = "x1_132"
-GOOD_GEN2 = "x1_42"
 
 
 def setup():
@@ -142,76 +141,39 @@ def test_random():
     play(pymcs, puct_player)
 
 
-
 def test_trained():
     # simplemcts vs GOOD_GEN
-    pymcs = get.get_player("simplemcts")
-    pymcs.max_run_time = 0.25
+    simple = get.get_player("simplemcts")
+    simple.max_run_time = 0.5
 
-    eval_config = templates.base_puct_config(verbose=True,
-                                             max_dump_depth=1)
+    eval_config = confs.PUCTEvaluatorConfig(verbose=True,
+                                            puct_constant=0.85,
+                                            puct_constant_root=3.0,
+
+                                            dirichlet_noise_pct=-1,
+
+                                            fpu_prior_discount=0.25,
+                                            fpu_prior_discount_root=0.15,
+
+                                            choose="choose_temperature",
+                                            temperature=2.0,
+                                            depth_temperature_max=10.0,
+                                            depth_temperature_start=0,
+                                            depth_temperature_increment=0.75,
+                                            depth_temperature_stop=1,
+                                            random_scale=1.0,
+                                            batch_size=1,
+                                            max_dump_depth=1)
+
     puct_config = confs.PUCTPlayerConfig("gzero",
                                          True,
-                                         100,
+                                         200,
                                          0,
                                          GOOD_GEN1,
                                          eval_config)
-
     attrutil.pprint(puct_config)
 
     puct_player = PUCTPlayer(puct_config)
 
-    play(pymcs, puct_player)
-    play(puct_player, pymcs)
-
-
-def test_puct_v2():
-    eval_config_v1 = templates.base_puct_config(verbose=True,
-                                                max_dump_depth=1)
-
-
-    gzero_v1 = PUCTPlayer(confs.PUCTPlayerConfig("gzero_v1",
-                                                 True,
-                                                 100000,
-                                                 0,
-                                                 GOOD_GEN2,
-                                                 eval_config_v1))
-
-    eval_config_v2 = confs.PUCTEvaluatorV2Config(verbose=True,
-                                                 puct_constant=0.85,
-                                                 puct_constant_root=3.0,
-
-                                                 dirichlet_noise_pct=-1,
-
-                                                 fpu_prior_discount=0.25,
-                                                 fpu_prior_discount_root=0.15,
-
-                                                 choose="choose_temperature",
-                                                 temperature=2.0,
-                                                 depth_temperature_max=10.0,
-                                                 depth_temperature_start=0,
-                                                 depth_temperature_increment=0.75,
-                                                 depth_temperature_stop=1,
-                                                 random_scale=1.0,
-
-                                                 max_dump_depth=1,
-
-                                                 minimax_backup_ratio=0.75,
-
-                                                 top_visits_best_guess_converge_ratio=0.8,
-
-                                                 think_time=2.0,
-                                                 converged_visits=2000,
-
-                                                 batch_size=32,
-                                                 extra_uct_exploration=-1.0)
-
-    gzero_v2 = PUCTPlayerV2(confs.PUCTPlayerConfig("gzero_v2",
-                                                   True,
-                                                   100000,
-                                                   0,
-                                                   GOOD_GEN2,
-                                                   eval_config_v2))
-
-    play(gzero_v1, gzero_v2, move_time=3)
-    play(gzero_v2, gzero_v1, move_time=3)
+    play(simple, puct_player)
+    #play(puct_player, simple)

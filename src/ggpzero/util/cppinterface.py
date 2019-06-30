@@ -144,32 +144,21 @@ class PollerBase(object):
 
 
 class PlayPoller(PollerBase):
-    clz = ggpzero_interface.Player
-
-    def __init__(self, sm, nn, conf, batch_size=1):
-        super().__init__(sm, nn, batch_size=batch_size)
+    def __init__(self, sm, nn, conf):
+        assert isinstance(conf, confs.PUCTEvaluatorConfig)
+        super().__init__(sm, nn, batch_size=conf.batch_size)
         transformer = nn.gdl_bases_transformer
         self.c_transformer = create_c_transformer(transformer)
-        self.c_player = self.clz(sm_to_ptr(sm),
-                                 self.c_transformer,
-                                 attr.asdict(conf))
+        self.c_player = ggpzero_interface.Player(sm_to_ptr(sm),
+                                                 self.c_transformer,
+                                                 attr.asdict(conf))
 
-        for name in "reset apply_move move get_move".split():
+        for name in "reset apply_move move get_move update_config update_config".split():
             name = "player_" + name
             setattr(self, name, getattr(self.c_player, name))
 
     def _get_poller(self):
         return self.c_player
-
-
-class PlayPollerV2(PlayPoller):
-    clz = ggpzero_interface.Player2
-
-    def __init__(self, sm, nn, conf):
-        assert isinstance(conf, confs.PUCTEvaluatorV2Config)
-        super().__init__(sm, nn, conf, batch_size=conf.batch_size)
-
-        setattr(self, "update_config", getattr(self.c_player, "player_update_config"))
 
 
 class Supervisor(PollerBase):
@@ -206,6 +195,7 @@ class Supervisor(PollerBase):
             return []
 
     def add_unique_state(self, s):
+        return # ZZZ remove this
         assert isinstance(s, str)
         assert len(s) == self.bs_for_unique_states.num_bytes
         self.bs_for_unique_states.from_string(s)

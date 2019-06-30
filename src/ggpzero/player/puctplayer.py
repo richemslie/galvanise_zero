@@ -5,14 +5,13 @@ from ggplib.player.base import MatchPlayer
 
 from ggpzero.defs import confs
 
-from ggpzero.util.cppinterface import joint_move_to_ptr, basestate_to_ptr, PlayPoller, PlayPollerV2
+from ggpzero.util.cppinterface import joint_move_to_ptr, basestate_to_ptr, PlayPoller
 
 from ggpzero.nn.manager import get_manager
 
 
 class PUCTPlayer(MatchPlayer):
     poller = None
-    poller_clz = PlayPoller
     last_probability = -1
     last_node_count = -1
 
@@ -20,9 +19,7 @@ class PUCTPlayer(MatchPlayer):
         assert isinstance(conf, (confs.PUCTPlayerConfig, confs.PUCTEvaluatorConfig))
 
         self.conf = conf
-        self.identifier = "%s_%s_%s" % (self.conf.name,
-                                        self.conf.playouts_per_iteration,
-                                        conf.generation)
+        self.identifier = "%s_%s" % (self.conf.name, conf.generation)
         super().__init__(self.identifier)
         self.sm = None
 
@@ -46,7 +43,7 @@ class PUCTPlayer(MatchPlayer):
             gen = self.conf.generation
 
             self.nn = man.load_network(game_info.game, gen)
-            self.poller = self.poller_clz(self.sm, self.nn, self.conf.evaluator_config)
+            self.poller = PlayPoller(self.sm, self.nn, self.conf.evaluator_config)
 
             def get_noop_idx(actions):
                 for idx, a in enumerate(actions):
@@ -91,18 +88,10 @@ class PUCTPlayer(MatchPlayer):
         self.last_node_count = node_count
         return move
 
+    def update_config(self, *args, **kwds):
+        self.poller.player_update_config(*args, **kwds)
+
     def __repr__(self):
         return self.get_name()
 
 
-class PUCTPlayerV2(PUCTPlayer):
-    poller_clz = PlayPollerV2
-
-    def __init__(self, conf):
-        super().__init__(conf)
-
-        # overwrite identifier
-        self.identifier = "%s_%s" % (self.conf.name, conf.generation)
-
-    def update_config(self, *args, **kwds):
-        self.poller.update_config(*args, **kwds)

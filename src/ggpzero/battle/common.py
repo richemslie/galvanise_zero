@@ -23,7 +23,7 @@ from ggpzero.util import attrutil as at
 
 from ggpzero.defs import confs
 
-from ggpzero.player.puctplayer import PUCTPlayer, PUCTPlayerV2
+from ggpzero.player.puctplayer import PUCTPlayer
 
 
 def setup(log_name_base=None):
@@ -88,58 +88,35 @@ class PromptPlayer(MatchPlayer):
         return ls.get_legal(choice)
 
 
-def get_puct_config(gen, v2=False, **kwds):
-    if v2:
-        eval_config = confs.PUCTEvaluatorV2Config(verbose=True,
-                                                  puct_constant=0.85,
-                                                  puct_constant_root=3.0,
+def get_puct_config(gen, **kwds):
+    eval_config = confs.PUCTEvaluatorV2Config(verbose=True,
+                                              puct_constant=0.85,
+                                              puct_constant_root=3.0,
 
-                                                  dirichlet_noise_pct=-1,
+                                              dirichlet_noise_pct=-1,
 
-                                                  fpu_prior_discount=0.25,
-                                                  fpu_prior_discount_root=0.15,
+                                              fpu_prior_discount=0.25,
+                                              fpu_prior_discount_root=0.15,
 
-                                                  choose="choose_temperature",
-                                                  temperature=2.0,
-                                                  depth_temperature_max=10.0,
-                                                  depth_temperature_start=0,
-                                                  depth_temperature_increment=0.75,
-                                                  depth_temperature_stop=1,
-                                                  random_scale=1.0,
+                                              choose="choose_temperature",
+                                              temperature=2.0,
+                                              depth_temperature_max=10.0,
+                                              depth_temperature_start=0,
+                                              depth_temperature_increment=0.75,
+                                              depth_temperature_stop=1,
+                                              random_scale=1.0,
 
-                                                  max_dump_depth=2,
+                                              max_dump_depth=2,
 
-                                                  minimax_backup_ratio=0.75,
+                                              minimax_backup_ratio=0.75,
 
-                                                  top_visits_best_guess_converge_ratio=0.8,
+                                              top_visits_best_guess_converge_ratio=0.8,
 
-                                                  think_time=2.0,
-                                                  converged_visits=2000,
+                                              think_time=2.0,
+                                              converged_visits=2000,
 
-                                                  batch_size=32,
-                                                  extra_uct_exploration=-1.0)
-    else:
-        eval_config = confs.PUCTEvaluatorConfig(verbose=True,
-
-                                                dirichlet_noise_pct=-1,
-
-                                                root_expansions_preset_visits=-1,
-                                                fpu_prior_discount=0.25,
-                                                fpu_prior_discount_root=0.4,
-
-                                                puct_constant=0.85,
-
-                                                choose="choose_temperature",
-                                                temperature=2.0,
-                                                depth_temperature_max=10.0,
-                                                depth_temperature_start=0,
-                                                depth_temperature_increment=0.75,
-                                                depth_temperature_stop=1,
-                                                random_scale=1.0,
-
-                                                max_dump_depth=3,
-                                                top_visits_best_guess_converge_ratio=0.8,
-                                                evaluation_multiplier_to_convergence=2.0)
+                                              batch_size=32,
+                                              extra_uct_exploration=-1.0)
 
     config = confs.PUCTPlayerConfig(name="puct",
                                     verbose=True,
@@ -173,14 +150,8 @@ class MatchTooLong(Exception):
 
 def get_player(player_type, move_time, gen=None, **extra_opts):
     if gen:
-        if player_type == "p1":
-            return PUCTPlayer(get_puct_config(gen, **extra_opts))
-
-        elif player_type == "p2":
-            return PUCTPlayerV2(get_puct_config(gen, v2=True, **extra_opts))
-
-        else:
-            assert False, "unknown player type: %s" % player_type
+        assert player_type == "puct", "unknown player type: %s" % player_type
+        return PUCTPlayer(get_puct_config(gen, **extra_opts))
 
     add_extra_opts = False
     assert gen is None

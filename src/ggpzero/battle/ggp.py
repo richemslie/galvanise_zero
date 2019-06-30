@@ -1,3 +1,4 @@
+#ZZZ XXX Fix
 import sys
 
 from ggplib.play import play_runner
@@ -6,12 +7,6 @@ from ggpzero.battle.common import get_player, run
 
 def main():
     args = sys.argv[1:]
-
-    # by defuault use v2
-    v2 = True
-    if args[0] == "-v1":
-        v2 = False
-        args = args[1:]
 
     port = int(args[0])
     gen = args[1]
