@@ -652,14 +652,10 @@ void PuctEvaluator::playoutWorker(int worker_id) {
         }
 
         if (this->root->is_finalised) {
-            K273::l_debug("PuctEvaluator::playoutWorker() this->root->is_finalised - break");
             break;
         }
 
         int depth = this->treePlayout();
-        if (depth == 0) {
-            K273::l_debug("worker depth == 0");
-        }
 
         this->stats.playouts_max_depth = std::max(depth, this->stats.playouts_max_depth);
         this->stats.playouts_total_depth += depth;
@@ -702,22 +698,31 @@ void PuctEvaluator::playoutMain(int max_evaluations, double end_time) {
         const int our_role_index = this->root->lead_role_index;
 
         if (this->stats.num_evaluations > max_evaluations) {
-            K273::l_warning("Breaking max evaluations");
+            if (this->conf->verbose) {
+                K273::l_warning("Breaking max evaluations");
+            }
             break;
         }
 
         if (this->stats.num_tree_playouts > max_tree_playouts) {
-            K273::l_warning("Breaking max iterations");
+            if (this->conf->verbose) {
+                K273::l_warning("Breaking max iterations");
+            }
+
             break;
         }
 
+        // XXX this should be configurable
         if (this->number_of_nodes > 5000000) {
             K273::l_warning("Breaking max nodes");
             break;
         }
 
         if (this->root->is_finalised && this->stats.num_tree_playouts > 100) {
-            K273::l_warning("Breaking early as finalised");
+            if (this->conf->verbose) {
+                K273::l_warning("Breaking early as finalised");
+            }
+
             break;
         }
 
@@ -842,18 +847,10 @@ PuctNode* PuctEvaluator::fastApplyMove(const PuctNodeChild* next) {
 
     ASSERT(new_root != nullptr);
 
-    //this->root->ref_count--;
-    //if (this->root->ref_count == 0) {
-    //    this->removeNode(this->root);
-    //
-    //} else {
-    //    K273::l_warning("What is root ref_count? %d", this->root->ref_count);
-    // }
-
     this->root = new_root;
     this->game_depth++;
 
-    if (number_of_nodes_before - this->number_of_nodes > 0) {
+    if (this->conf->verbose && number_of_nodes_before - this->number_of_nodes > 0) {
         K273::l_info("deleted %d nodes", number_of_nodes_before - this->number_of_nodes);
     }
 
@@ -874,11 +871,13 @@ void PuctEvaluator::applyMove(const GGPLib::JointMove* move) {
 
     std::string move_str = PuctNode::moveString(*move, this->sm);
 
-    if (!found) {
-        K273::l_warning("PuctEvaluator::applyMove(): Did not find move %s",
-                        move_str.c_str());
-    } else {
-        K273::l_info("PuctEvaluator::applyMove(): %s", move_str.c_str());
+    if (this->conf->verbose) {
+        if (!found) {
+            K273::l_warning("PuctEvaluator::applyMove(): Did not find move %s",
+                            move_str.c_str());
+        } else {
+            K273::l_info("PuctEvaluator::applyMove(): %s", move_str.c_str());
+        }
     }
 
     ASSERT(this->root != nullptr);
@@ -890,7 +889,10 @@ void PuctEvaluator::reset(int game_depth) {
         this->releaseNodes(this->initial_root);
         this->garbage.push_back(this->initial_root);
 
-        K273::l_error("Garbage collected... %zu, please wait", this->garbage.size());
+        if (this->conf->verbose) {
+            K273::l_error("Garbage collected... %zu, please wait", this->garbage.size());
+        }
+
         for (PuctNode* n : this->garbage) {
             this->removeNode(n);
         }
@@ -938,7 +940,11 @@ const PuctNodeChild* PuctEvaluator::onNextMove(int max_evaluations, double end_t
     // reset root node?  XXX a bunch of arbirtary checks to see if will reset it...
     if (conf->think_time > 10 && !this->root->dirichlet_noise_set &&
         !this->root->is_finalised && this->root->visits > 10000) {
-        K273::l_warning("Warning - reseting root node");
+
+        if (this->conf->verbose) {
+            K273::l_warning("Warning - reseting root node");
+        }
+
         for (int ii=0; ii<this->root->num_children; ii++) {
             PuctNodeChild* c = this->root->getNodeChild(this->sm->getRoleCount(), ii);
             // reset policy_prob
@@ -1274,10 +1280,6 @@ void PuctEvaluator::checkDrawStates(const PuctNode* node, PuctNode* next) {
             repeat_count++;
 
             if (repeat_count == number_repeat_states_draw) {
-
-                //K273::l_verbose("repeat state found at depth %d, legals %d",
-                //                next->game_depth, (int) next_legal_set.size());
-
 
                 for (int ii=0; ii<this->sm->getRoleCount(); ii++) {
                     next->setCurrentScore(ii, 0.5);
