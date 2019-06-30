@@ -63,6 +63,7 @@ static PuctNode* createNode(const GGPLib::BaseState* base_state,
 
     PuctNode* node = static_cast <PuctNode*>(malloc(total_bytes));
     node->parent = nullptr;
+
     node->visits = 0;
     node->inflight_visits = 0;
     node->ref_count = 1;
@@ -387,7 +388,7 @@ void PuctNodeRequest::add(float* buf, const GdlBasesTransformer* transformer) {
         }
     }
 
-    transformer->toChannels(node->getBaseState(), prev_states, buf);
+    transformer->toChannels(this->node->getBaseState(), prev_states, buf);
 }
 
 void PuctNodeRequest::reply(const ModelResult& result,

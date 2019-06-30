@@ -86,11 +86,6 @@ void PuctEvaluator::updateConf(const PuctConfig* conf) {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-void PuctEvaluator::addNode(PuctNode* new_node) {
-    this->number_of_nodes++;
-    this->node_allocated_memory += new_node->allocated_size;
-}
-
 void PuctEvaluator::removeNode(PuctNode* node) {
     for (int ii=0; ii<node->num_children; ii++) {
         PuctNodeChild* child = node->getNodeChild(this->sm->getRoleCount(), ii);
@@ -107,39 +102,37 @@ void PuctEvaluator::removeNode(PuctNode* node) {
     this->number_of_nodes--;
 }
 
-void PuctEvaluator::expandChild(PuctNode* parent, PuctNodeChild* child, bool expansion_time) {
-    // update the statemachine
-    this->sm->updateBases(parent->getBaseState());
-    this->sm->nextState(&child->move, this->basestate_expand_node);
-
-    // create node
-    child->to_node = this->createNode(parent, this->basestate_expand_node, expansion_time);
-}
-
-PuctNode* PuctEvaluator::createNode(PuctNode* parent, const GGPLib::BaseState* state, bool expansion_time) {
+PuctNode* PuctEvaluator::createNode(PuctNode* parent, const GGPLib::BaseState* state) {
     PuctNode* new_node = PuctNode::create(state, this->sm);
+
+    // update stats
+    this->number_of_nodes++;
+    this->node_allocated_memory += new_node->allocated_size;
+
+    new_node->parent = parent;
     if (parent != nullptr) {
-        new_node->parent = parent;
         new_node->game_depth = parent->game_depth + 1;
         parent->num_children_expanded++;
+
+    } else {
+        new_node->game_depth = 0;
     }
 
-    this->addNode(new_node);
-
-    if (new_node->isTerminal()) {
+    if (new_node->is_finalised) {
         // hack to try and focus more on winning lines
         // (XXX) actually a very good hack... maybe make it less hacky somehow
         for (int ii=0; ii<this->sm->getRoleCount(); ii++) {
             const float s = new_node->getCurrentScore(ii);
             if (s > 0.99) {
-                new_node->setCurrentScore(ii, s * 1.05);
+                new_node->setCurrentScore(ii, 1.05);
             } else if (s < 0.01) {
                 new_node->setCurrentScore(ii, -0.05);
             }
         }
 
     } else {
-        if (expansion_time && new_node->num_children == 1) {
+        // don't evaluate in this case.  Note the score will be invalid...
+        if (new_node->num_children == 1) {
             return new_node;
         }
 
@@ -151,6 +144,17 @@ PuctNode* PuctEvaluator::createNode(PuctNode* parent, const GGPLib::BaseState* s
 
     return new_node;
 }
+
+void PuctEvaluator::expandChild(PuctNode* parent, PuctNodeChild* child) {
+    // update the statemachine
+    this->sm->updateBases(parent->getBaseState());
+    this->sm->nextState(&child->move, this->basestate_expand_node);
+
+    // create node
+    child->to_node = this->createNode(parent, this->basestate_expand_node);
+}
+
+///////////////////////////////////////////////////////////////////////////////
 
 void PuctEvaluator::backPropagate(float* new_scores) {
     const int start_index = this->path.size() - 1;
@@ -271,7 +275,7 @@ int PuctEvaluator::treePlayout() {
 
         // if does not exist, then create it (will incur a nn prediction)
         if (child->to_node == nullptr) {
-            this->expandChild(current, child, true);
+            this->expandChild(current, child);
 
             if (this->conf->use_legals_count_draw > 0) {
                 this->checkDrawStates(current, child->to_node);
@@ -279,14 +283,12 @@ int PuctEvaluator::treePlayout() {
 
             current = child->to_node;
 
-            // special case if number of children is 1, we just bypass it and inherit next value
-            if (!current->is_finalised && current->num_children == 1) {
-                tree_playout_depth++;
-                continue;
+            // end of the road.  We continue if num_children == 1, since there is nothing to
+            // select
+            if (current->is_finalised || current->num_children > 1) {
+                this->path.emplace_back(child, current);
+                break;
             }
-
-            this->path.emplace_back(child, current);
-            break;
         }
 
         current = child->to_node;
@@ -378,9 +380,15 @@ void PuctEvaluator::playoutLoop(int max_evaluations, double end_time) {
     }
 }
 
+
+
+//////////////////////////////////////////////////////////////////////
+
 PuctNode* PuctEvaluator::fastApplyMove(const PuctNodeChild* next) {
-    ASSERT(this->initial_root != nullptr);
     ASSERT(this->root != nullptr);
+    ASSERT(this->initial_root != nullptr);
+
+    const int number_of_nodes_before = this->number_of_nodes;
 
     PuctNode* new_root = nullptr;
     for (int ii=0; ii<this->root->num_children; ii++) {
@@ -391,8 +399,6 @@ PuctNode* PuctEvaluator::fastApplyMove(const PuctNodeChild* next) {
             if (c->to_node == nullptr) {
                 this->expandChild(this->root, c);
             }
-
-            this->moves.push_back(c);
 
             new_root = c->to_node;
 
@@ -411,30 +417,39 @@ PuctNode* PuctEvaluator::fastApplyMove(const PuctNodeChild* next) {
     this->root = new_root;
     this->game_depth++;
 
+    if (this->conf->verbose && number_of_nodes_before - this->number_of_nodes > 0) {
+        K273::l_info("deleted %d nodes", number_of_nodes_before - this->number_of_nodes);
+    }
+
     return this->root;
 }
 
 void PuctEvaluator::applyMove(const GGPLib::JointMove* move) {
     // XXX this is only here for the player.  We should probably have a player class, and not
     // simplify code greatly.
+
+    bool found = false;
     for (int ii=0; ii<this->root->num_children; ii++) {
         PuctNodeChild* c = this->root->getNodeChild(this->sm->getRoleCount(), ii);
         if (c->move.equals(move)) {
             this->fastApplyMove(c);
+            found = true;
             break;
         }
     }
 
-    ASSERT(this->root != nullptr);
+    std::string move_str = PuctNode::moveString(*move, this->sm);
 
     if (this->conf->verbose) {
-        if (this->root->isTerminal()) {
-            for (auto child : this->moves) {
-                K273::l_info("Move made %s",
-                             PuctNode::moveString(child->move, this->sm).c_str());
-            }
+        if (!found) {
+            K273::l_warning("PuctEvaluator::applyMove(): Did not find move %s",
+                            move_str.c_str());
+        } else {
+            K273::l_info("PuctEvaluator::applyMove(): %s", move_str.c_str());
         }
     }
+
+    ASSERT(this->root != nullptr);
 }
 
 void PuctEvaluator::reset(int game_depth) {
@@ -445,6 +460,8 @@ void PuctEvaluator::reset(int game_depth) {
         this->root = nullptr;
     }
 
+    ASSERT(this->root == nullptr);
+
     if (this->number_of_nodes) {
         K273::l_warning("Number of nodes not zero %d", this->number_of_nodes);
     }
@@ -452,9 +469,6 @@ void PuctEvaluator::reset(int game_depth) {
     if (this->node_allocated_memory) {
         K273::l_warning("Leaked memory %ld", this->node_allocated_memory);
     }
-
-    // these dont own the memory, so can just clear
-    this->moves.clear();
 
     // this is the only place we set game_depth
     this->game_depth = game_depth;
@@ -468,7 +482,7 @@ PuctNode* PuctEvaluator::establishRoot(const GGPLib::BaseState* current_state) {
     }
 
     this->initial_root = this->root = this->createNode(nullptr, current_state);
-    this->initial_root->game_depth = this->game_depth;
+    this->root->game_depth = this->game_depth;
 
     ASSERT(!this->root->isTerminal());
     return this->root;
@@ -507,6 +521,7 @@ const PuctNodeChild* PuctEvaluator::onNextMove(int max_evaluations, double end_t
     return choice;
 }
 
+
 Children PuctEvaluator::getProbabilities(PuctNode* node, float temperature, bool use_policy) {
     // XXX this makes the assumption that our legals are unique for each child.
 
@@ -542,117 +557,40 @@ Children PuctEvaluator::getProbabilities(PuctNode* node, float temperature, bool
 
 
 const PuctNodeChild* PuctEvaluator::chooseTopVisits(const PuctNode* node) const {
-    if (node == nullptr) {
-        return nullptr;
-    }
+    ASSERT(node != nullptr);
 
     auto children = PuctNode::sortedChildren(node, this->sm->getRoleCount());
+    ASSERT(children.size() > 0);
 
+    const int role_index = node->lead_role_index;
+
+    // look for finalised first
+    if (node->is_finalised && node->getCurrentScore(role_index) > 1.0) {
+        for (auto c : children) {
+            if (c->to_node != nullptr && c->to_node->is_finalised &&
+                c->to_node->getCurrentScore(role_index) > 0.99) {
+                return c;
+            }
+        }
+    }
 
     // compare top two.  This is a heuristic to cheaply check if the node hasn't yet converged and
     // chooses the one with the best score.  It isn't very accurate, the only way to get 100%
     // accuracy is to keep running for longer, until it cleanly converges.  This is a best guess for now.
     if (this->conf->top_visits_best_guess_converge_ratio > 0 && children.size() >= 2) {
-        PuctNode* n0 = children[0]->to_node;
-        PuctNode* n1 = children[1]->to_node;
+        const PuctNodeChild* c0 = children[0];
+        const PuctNodeChild* c1 = children[1];
 
-        if (n0 != nullptr && n1 != nullptr) {
-            const int role_index = node->lead_role_index;
-
-            if (n1->visits > n0->visits * this->conf->top_visits_best_guess_converge_ratio &&
-                n1->getCurrentScore(role_index) > n0->getCurrentScore(role_index)) {
-                return children[1];
+        if (c0->to_node != nullptr && c1->to_node != nullptr) {
+            if (c1->to_node->visits > c0->to_node->visits * this->conf->top_visits_best_guess_converge_ratio &&
+                c1->to_node->getCurrentScore(role_index) > c0->to_node->getCurrentScore(role_index)) {
+                return c1;
             } else {
-                return children[0];
+                return c0;
             }
         }
     }
 
-    ASSERT(children.size() > 0);
     return children[0];
 }
 
-const PuctNodeChild* PuctEvaluator::chooseTemperature(const PuctNode* node) {
-    float temperature = this->getTemperature(node->game_depth);
-    if (temperature < 0) {
-        return this->chooseTopVisits(node);
-    }
-
-    // subtle: when the visits is very low, we want to use the policy part of the
-    // distribution - not the visits.
-    Children dist;
-    if (this->conf->dirichlet_noise_pct < 0 && node->visits < 3) {
-        dist = this->getProbabilities(this->root, temperature, true);
-
-    } else {
-        dist = this->getProbabilities(this->root, temperature, false);
-    }
-
-    float expected_probability = this->rng.get() * this->conf->random_scale;
-
-    if (this->conf->verbose) {
-        K273::l_debug("temperature %.2f, expected_probability %.2f",
-                      temperature, expected_probability);
-    }
-
-    float seen_probability = 0;
-    for (const PuctNodeChild* c : dist) {
-        seen_probability += c->next_prob;
-        if (seen_probability > expected_probability) {
-            return c;
-        }
-    }
-
-    return dist.back();
-}
-
-void PuctEvaluator::logDebug(const PuctNodeChild* choice_root) {
-    PuctNode* cur = this->root;
-    for (int ii=0; ii<this->conf->max_dump_depth; ii++) {
-        std::string indent = "";
-        for (int jj=ii-1; jj>=0; jj--) {
-            if (jj > 0) {
-                indent += "    ";
-            } else {
-                indent += ".   ";
-            }
-        }
-
-        const PuctNodeChild* next_choice;
-
-        if (cur->num_children == 0) {
-            next_choice = nullptr;
-
-        } else {
-            if (cur == this->root) {
-                next_choice = choice_root;
-            } else {
-                next_choice = this->chooseTopVisits(cur);
-            }
-        }
-
-        bool sort_by_next_probability = (cur == this->root &&
-                                         this->conf->choose == ChooseFn::choose_temperature);
-
-
-
-        // for side effects of displaying probabilities
-        Children dist;
-        if (cur->num_children > 0 && cur->visits > 0) {
-            if (cur->visits < 3) {
-                dist = this->getProbabilities(cur, this->getTemperature(cur->game_depth), true);
-
-            } else {
-                dist = this->getProbabilities(cur, this->getTemperature(cur->game_depth), false);
-            }
-        }
-
-        PuctNode::dumpNode(cur, next_choice, indent, sort_by_next_probability, this->sm);
-
-        if (next_choice == nullptr || next_choice->to_node == nullptr) {
-            break;
-        }
-
-        cur = next_choice->to_node;
-    }
-}

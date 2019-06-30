@@ -38,10 +38,10 @@ namespace GGPZero::PuctV2 {
         // called after creation
         void updateConf(const PuctConfig* conf);
 
-    private:
         //tmp:
         #include "unify.h"
 
+    private:
         // tree manangement
         void removeNode(PuctNode*);
         void releaseNodes(PuctNode*);
@@ -65,7 +65,7 @@ namespace GGPZero::PuctV2 {
         PuctNode* fastApplyMove(const PuctNodeChild* next);
         PuctNode* establishRoot(const GGPLib::BaseState* current_state);
 
-        const PuctNodeChild* onNextMove(int max_evaluations, double end_time);
+        const PuctNodeChild* onNextMove(int max_evaluations, double end_time=-1);
         void applyMove(const GGPLib::JointMove* move);
 
         const PuctNodeChild* chooseTopVisits(const PuctNode* node) const;
@@ -75,6 +75,10 @@ namespace GGPZero::PuctV2 {
 
         int nodeCount() const {
             return this->number_of_nodes;
+        }
+
+        GGPLib::StateMachineInterface* getSM() const {
+            return this->sm;
         }
 
     private:
@@ -112,6 +116,9 @@ namespace GGPZero::PuctV2 {
         NetworkScheduler* scheduler;
 
         int game_depth;
+
+        // tree for the entire game
+        PuctNode* initial_root;
 
         // root of the tree
         PuctNode* root;

@@ -15,13 +15,13 @@
 namespace GGPZero {
     typedef float Score;
 
-    const int LEAD_ROLE_INDEX_SIMULTANEOUS = -1;
 
     // Forwards
     struct PuctNode;
 
     struct PuctNodeChild {
         PuctNode* to_node;
+        uint32_t traversals;
 
         float policy_prob_orig;
         float policy_prob;
@@ -29,6 +29,7 @@ namespace GGPZero {
 
         Score debug_node_score;
         Score debug_puct_score;
+
         GGPLib::JointMove move;
     };
 
@@ -43,10 +44,12 @@ namespace GGPZero {
     }
 
     struct PuctNode {
-        // actual visits
+        constexpr static int lead_role_index_simultaneous = -1;
 
+        // for transpositions, the first parent node is set
         const PuctNode* parent;
 
+        // actual visits to this node (differs from traversals, due to transpositions)
         int visits;
 
         uint16_t num_children;
@@ -162,6 +165,11 @@ namespace GGPZero {
         static Children sortedChildren(const PuctNode* node,
                                        int role_count,
                                        bool next_probability=false);
+
+        static Children sortedChildrenTraversals(const PuctNode* node,
+                                                 int role_count,
+                                                 bool next_probability=false);
+
     };
 
     ///////////////////////////////////////////////////////////////////////////////

@@ -113,6 +113,8 @@ static int initialiseChildHelper(PuctNode* node, int role_index, int child_index
             PuctNodeChild* child = node->getNodeChild(role_count, child_index++);
             child->to_node = nullptr;
 
+            child->traversals = 0;
+
             // by default set to 1.0, will be overridden
             child->policy_prob_orig = 1.0f;
             child->policy_prob = 1.0f;
@@ -178,7 +180,7 @@ PuctNode* PuctNode::create(const GGPLib::BaseState* base_state,
 
             // simultaneous?
             if (!rest_one) {
-                lead_role_index = LEAD_ROLE_INDEX_SIMULTANEOUS;
+                lead_role_index = PuctNode::lead_role_index_simultaneous;
             }
         }
     }
@@ -324,6 +326,36 @@ Children PuctNode::sortedChildren(const PuctNode* node, int role_count, bool nex
     return children;
 }
 
+/* sorts children first by traversals, then by policy_prob */
+Children PuctNode::sortedChildrenTraversals(const PuctNode* node,
+                                            int role_count,
+                                            bool next_probability) {
+
+    Children children;
+    for (int ii=0; ii<node->num_children; ii++) {
+        const PuctNodeChild* child = node->getNodeChild(role_count, ii);
+        children.push_back(child);
+    }
+
+    auto f = [next_probability](const PuctNodeChild* a, const PuctNodeChild* b) {
+        int traversals_a = a->traversals;
+        int traversals_b = b->traversals;
+
+        if (traversals_a == traversals_b) {
+            if (next_probability) {
+                return a->next_prob > b->next_prob;
+            } else {
+                return a->policy_prob > b->policy_prob;
+            }
+        }
+
+        return traversals_a > traversals_b;
+    };
+
+    std::sort(children.begin(), children.end(), f);
+    return children;
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 
 const GGPLib::BaseState* PuctNodeRequest::getBaseState() const {
@@ -341,7 +373,7 @@ void PuctNodeRequest::add(float* buf, const GdlBasesTransformer* transformer) {
         }
     }
 
-    transformer->toChannels(node->getBaseState(), prev_states, buf);
+    transformer->toChannels(this->node->getBaseState(), prev_states, buf);
 }
 
 void PuctNodeRequest::reply(const GGPZero::ModelResult& result,

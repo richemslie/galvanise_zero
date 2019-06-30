@@ -23,7 +23,6 @@ using namespace GGPZero::PuctV2;
 
 #include "unify.cpp"
 
-
 ///////////////////////////////////////////////////////////////////////////////
 
 PathElement::PathElement(PuctNode* node, PuctNodeChild* choice,
@@ -42,6 +41,7 @@ PuctEvaluator::PuctEvaluator(GGPLib::StateMachineInterface* sm, NetworkScheduler
     basestate_expand_node(nullptr),
     scheduler(scheduler),
     game_depth(0),
+    initial_root(nullptr),
     root(nullptr),
     number_of_nodes(0),
     node_allocated_memory(0),
@@ -86,6 +86,12 @@ void PuctEvaluator::updateConf(const PuctConfig* conf) {
 
         K273::l_verbose("think %.1f, converged_visits=%d, batch_size=%d",
                         conf->think_time, conf->converged_visits, conf->batch_size);
+
+
+        K273::l_verbose("transpositions %s / backup finalised %s, use_legals_count_draw %d",
+                        conf->lookup_transpositions ? "true" : "false",
+                        conf->backup_finalised ? "true" : "false",
+                        conf->use_legals_count_draw);
     }
 
     this->conf = conf;
@@ -95,7 +101,10 @@ void PuctEvaluator::updateConf(const PuctConfig* conf) {
 
 void PuctEvaluator::removeNode(PuctNode* node) {
     const GGPLib::BaseState* bs = node->getBaseState();
-    this->lookup->erase(bs);
+    if (this->conf->lookup_transpositions) {
+        this->lookup->erase(bs);
+    }
+
     this->node_allocated_memory -= node->allocated_size;
 
     free(node);
@@ -112,8 +121,9 @@ void PuctEvaluator::releaseNodes(PuctNode* current) {
             PuctNode* next_node = child->to_node;
 
             // wah a cycle...
-            if (next_node->ref_count == 0) {
-                K273::l_warning("A cycle was found in Player::releaseNodes() skipping");
+            if (next_node->ref_count <= 0) {
+                K273::l_warning("A cycle was found in Player::releaseNodes() skipping %d",
+                                next_node->ref_count);
                 continue;
             }
 
@@ -132,6 +142,10 @@ void PuctEvaluator::releaseNodes(PuctNode* current) {
 ///////////////////////////////////////////////////////////////////////////////
 
 PuctNode* PuctEvaluator::lookupNode(const GGPLib::BaseState* bs, int depth) {
+    if (!this->conf->lookup_transpositions) {
+        return nullptr;
+    }
+
     auto found = this->lookup->find(bs);
     if (found != this->lookup->end()) {
         PuctNode* result = found->second;
@@ -142,7 +156,6 @@ PuctNode* PuctEvaluator::lookupNode(const GGPLib::BaseState* bs, int depth) {
             return nullptr;
         }
 
-        result->ref_count++;
         return result;
     }
 
@@ -155,7 +168,9 @@ PuctNode* PuctEvaluator::createNode(PuctNode* parent, const GGPLib::BaseState* s
     PuctNode* new_node = PuctNode::create(state, this->sm);
 
     // add to lookup table
-    this->lookup->emplace(new_node->getBaseState(), new_node);
+    if (this->conf->lookup_transpositions) {
+        this->lookup->emplace(new_node->getBaseState(), new_node);
+    }
 
     // update stats
     this->number_of_nodes++;
@@ -167,7 +182,7 @@ PuctNode* PuctEvaluator::createNode(PuctNode* parent, const GGPLib::BaseState* s
         parent->num_children_expanded++;
 
     } else {
-        new_node->game_depth = 0;
+        new_node->game_depth = this->game_depth;
     }
 
     if (new_node->is_finalised) {
@@ -207,12 +222,14 @@ PuctNode* PuctEvaluator::expandChild(PuctNode* parent, PuctNodeChild* child) {
     child->to_node = this->lookupNode(this->basestate_expand_node, next_depth);
 
     if (child->to_node != nullptr) {
+        child->to_node->ref_count++;
         this->stats.num_transpositions_attached++;
 
     } else {
         // create node
         child->unselectable = true;
         parent->unselectable_count++;
+
         child->to_node = this->createNode(parent, this->basestate_expand_node);
         parent->unselectable_count--;
         child->unselectable = false;
@@ -480,7 +497,7 @@ void PuctEvaluator::backup(float* new_scores, const Path& path) {
         return best;
     };
 
-    bool bp_finalised_only_once = true;
+    bool bp_finalised_only_once = this->conf->backup_finalised;
     const PathElement* prev = nullptr;
 
     for (int index=path.size() - 1; index >= 0; index--) {
@@ -781,6 +798,7 @@ void PuctEvaluator::playoutMain(int max_evaluations, double end_time) {
 
 PuctNode* PuctEvaluator::fastApplyMove(const PuctNodeChild* next) {
     ASSERT(this->root != nullptr);
+    ASSERT(this->initial_root != nullptr);
 
     const int number_of_nodes_before = this->number_of_nodes;
 
@@ -825,19 +843,15 @@ PuctNode* PuctEvaluator::fastApplyMove(const PuctNodeChild* next) {
 
     ASSERT(new_root != nullptr);
 
-    this->root->ref_count--;
-    if (this->root->ref_count == 0) {
-        this->removeNode(this->root);
-
-    } else {
-        K273::l_debug("What is root ref_count? %d", this->root->ref_count);
-    }
+    //this->root->ref_count--;
+    //if (this->root->ref_count == 0) {
+    //    this->removeNode(this->root);
+    //
+    //} else {
+    //    K273::l_warning("What is root ref_count? %d", this->root->ref_count);
+    // }
 
     this->root = new_root;
-
-    // ensure we have no parent
-    this->root->parent = nullptr;
-
     this->game_depth++;
 
     if (number_of_nodes_before - this->number_of_nodes > 0) {
@@ -873,9 +887,9 @@ void PuctEvaluator::applyMove(const GGPLib::JointMove* move) {
 
 void PuctEvaluator::reset(int game_depth) {
     // really free all
-    if (this->root != nullptr) {
-        this->releaseNodes(this->root);
-        this->garbage.push_back(this->root);
+    if (this->initial_root != nullptr) {
+        this->releaseNodes(this->initial_root);
+        this->garbage.push_back(this->initial_root);
 
         K273::l_error("Garbage collected... %zu, please wait", this->garbage.size());
         for (PuctNode* n : this->garbage) {
@@ -884,10 +898,10 @@ void PuctEvaluator::reset(int game_depth) {
 
         this->garbage.clear();
 
-        this->root = nullptr;
+        this->initial_root = this->root = nullptr;
     }
 
-    this->stats.reset();
+    ASSERT(this->root == nullptr);
 
     if (this->number_of_nodes) {
         K273::l_warning("Number of nodes not zero %d", this->number_of_nodes);
@@ -897,27 +911,27 @@ void PuctEvaluator::reset(int game_depth) {
         K273::l_warning("Leaked memory %ld", this->node_allocated_memory);
     }
 
+    this->stats.reset();
+
     // this is the only place we set game_depth
     this->game_depth = game_depth;
 }
 
 PuctNode* PuctEvaluator::establishRoot(const GGPLib::BaseState* current_state) {
-    ASSERT(this->root == nullptr);
+    ASSERT(this->root == nullptr && this->initial_root == nullptr);
 
     if (current_state == nullptr) {
         current_state = this->sm->getInitialState();
     }
 
-    this->sm->updateBases(current_state);
-    this->root = this->createNode(nullptr, current_state);
-    this->root->game_depth = this->game_depth;
+    this->initial_root = this->root = this->createNode(nullptr, current_state);
 
     ASSERT(!this->root->isTerminal());
     return this->root;
 }
 
 const PuctNodeChild* PuctEvaluator::onNextMove(int max_evaluations, double end_time) {
-    ASSERT(this->root != nullptr);
+    ASSERT(this->root != nullptr && this->initial_root != nullptr);
 
     this->stats.reset();
     this->do_playouts = true;
@@ -984,23 +998,18 @@ const PuctNodeChild* PuctEvaluator::onNextMove(int max_evaluations, double end_t
 }
 
 const PuctNodeChild* PuctEvaluator::chooseTopVisits(const PuctNode* node) const {
-    if (node == nullptr) {
-        node = this->root;
-    }
-
-    if (node == nullptr) {
-        return nullptr;
-    }
-
-    const int role_index = node->lead_role_index;
+    ASSERT(node != nullptr);
 
     auto children = PuctNode::sortedChildrenTraversals(node, this->sm->getRoleCount());
+    ASSERT(children.size() > 0);
+
+    const int role_index = node->lead_role_index;
 
     // look for finalised first
     if (node->is_finalised && node->getCurrentScore(role_index) > 1.0) {
         for (auto c : children) {
             if (c->to_node != nullptr && c->to_node->is_finalised &&
-                c->to_node->getCurrentScore(role_index) > 1.0) {
+                c->to_node->getCurrentScore(role_index) > 0.99) {
                 return c;
             }
         }
@@ -1010,78 +1019,36 @@ const PuctNodeChild* PuctEvaluator::chooseTopVisits(const PuctNode* node) const 
     // chooses the one with the best score.  It isn't very accurate, the only way to get 100%
     // accuracy is to keep running for longer, until it cleanly converges.  This is a best guess for now.
     if (this->conf->top_visits_best_guess_converge_ratio > 0 && children.size() >= 2) {
-        PuctNode* n0 = children[0]->to_node;
-        PuctNode* n1 = children[1]->to_node;
+        const PuctNodeChild* c0 = children[0];
+        const PuctNodeChild* c1 = children[1];
 
-        if (n0 != nullptr && n1 != nullptr) {
-            if (children[1]->traversals > children[0]->traversals * this->conf->top_visits_best_guess_converge_ratio &&
-                n1->getCurrentScore(role_index) > n0->getCurrentScore(role_index)) {
-                return children[1];
+        if (c0->to_node != nullptr && c1->to_node != nullptr) {
+            if (c1->traversals > c0->traversals * this->conf->top_visits_best_guess_converge_ratio &&
+                c1->to_node->getCurrentScore(role_index) > c0->to_node->getCurrentScore(role_index)) {
+                return c1;
             } else {
-                return children[0];
+                return c0;
             }
         }
     }
 
-    ASSERT(children.size() > 0);
     return children[0];
 }
 
-const PuctNodeChild* PuctEvaluator::chooseTemperature(const PuctNode* node) {
-    if (node == nullptr) {
-        node = this->root;
-    }
-
-    float temperature = this->getTemperature(node->game_depth);
-    if (temperature < 0) {
-        return this->chooseTopVisits(node);
-    }
-
-    // subtle: when the visits is low (like 0), we want to use the policy part of the
-    // distribution. By using linger here, we get that behaviour.
-    Children dist;
-    if (root->visits < root->num_children) {
-        dist = this->getProbabilities(this->root, temperature, true);
-    } else {
-        dist = this->getProbabilities(this->root, temperature, false);
-    }
-
-    float expected_probability = this->rng.get() * this->conf->random_scale;
-
-    if (this->conf->verbose) {
-        K273::l_debug("temperature %.2f, expected_probability %.2f",
-                      temperature, expected_probability);
-    }
-
-    float seen_probability = 0;
-    for (const PuctNodeChild* c : dist) {
-        seen_probability += c->next_prob;
-        if (seen_probability > expected_probability) {
-            return c;
-        }
-    }
-
-    return dist.back();
-}
-
-Children PuctEvaluator::getProbabilities(PuctNode* node, float temperature, bool use_linger) {
+Children PuctEvaluator::getProbabilities(PuctNode* node, float temperature, bool use_policy) {
     // XXX this makes the assumption that our legals are unique for each child.
 
     ASSERT(node->num_children > 0);
 
-    // since we add 0.1 to each our children (this is so the percentage does don't drop too low)
-    float node_visits = node->visits + 0.1 * node->num_children;
-
-    // add some smoothness.  This also works for the case when doing no evaluations (ie
-    // onNextMove(0)), as the node_visits == 0 and be uniform.
-    float linger_pct = 0.1f;
+    // we add 0.001 to each our children, so zero chance doesn't happen
+    float node_visits = node->visits + 0.001 * node->num_children;
 
     float total_probability = 0.0f;
     for (int ii=0; ii<node->num_children; ii++) {
         PuctNodeChild* child = node->getNodeChild(this->sm->getRoleCount(), ii);
-        float child_visits = child->to_node ? child->traversals + 0.1f : 0.1f;
-        if (use_linger) {
-            child->next_prob = linger_pct * child->policy_prob + (1 - linger_pct) * (child_visits / node_visits);
+        float child_visits = child->to_node ? child->traversals + 0.001f : 0.001f;
+        if (use_policy) {
+            child->next_prob = child->policy_prob + 0.001f;
 
         } else {
             child->next_prob = child_visits / node_visits;
@@ -1101,52 +1068,3 @@ Children PuctEvaluator::getProbabilities(PuctNode* node, float temperature, bool
     return PuctNode::sortedChildren(node, this->sm->getRoleCount(), true);
 }
 
-void PuctEvaluator::logDebug(const PuctNodeChild* choice_root) {
-    PuctNode* cur = this->root;
-    for (int ii=0; ii<this->conf->max_dump_depth; ii++) {
-        std::string indent = "";
-        for (int jj=ii-1; jj>=0; jj--) {
-            if (jj > 0) {
-                indent += "    ";
-            } else {
-                indent += ".   ";
-            }
-        }
-
-        const PuctNodeChild* next_choice;
-
-        if (cur->num_children == 0) {
-            next_choice = nullptr;
-
-        } else {
-            if (cur == this->root) {
-                next_choice = choice_root;
-            } else {
-                next_choice = this->chooseTopVisits(cur);
-            }
-        }
-
-        bool sort_by_next_probability = (cur == this->root &&
-                                         this->conf->choose == ChooseFn::choose_temperature);
-
-
-
-        // for side effects of displaying probabilities
-        Children dist;
-        if (cur->num_children > 0 && cur->visits > 0) {
-            if (cur->visits < cur->num_children) {
-                dist = this->getProbabilities(cur, 1.0, true);
-            } else {
-                dist = this->getProbabilities(cur, 1.0, false);
-            }
-        }
-
-        PuctNode::dumpNode(cur, next_choice, indent, sort_by_next_probability, this->sm);
-
-        if (next_choice == nullptr || next_choice->to_node == nullptr) {
-            break;
-        }
-
-        cur = next_choice->to_node;
-    }
-}

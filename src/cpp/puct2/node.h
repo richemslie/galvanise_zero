@@ -46,7 +46,7 @@ namespace GGPZero::PuctV2 {
     struct PuctNode {
         constexpr static int lead_role_index_simultaneous = -1;
 
-        // the parent node, this is only useful for self play (XXX - need to think about this so more...)
+        // for transpositions, the first parent node is set
         const PuctNode* parent;
 
         // actual visits to this node (differs from traversals, due to transpositions)

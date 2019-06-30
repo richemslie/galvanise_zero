@@ -226,3 +226,93 @@ void PuctEvaluator::checkDrawStates(const PuctNode* node, PuctNode* next) {
         node = node->parent;
     }
 }
+
+void PuctEvaluator::logDebug(const PuctNodeChild* choice_root) {
+    PuctNode* cur = this->root;
+    for (int ii=0; ii<this->conf->max_dump_depth; ii++) {
+        std::string indent = "";
+        for (int jj=ii-1; jj>=0; jj--) {
+            if (jj > 0) {
+                indent += "    ";
+            } else {
+                indent += ".   ";
+            }
+        }
+
+        const PuctNodeChild* next_choice;
+
+        if (cur->num_children == 0) {
+            next_choice = nullptr;
+
+        } else {
+            if (cur == this->root) {
+                next_choice = choice_root;
+            } else {
+                next_choice = this->chooseTopVisits(cur);
+            }
+        }
+
+        bool sort_by_next_probability = (cur == this->root &&
+                                         this->conf->choose == ChooseFn::choose_temperature);
+
+
+        // for side effects of displaying probabilities
+        Children dist;
+        if (cur->num_children > 0 && cur->visits > 0) {
+            const float temperature = std::max(1.0f, this->getTemperature(cur->game_depth));
+            if (cur->visits < 3) {
+                dist = this->getProbabilities(cur, temperature, true);
+
+            } else {
+                dist = this->getProbabilities(cur, temperature, false);
+            }
+        }
+
+        PuctNode::dumpNode(cur, next_choice, indent, sort_by_next_probability, this->sm);
+
+        if (next_choice == nullptr || next_choice->to_node == nullptr) {
+            break;
+        }
+
+        cur = next_choice->to_node;
+    }
+}
+
+const PuctNodeChild* PuctEvaluator::chooseTemperature(const PuctNode* node) {
+
+    // XXX do we need this check?
+    if (node == nullptr) {
+        node = this->root;
+    }
+
+    float temperature = this->getTemperature(node->game_depth);
+    if (temperature < 0) {
+        return this->chooseTopVisits(node);
+    }
+
+    // subtle: when the visits is very low, we want to use the policy part of the
+    // distribution - not the visits.
+    Children dist;
+    if (this->conf->dirichlet_noise_pct < 0 && node->visits < 3) {
+        dist = this->getProbabilities(this->root, temperature, true);
+    } else {
+        dist = this->getProbabilities(this->root, temperature, false);
+    }
+
+    float expected_probability = this->rng.get() * this->conf->random_scale;
+
+    if (this->conf->verbose) {
+        K273::l_debug("temperature %.2f, expected_probability %.2f",
+                      temperature, expected_probability);
+    }
+
+    float seen_probability = 0;
+    for (const PuctNodeChild* c : dist) {
+        seen_probability += c->next_prob;
+        if (seen_probability > expected_probability) {
+            return c;
+        }
+    }
+
+    return dist.back();
+}

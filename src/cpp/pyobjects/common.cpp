@@ -157,7 +157,11 @@ static GGPZero::PuctV2::PuctConfig* createPuctConfigV2(PyObject* dict) {
 
     config->batch_size = asInt("batch_size");
 
+    config->use_legals_count_draw = asInt("use_legals_count_draw");
     config->extra_uct_exploration = asFloat("extra_uct_exploration");
+
+    config->backup_finalised = asInt("backup_finalised");
+    config->lookup_transpositions = asInt("lookup_transpositions");
 
     std::string choose_method = asString("choose");
     if (choose_method == "choose_top_visits") {
@@ -197,7 +201,7 @@ static SelfPlayConfig* createSelfPlayConfig(PyObject* dict) {
     config->oscillate_sampling_pct = asFloat("oscillate_sampling_pct");
     config->temperature_for_policy = asFloat("temperature_for_policy");
 
-    config->puct_config = ::createPuctConfig(asDict("puct_config"));
+    config->puct_config = ::createPuctConfigV2(asDict("puct_config"));
     config->evals_per_move = asInt("evals_per_move");
 
     config->resign0_score_probability = asFloat("resign0_score_probability");
@@ -208,7 +212,7 @@ static SelfPlayConfig* createSelfPlayConfig(PyObject* dict) {
 
     config->run_to_end_pct = asFloat("run_to_end_pct");
     config->run_to_end_evals = asInt("run_to_end_evals");
-    config->run_to_end_puct_config = ::createPuctConfig(asDict("run_to_end_puct_config"));
+    config->run_to_end_puct_config = ::createPuctConfigV2(asDict("run_to_end_puct_config"));
     config->run_to_end_early_score = asFloat("run_to_end_early_score");
     config->run_to_end_minimum_game_depth = asInt("run_to_end_minimum_game_depth");
 

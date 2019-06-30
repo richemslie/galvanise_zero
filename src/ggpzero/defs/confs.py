@@ -98,8 +98,14 @@ class PUCTEvaluatorV2Config(object):
     # batches to GPU.  number of greenlets to run, along with virtual lossesa
     batch_size = attribute(32)
 
+    # for repetition
+    use_legals_count_draw = attribute(-1)
+
     # experimental for long running searches: extra_uct_exploration
     extra_uct_exploration = attribute(-1.0)
+
+    backup_finalised = attribute(False)
+    lookup_transpositions = attribute(False)
 
 
 @register_attrs

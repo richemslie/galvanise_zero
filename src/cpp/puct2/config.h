@@ -5,7 +5,7 @@ namespace GGPZero::PuctV2 {
 
 
     enum class ChooseFn {
-        choose_top_visits, choose_converge_check, choose_temperature
+        choose_top_visits, choose_temperature
     };
 
     struct PuctConfig {
@@ -43,10 +43,16 @@ namespace GGPZero::PuctV2 {
         int batch_size;
 
         // <= 0, off (XXX unused currently)
-        int use_legals_count_draw = -1;
+        int use_legals_count_draw;
 
         // extra exploration
         float extra_uct_exploration;
+
+        // MCTS prover
+        bool backup_finalised;
+
+        // turn on transposition
+        bool lookup_transpositions;
     };
 
 }

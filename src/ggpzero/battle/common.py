@@ -139,7 +139,7 @@ def get_puct_config(gen, v2=False, **kwds):
 
                                                 max_dump_depth=3,
                                                 top_visits_best_guess_converge_ratio=0.8,
-                                                evaluation_multipler_to_convergence=2.0)
+                                                evaluation_multiplier_to_convergence=2.0)
 
     config = confs.PUCTPlayerConfig(name="puct",
                                     verbose=True,

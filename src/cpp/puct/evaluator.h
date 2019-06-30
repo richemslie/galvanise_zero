@@ -41,15 +41,11 @@ namespace GGPZero {
     public:
         void updateConf(const PuctConfig* conf);
 
-        // special config for self play only
-        void setRepeatStateDraw(int number_repeat_states_draw, float repeat_states_score);
-
     private:
-        void addNode(PuctNode* new_node);
         void removeNode(PuctNode* n);
 
-        void expandChild(PuctNode* parent, PuctNodeChild* child, bool expansion_time=false);
-        PuctNode* createNode(PuctNode* parent, const GGPLib::BaseState* state, bool expansion_time=false);
+        void expandChild(PuctNode* parent, PuctNodeChild* child);
+        PuctNode* createNode(PuctNode* parent, const GGPLib::BaseState* state);
 
     public:
 #include "unify.h"
@@ -89,13 +85,12 @@ namespace GGPZero {
         NetworkScheduler* scheduler;
 
         int game_depth;
+
+        // ZZZ remove
         int evaluations;
 
         // tree for the entire game
         PuctNode* initial_root;
-
-        // not const PuctNodeChild, as we may need to fix tree
-        std::vector <PuctNodeChild*> moves;
 
         // root for evaluation
         PuctNode* root;

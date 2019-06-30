@@ -10,11 +10,14 @@
 #include <string>
 #include <vector>
 
+namespace GGPZero::PuctV2 {
+    class PuctEvaluator;
+};
+
 namespace GGPZero {
 
     // forwards
     class SelfPlay;
-    class PuctEvaluator;
     struct SelfPlayConfig;
 
     class SelfPlayManager {
@@ -28,7 +31,8 @@ namespace GGPZero {
 
     public:
         // the following are only called from self player
-        Sample* createSample(const PuctEvaluator* pe, const PuctNode* node);
+        Sample* createSample(const PuctV2::PuctEvaluator* pe, const PuctV2::PuctNode* node);
+
         void addSample(Sample* sample);
 
         UniqueStates* getUniqueStates() const {
