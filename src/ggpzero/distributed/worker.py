@@ -114,7 +114,7 @@ class Worker(Broker):
         else:
             if self.game_info.game != msg.game:
                 log.critical("Game changed to %s" % msg.game)
-                os.exit(1)
+                sys.exit(1)
 
         self.self_play_conf = msg.self_play_conf
         self.latest_generation_name = msg.generation_name
