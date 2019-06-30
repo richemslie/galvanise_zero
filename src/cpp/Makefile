@@ -9,33 +9,36 @@ CFLAGS += -fPIC
 # python specific compile flags
 CFLAGS += -Wno-register -Wno-strict-aliasing $(shell python2-config --includes)
 
-SRCS = puct/node.cpp puct/evaluator.cpp
-SRCS += gdltransformer.cpp scheduler.cpp selfplay.cpp selfplaymanager.cpp
-SRCS += player.cpp supervisor.cpp ggpzero_interface.cpp
-
-# experimental
+SRCS = puct/node.cpp puct/evaluator.cpp player.cpp
 SRCS += puct2/node.cpp puct2/evaluator.cpp player2.cpp
 
+SRCS += gdltransformer.cpp scheduler.cpp selfplay.cpp selfplaymanager.cpp
+SRCS += supervisor.cpp ggpzero_interface.cpp
+
+EXT_SRCS = external/draughts_desc.cpp external/draughts_board.cpp external/draughts_sm.cpp external/draughts_init.cpp external/interface.cpp
+
+
 OBJS = $(patsubst %.cpp, %.o, $(SRCS))
-DEPS=$(SRCS:.cpp=.d)
+EXT_OBJS = $(patsubst %.cpp, %.o, $(EXT_SRCS))
+
+DEPS = $(SRCS:.cpp=.d)
+DEPS += $(E_SRCS:.cpp=.d)
 
 # Top level
-all: $(OBJS) ggpzero_interface.so
+all: $(OBJS) $(EXT_OBJS) ggpzero_interface.so libgzero_games_cpp.so
 
 ggpzero_interface.so: $(OBJS)
 	$(CPP) -shared $(LDFLAGS) $(OBJS) $(LIBS) -o $@
 
+libgzero_games_cpp.so: $(EXT_OBJS)
+	$(CPP) -shared $(LDFLAGS) $(EXT_OBJS) $(LIBS) -o $@
+
 %.o : %.cpp
 	$(CPP) $(INCLUDE_PATHS) $(CFLAGS) -c -o $@ $<
 
-# Install
-install: $(LIB_NAME)
-	$(CP) $(LIB_NAME) $(INSTALL_LIB_PATH)
-
 # Cleans
 clean :
-	$(RM) $(OBJS) $(DEPS)
-
+	$(RM) $(OBJS) $(EXT_OBJS) $(DEPS)
 
 -include $(DEPS)
 .PHONY: all clean
