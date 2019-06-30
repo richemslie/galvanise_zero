@@ -19,7 +19,11 @@ class PUCTPlayer(MatchPlayer):
         assert isinstance(conf, (confs.PUCTPlayerConfig, confs.PUCTEvaluatorConfig))
 
         self.conf = conf
-        self.identifier = "%s_%s" % (self.conf.name, conf.generation)
+        if conf.playouts_per_iteration > 0:
+            self.identifier = "%s_%s_%s" % (self.conf.name, conf.playouts_per_iteration, conf.generation)
+        else:
+            self.identifier = "%s_%s" % (self.conf.name, conf.generation)
+
         super().__init__(self.identifier)
         self.sm = None
 

@@ -89,34 +89,34 @@ class PromptPlayer(MatchPlayer):
 
 
 def get_puct_config(gen, **kwds):
-    eval_config = confs.PUCTEvaluatorV2Config(verbose=True,
-                                              puct_constant=0.85,
-                                              puct_constant_root=3.0,
+    eval_config = confs.PUCTEvaluatorConfig(verbose=True,
+                                            puct_constant=0.85,
+                                            puct_constant_root=3.0,
 
-                                              dirichlet_noise_pct=-1,
+                                            dirichlet_noise_pct=-1,
 
-                                              fpu_prior_discount=0.25,
-                                              fpu_prior_discount_root=0.15,
+                                            fpu_prior_discount=0.25,
+                                            fpu_prior_discount_root=0.15,
 
-                                              choose="choose_temperature",
-                                              temperature=2.0,
-                                              depth_temperature_max=10.0,
-                                              depth_temperature_start=0,
-                                              depth_temperature_increment=0.75,
-                                              depth_temperature_stop=1,
-                                              random_scale=1.0,
+                                            choose="choose_temperature",
+                                            temperature=2.0,
+                                            depth_temperature_max=10.0,
+                                            depth_temperature_start=0,
+                                            depth_temperature_increment=0.75,
+                                            depth_temperature_stop=1,
+                                            random_scale=1.0,
 
-                                              max_dump_depth=2,
+                                            max_dump_depth=2,
 
-                                              minimax_backup_ratio=0.75,
+                                            minimax_backup_ratio=0.75,
 
-                                              top_visits_best_guess_converge_ratio=0.8,
+                                            top_visits_best_guess_converge_ratio=0.8,
 
-                                              think_time=2.0,
-                                              converged_visits=2000,
+                                            think_time=2.0,
+                                            converged_visits=2000,
 
-                                              batch_size=32,
-                                              extra_uct_exploration=-1.0)
+                                            batch_size=32,
+                                            extra_uct_exploration=-1.0)
 
     config = confs.PUCTPlayerConfig(name="puct",
                                     verbose=True,

@@ -1,3 +1,9 @@
+/*
+General note of is_finalised versus isTerminal().  When collecting, we want to add everything
+(especially if oscillating) even if game has been finalised.  Let resign threshold handle those
+cases when game is finalised long before termination.
+Therefore it makes sense to only use isTerminal() in collecting samples, but use is_finalised in
+runToEnd(). */
 
 #include "selfplay.h"
 
@@ -88,7 +94,7 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
             break;
         }
 
-        if (node->is_finalised) {
+        if (node->isTerminal()) {
             break;
         }
 
@@ -160,19 +166,12 @@ int SelfPlay::runToEnd(PuctNode* node, std::vector <float>& final_scores) {
                                         this->rng.get() > this->conf->run_to_end_pct);
 
     auto done = [this] (const PuctNode* node) {
-        if (node->isTerminal()) {
+        if (this->conf->abort_max_length > 0 && node->game_depth > this->conf->abort_max_length) {
             return true;
         }
 
-        if (this->conf->abort_max_length > 0) {
-            if (node->game_depth > this->conf->abort_max_length) {
-                return true;
-            }
-
-        } else {
-            if (node->is_finalised) {
-                return true;
-            }
+        if (node->is_finalised) {
+            return true;
         }
 
         return false;
@@ -183,8 +182,7 @@ int SelfPlay::runToEnd(PuctNode* node, std::vector <float>& final_scores) {
         const PuctNodeChild* choice = this->pe->onNextMove(evals);
         node = this->pe->fastApplyMove(choice);
 
-        // XXX do we need this?  node should still be ok.   XXX check & remove.
-        if (node->isTerminal()) {
+        if (node->is_finalised) {
             break;
         }
 
@@ -208,8 +206,7 @@ int SelfPlay::runToEnd(PuctNode* node, std::vector <float>& final_scores) {
         }
     }
 
-    if (this->conf->abort_max_length > 0 &&
-        node->game_depth > this->conf->abort_max_length) {
+    if (this->conf->abort_max_length > 0 && node->game_depth > this->conf->abort_max_length) {
         return -1;
     }
 
