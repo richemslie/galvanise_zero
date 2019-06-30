@@ -2,14 +2,11 @@
 
 #include "events.h"
 #include "player.h"
-#include "player2.h"
 #include "selfplay.h"
 #include "scheduler.h"
 #include "supervisor.h"
 #include "puct/config.h"
 #include "puct/evaluator.h"
-#include "puct2/config.h"
-#include "puct2/evaluator.h"
 
 // ggplib imports
 #include <statemachine/goalless_sm.h>
@@ -48,70 +45,70 @@ static void logExceptionWrapper(const std::string& name) {
     }
 }
 
-static PuctConfig* createPuctConfig(PyObject* dict) {
-    PuctConfig* config = new PuctConfig;
+// static PuctConfig* createPuctConfig(PyObject* dict) {
+//     PuctConfig* config = new PuctConfig;
 
-    auto asInt = [dict] (const char* name) {
-        PyObject* borrowed = PyDict_GetItemString(dict, name);
-        return PyInt_AsLong(borrowed);
-    };
+//     auto asInt = [dict] (const char* name) {
+//         PyObject* borrowed = PyDict_GetItemString(dict, name);
+//         return PyInt_AsLong(borrowed);
+//     };
 
-    auto asString = [dict] (const char* name) {
-        PyObject* borrowed = PyDict_GetItemString(dict, name);
-        return PyString_AsString(borrowed);
-    };
+//     auto asString = [dict] (const char* name) {
+//         PyObject* borrowed = PyDict_GetItemString(dict, name);
+//         return PyString_AsString(borrowed);
+//     };
 
-    auto asFloat = [dict] (const char* name) {
-        PyObject* borrowed = PyDict_GetItemString(dict, name);
-        return (float) PyFloat_AsDouble(borrowed);
-    };
+//     auto asFloat = [dict] (const char* name) {
+//         PyObject* borrowed = PyDict_GetItemString(dict, name);
+//         return (float) PyFloat_AsDouble(borrowed);
+//     };
 
-    config->verbose = asInt("verbose");
+//     config->verbose = asInt("verbose");
 
-    config->puct_constant = asFloat("puct_constant");
+//     config->puct_constant = asFloat("puct_constant");
 
-    // XXX temp
-    config->puct_constant_root = config->puct_constant;
+//     // XXX temp
+//     config->puct_constant_root = config->puct_constant;
 
-    config->root_expansions_preset_visits = asInt("root_expansions_preset_visits");
-    config->dirichlet_noise_pct = asFloat("dirichlet_noise_pct");
-    config->noise_policy_squash_pct = asFloat("noise_policy_squash_pct");
-    config->noise_policy_squash_prob = asFloat("noise_policy_squash_prob");
+//     config->root_expansions_preset_visits = asInt("root_expansions_preset_visits");
+//     config->dirichlet_noise_pct = asFloat("dirichlet_noise_pct");
+//     config->noise_policy_squash_pct = asFloat("noise_policy_squash_pct");
+//     config->noise_policy_squash_prob = asFloat("noise_policy_squash_prob");
 
-    config->max_dump_depth = asInt("max_dump_depth");
+//     config->max_dump_depth = asInt("max_dump_depth");
 
-    config->random_scale = asFloat("random_scale");
-    config->temperature = asFloat("temperature");
-    config->depth_temperature_start = asInt("depth_temperature_start");
-    config->depth_temperature_increment = asFloat("depth_temperature_increment");
-    config->depth_temperature_stop = asInt("depth_temperature_stop");
-    config->depth_temperature_max = asFloat("depth_temperature_max");
+//     config->random_scale = asFloat("random_scale");
+//     config->temperature = asFloat("temperature");
+//     config->depth_temperature_start = asInt("depth_temperature_start");
+//     config->depth_temperature_increment = asFloat("depth_temperature_increment");
+//     config->depth_temperature_stop = asInt("depth_temperature_stop");
+//     config->depth_temperature_max = asFloat("depth_temperature_max");
 
-    config->fpu_prior_discount = asFloat("fpu_prior_discount");
-    config->fpu_prior_discount_root = asFloat("fpu_prior_discount_root");
+//     config->fpu_prior_discount = asFloat("fpu_prior_discount");
+//     config->fpu_prior_discount_root = asFloat("fpu_prior_discount_root");
 
-    config->top_visits_best_guess_converge_ratio = asFloat("top_visits_best_guess_converge_ratio");
+//     config->top_visits_best_guess_converge_ratio = asFloat("top_visits_best_guess_converge_ratio");
 
-    config->evaluation_multiplier_to_convergence = asFloat("evaluation_multiplier_to_convergence");
-    config->use_legals_count_draw = asInt("use_legals_count_draw");
+//     config->evaluation_multiplier_to_convergence = asFloat("evaluation_multiplier_to_convergence");
+//     config->use_legals_count_draw = asInt("use_legals_count_draw");
 
-    std::string choose_method = asString("choose");
-    if (choose_method == "choose_top_visits") {
-        config->choose = ChooseFn::choose_top_visits;
+//     std::string choose_method = asString("choose");
+//     if (choose_method == "choose_top_visits") {
+//         config->choose = ChooseFn::choose_top_visits;
 
-    } else if (choose_method == "choose_temperature") {
-        config->choose = ChooseFn::choose_temperature;
+//     } else if (choose_method == "choose_temperature") {
+//         config->choose = ChooseFn::choose_temperature;
 
-    } else {
-        K273::l_error("Choose method unknown: '%s', setting to top visits", choose_method.c_str());
-        config->choose = ChooseFn::choose_top_visits;
-    }
+//     } else {
+//         K273::l_error("Choose method unknown: '%s', setting to top visits", choose_method.c_str());
+//         config->choose = ChooseFn::choose_top_visits;
+//     }
 
-    return config;
-}
+//     return config;
+// }
 
-static GGPZero::PuctV2::PuctConfig* createPuctConfigV2(PyObject* dict) {
-    GGPZero::PuctV2::PuctConfig* config = new GGPZero::PuctV2::PuctConfig;
+static GGPZero::PuctConfig* createPuctConfig(PyObject* dict) {
+    GGPZero::PuctConfig* config = new GGPZero::PuctConfig;
 
     auto asInt = [dict] (const char* name) {
         PyObject* borrowed = PyDict_GetItemString(dict, name);
@@ -165,14 +162,14 @@ static GGPZero::PuctV2::PuctConfig* createPuctConfigV2(PyObject* dict) {
 
     std::string choose_method = asString("choose");
     if (choose_method == "choose_top_visits") {
-        config->choose = GGPZero::PuctV2::ChooseFn::choose_top_visits;
+        config->choose = GGPZero::ChooseFn::choose_top_visits;
 
     } else if (choose_method == "choose_temperature") {
-        config->choose = GGPZero::PuctV2::ChooseFn::choose_temperature;
+        config->choose = GGPZero::ChooseFn::choose_temperature;
 
     } else {
         K273::l_error("Choose method unknown: '%s', setting to top visits", choose_method.c_str());
-        config->choose = GGPZero::PuctV2::ChooseFn::choose_top_visits;
+        config->choose = GGPZero::ChooseFn::choose_top_visits;
     }
 
     return config;
@@ -201,7 +198,7 @@ static SelfPlayConfig* createSelfPlayConfig(PyObject* dict) {
     config->oscillate_sampling_pct = asFloat("oscillate_sampling_pct");
     config->temperature_for_policy = asFloat("temperature_for_policy");
 
-    config->puct_config = ::createPuctConfigV2(asDict("puct_config"));
+    config->puct_config = ::createPuctConfig(asDict("puct_config"));
     config->evals_per_move = asInt("evals_per_move");
 
     config->resign0_score_probability = asFloat("resign0_score_probability");
@@ -212,7 +209,7 @@ static SelfPlayConfig* createSelfPlayConfig(PyObject* dict) {
 
     config->run_to_end_pct = asFloat("run_to_end_pct");
     config->run_to_end_evals = asInt("run_to_end_evals");
-    config->run_to_end_puct_config = ::createPuctConfigV2(asDict("run_to_end_puct_config"));
+    config->run_to_end_puct_config = ::createPuctConfig(asDict("run_to_end_puct_config"));
     config->run_to_end_early_score = asFloat("run_to_end_early_score");
     config->run_to_end_minimum_game_depth = asInt("run_to_end_minimum_game_depth");
 

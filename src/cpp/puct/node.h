@@ -12,7 +12,7 @@
 #include <string>
 #include <vector>
 
-namespace GGPZero::PuctV2 {
+namespace GGPZero {
     typedef float Score;
 
     // Forwards

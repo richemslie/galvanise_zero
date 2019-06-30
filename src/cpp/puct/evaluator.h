@@ -1,7 +1,7 @@
 #pragma once
 
-#include "puct2/node.h"
-#include "puct2/config.h"
+#include "puct/node.h"
+#include "puct/config.h"
 
 #include "scheduler.h"
 
@@ -14,7 +14,7 @@
 #include <vector>
 
 
-namespace GGPZero::PuctV2 {
+namespace GGPZero {
 
     struct PathElement {
         PathElement(PuctNode* node, PuctNodeChild* choice, PuctNodeChild* best);
@@ -38,8 +38,15 @@ namespace GGPZero::PuctV2 {
         // called after creation
         void updateConf(const PuctConfig* conf);
 
-        //tmp:
-        #include "unify.h"
+        void setDirichletNoise(PuctNode* node);
+        float priorScore(PuctNode* node, int depth) const;
+        void setPuctConstant(PuctNode* node, int depth) const;
+        float getTemperature(int depth) const;
+
+        const PuctNodeChild* choose(const PuctNode* node);
+        bool converged(int count) const;
+
+        void checkDrawStates(const PuctNode* node, PuctNode* next);
 
     private:
         // tree manangement

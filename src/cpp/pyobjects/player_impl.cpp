@@ -145,7 +145,7 @@ static PyObject* gi_Player(PyObject* self, PyObject* args) {
     }
 
     GGPLib::StateMachine* sm = reinterpret_cast<GGPLib::StateMachine*> (ptr);
-    GGPZero::PuctConfig* conf = createPuctConfigV2(dict);
+    GGPZero::PuctConfig* conf = createPuctConfig(dict);
 
     // create the c++ object
     GGPZero::Player* player = new GGPZero::Player(sm, py_transformer->impl, conf);

@@ -1,4 +1,4 @@
-#include "puct2/node.h"
+#include "puct/node.h"
 
 #include "gdltransformer.h"
 
@@ -14,7 +14,7 @@
 #include <algorithm>
 
 using namespace std;
-using namespace GGPZero::PuctV2;
+using namespace GGPZero;
 
 static string scoreString(const PuctNode* node,
                           GGPLib::StateMachineInterface* sm, bool final=false) {

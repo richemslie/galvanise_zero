@@ -6,9 +6,9 @@
 #include "uniquestates.h"
 #include "selfplaymanager.h"
 
-#include "puct2/node.h"
-#include "puct2/config.h"
-#include "puct2/evaluator.h"
+#include "puct/node.h"
+#include "puct/config.h"
+#include "puct/evaluator.h"
 
 #include <statemachine/statemachine.h>
 
@@ -20,7 +20,7 @@
 
 using namespace GGPZero;
 
-SelfPlay::SelfPlay(SelfPlayManager* manager, const SelfPlayConfig* conf, PuctV2::PuctEvaluator* pe,
+SelfPlay::SelfPlay(SelfPlayManager* manager, const SelfPlayConfig* conf, PuctEvaluator* pe,
                    const GGPLib::BaseState* initial_state, int role_count, std::string identifier) :
     manager(manager),
     conf(conf),
@@ -36,7 +36,7 @@ SelfPlay::~SelfPlay() {
 }
 
 
-bool SelfPlay::resign(const PuctV2::PuctNode* node) {
+bool SelfPlay::resign(const PuctNode* node) {
     ASSERT(!node->isTerminal());
 
     // should never get here if already resigned
@@ -67,7 +67,7 @@ bool SelfPlay::resign(const PuctV2::PuctNode* node) {
     return this->has_resigned;
 }
 
-PuctV2::PuctNode* SelfPlay::collectSamples(PuctV2::PuctNode* node) {
+PuctNode* SelfPlay::collectSamples(PuctNode* node) {
 
     // sampling:
     this->pe->updateConf(this->conf->puct_config);
@@ -92,7 +92,7 @@ PuctV2::PuctNode* SelfPlay::collectSamples(PuctV2::PuctNode* node) {
             break;
         }
 
-        const PuctV2::PuctNodeChild* choice = nullptr;
+        const PuctNodeChild* choice = nullptr;
 
         bool do_skip = false;
         if (!man.isUnique(node->getBaseState(), node->game_depth)) {
@@ -152,14 +152,14 @@ PuctV2::PuctNode* SelfPlay::collectSamples(PuctV2::PuctNode* node) {
     return node;
 }
 
-int SelfPlay::runToEnd(PuctV2::PuctNode* node, std::vector <float>& final_scores) {
+int SelfPlay::runToEnd(PuctNode* node, std::vector <float>& final_scores) {
     this->pe->updateConf(this->conf->run_to_end_puct_config);
 
     const int evals = this->conf->run_to_end_evals;
     const bool run_to_end_can_resign = (this->has_resigned &&
                                         this->rng.get() > this->conf->run_to_end_pct);
 
-    auto done = [this] (const PuctV2::PuctNode* node) {
+    auto done = [this] (const PuctNode* node) {
         if (node->isTerminal()) {
             return true;
         }
@@ -180,7 +180,7 @@ int SelfPlay::runToEnd(PuctV2::PuctNode* node, std::vector <float>& final_scores
 
     // simply run the game to end
     while (!done(node)) {
-        const PuctV2::PuctNodeChild* choice = this->pe->onNextMove(evals);
+        const PuctNodeChild* choice = this->pe->onNextMove(evals);
         node = this->pe->fastApplyMove(choice);
 
         // XXX do we need this?  node should still be ok.   XXX check & remove.
@@ -303,7 +303,7 @@ void SelfPlay::playOnce() {
     this->pe->reset(0);
 
     // Initial node
-    PuctV2::PuctNode* node = this->pe->establishRoot(this->initial_state);
+    PuctNode* node = this->pe->establishRoot(this->initial_state);
     ASSERT(!node->isTerminal());
 
     const int starting_sample_depth = node->game_depth;

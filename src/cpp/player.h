@@ -10,7 +10,7 @@
 
 #include <vector>
 
-namespace GGPZero::PuctV2 {
+namespace GGPZero {
 
     // forwards
     class PuctEvaluator;

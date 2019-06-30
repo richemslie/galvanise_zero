@@ -5,8 +5,8 @@
 #include "scheduler.h"
 #include "selfplaymanager.h"
 
-#include "puct2/config.h"
-#include "puct2/evaluator.h"
+#include "puct/config.h"
+#include "puct/evaluator.h"
 
 #include <statemachine/basestate.h>
 #include <statemachine/statemachine.h>
@@ -69,14 +69,14 @@ SelfPlayManager::~SelfPlayManager() {
 ///////////////////////////////////////////////////////////////////////////////
 
 // will create a new sample based on the root tree
-Sample* SelfPlayManager::createSample(const PuctV2::PuctEvaluator* pe,
-                                      const PuctV2::PuctNode* node) {
+Sample* SelfPlayManager::createSample(const PuctEvaluator* pe,
+                                      const PuctNode* node) {
     Sample* sample = new Sample;
     sample->state = this->sm->newBaseState();
     sample->state->assign(node->getBaseState());
 
     // Add previous states
-    const PuctV2::PuctNode* cur = node->parent;
+    const PuctNode* cur = node->parent;
     for (int ii=0; ii<this->transformer->getNumberPrevStates(); ii++) {
         if (cur == nullptr) {
             break;
@@ -95,7 +95,7 @@ Sample* SelfPlayManager::createSample(const PuctV2::PuctEvaluator* pe,
     for (int ri=0; ri<this->sm->getRoleCount(); ri++) {
         Sample::Policy& policy = sample->policies[ri];
         for (int ii=0; ii<node->num_children; ii++) {
-            const PuctV2::PuctNodeChild* child = node->getNodeChild(this->sm->getRoleCount(), ii);
+            const PuctNodeChild* child = node->getNodeChild(this->sm->getRoleCount(), ii);
             if (ri == node->lead_role_index) {
                 policy.emplace_back(child->move.get(ri),
                                     child->next_prob);
@@ -133,11 +133,7 @@ void SelfPlayManager::startSelfPlayers(const SelfPlayConfig* config) {
     for (int ii=0; ii<this->batch_size; ii++) {
         // the statemachine is shared between all puctevaluators of this mananger.  Just be careful.
 
-        // ZZZ convert config to puct2
-        // ZZZcontinue as is
-        PuctV2::PuctEvaluator* pe = new PuctV2::PuctEvaluator(this->sm,
-                                                              this->scheduler,
-                                                              this->transformer);
+        PuctEvaluator* pe = new PuctEvaluator(this->sm, this->scheduler, this->transformer);
         pe->updateConf(config->puct_config);
 
         std::string self_play_identifier = this->identifier + K273::fmtString("_%d", ii);

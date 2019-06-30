@@ -1,7 +1,7 @@
-#include "player2.h"
+#include "player.h"
 
-#include "puct2/config.h"
-#include "puct2/evaluator.h"
+#include "puct/config.h"
+#include "puct/evaluator.h"
 
 #include "scheduler.h"
 #include "gdltransformer.h"
@@ -10,7 +10,7 @@
 #include <k273/exception.h>
 
 
-using namespace GGPZero::PuctV2;
+using namespace GGPZero;
 
 Player::Player(GGPLib::StateMachineInterface* sm,
                const GdlBasesTransformer* transformer,

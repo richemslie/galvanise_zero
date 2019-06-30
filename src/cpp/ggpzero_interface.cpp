@@ -16,7 +16,6 @@ PyObject* ggpzero_interface_error;
 #include "pyobjects/common.cpp"
 #include "pyobjects/gdltransformer_impl.cpp"
 #include "pyobjects/player_impl.cpp"
-#include "pyobjects/player_impl2.cpp"
 #include "pyobjects/supervisor_impl.cpp"
 
 
@@ -52,7 +51,6 @@ PyMethodDef gi_functions[] = {
     {"buf_to_tuple_reverse_bytes", gi_buf_to_tuple_reverse_bytes, METH_VARARGS, "buf_to_tuple_reverse_bytes"},
     {"GdlBasesTransformer", gi_GdlBasesTransformer, METH_VARARGS, "GdlBasesTransformer"},
     {"Player", gi_Player, METH_VARARGS, "Player"},
-    {"Player2", gi_Player2, METH_VARARGS, "Player2"},
     {"Supervisor", gi_Supervisor, METH_VARARGS, "Supervisor"},
 
     {nullptr, nullptr, 0, nullptr}
@@ -74,12 +72,6 @@ extern "C" {
         Py_TYPE(&PyType_Player) = &PyType_Type;
 
         if (::PyType_Ready(&PyType_Player) < 0) {
-            return;
-        }
-
-        Py_TYPE(&PyType_Player2) = &PyType_Type;
-
-        if (::PyType_Ready(&PyType_Player2) < 0) {
             return;
         }
 

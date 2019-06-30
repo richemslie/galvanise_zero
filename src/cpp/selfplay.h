@@ -7,24 +7,21 @@
 
 #include <vector>
 
-namespace GGPZero::PuctV2 {
-    struct PuctNode;
-    struct PuctConfig;
-    class PuctEvaluator;
-};
-
 namespace GGPZero {
     // forwards
     struct Sample;
     class NetworkScheduler;
     class SelfPlayManager;
+    struct PuctNode;
+    struct PuctConfig;
+    class PuctEvaluator;
 
     struct SelfPlayConfig {
         float oscillate_sampling_pct;
 
         float temperature_for_policy;
 
-        PuctV2::PuctConfig* puct_config;
+        PuctConfig* puct_config;
         int evals_per_move;
 
         float resign0_score_probability;
@@ -38,7 +35,7 @@ namespace GGPZero {
 
         float run_to_end_pct;
         int run_to_end_evals;
-        PuctV2::PuctConfig* run_to_end_puct_config;
+        PuctConfig* run_to_end_puct_config;
         float run_to_end_early_score;
         int run_to_end_minimum_game_depth;
     };
@@ -46,14 +43,14 @@ namespace GGPZero {
     class SelfPlay {
     public:
         SelfPlay(SelfPlayManager* manager, const SelfPlayConfig* conf,
-                 PuctV2::PuctEvaluator* pe, const GGPLib::BaseState* initial_state,
+                 PuctEvaluator* pe, const GGPLib::BaseState* initial_state,
                  int role_count, std::string identifier);
         ~SelfPlay();
 
     private:
-        bool resign(const PuctV2::PuctNode* node);
-        PuctV2::PuctNode* collectSamples(PuctV2::PuctNode* node);
-        int runToEnd(PuctV2::PuctNode* node, std::vector <float>& final_scores);
+        bool resign(const PuctNode* node);
+        PuctNode* collectSamples(PuctNode* node);
+        int runToEnd(PuctNode* node, std::vector <float>& final_scores);
         void addSamples(const std::vector <float>& final_scores,
                         int starting_sample_depth, int game_depth);
 
@@ -70,7 +67,7 @@ namespace GGPZero {
         const SelfPlayConfig* conf;
 
         // only one evaluator - allow to swap in/out config
-        PuctV2::PuctEvaluator* pe;
+        PuctEvaluator* pe;
 
         const GGPLib::BaseState* initial_state;
         const int role_count;

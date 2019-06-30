@@ -1,7 +1,7 @@
 #pragma once
 
 
-namespace GGPZero::PuctV2 {
+namespace GGPZero {
 
 
     enum class ChooseFn {
