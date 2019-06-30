@@ -10,7 +10,6 @@ CFLAGS += -fPIC
 CFLAGS += -Wno-register -Wno-strict-aliasing $(shell python2-config --includes)
 
 SRCS = puct/node.cpp puct/evaluator.cpp player.cpp
-SRCS += puct2/node.cpp puct2/evaluator.cpp player2.cpp
 
 SRCS += gdltransformer.cpp scheduler.cpp selfplay.cpp selfplaymanager.cpp
 SRCS += supervisor.cpp ggpzero_interface.cpp
