@@ -117,11 +117,16 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
             // not atomic, but good enough
             man.add(node->getBaseState());
 
+            // reset the node beforehand
+            this->pe->resetRootNode();
+
             // run the simulations
             choice = this->pe->onNextMove(evals);
 
             // create a sample (call getProbabilities() to ensure probabilities are right for policy)
             this->pe->getProbabilities(node, this->conf->temperature_for_policy, false);
+
+            // this->pe->dumpNode(node, choice);
 
             Sample* s = this->manager->createSample(this->pe, node);
 

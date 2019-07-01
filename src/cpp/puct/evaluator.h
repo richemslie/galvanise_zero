@@ -72,6 +72,7 @@ namespace GGPZero {
         PuctNode* fastApplyMove(const PuctNodeChild* next);
         PuctNode* establishRoot(const GGPLib::BaseState* current_state);
 
+        void resetRootNode();
         const PuctNodeChild* onNextMove(int max_evaluations, double end_time=-1);
         void applyMove(const GGPLib::JointMove* move);
 
@@ -79,6 +80,7 @@ namespace GGPZero {
         const PuctNodeChild* chooseTemperature(const PuctNode* node);
 
         Children getProbabilities(PuctNode* node, float temperature, bool use_linger=true);
+        void dumpNode(const PuctNode* node, const PuctNodeChild* choice) const;
 
         int nodeCount() const {
             return this->number_of_nodes;

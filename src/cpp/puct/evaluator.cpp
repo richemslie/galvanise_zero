@@ -693,7 +693,7 @@ void PuctEvaluator::playoutMain(int max_evaluations, double end_time) {
         return false;
     };
 
-    const int max_tree_playouts = 8 * max_evaluations;
+    const int max_tree_playouts = 4 * max_evaluations;
     while (true) {
         const int our_role_index = this->root->lead_role_index;
 
@@ -931,13 +931,26 @@ PuctNode* PuctEvaluator::establishRoot(const GGPLib::BaseState* current_state) {
     return this->root;
 }
 
+void PuctEvaluator::resetRootNode() {
+    ASSERT(this->root != nullptr);
+
+    for (int ii=0; ii<this->root->num_children; ii++) {
+        PuctNodeChild* c = this->root->getNodeChild(this->sm->getRoleCount(), ii);
+        // reset policy_prob
+        c->policy_prob = c->policy_prob_orig;
+        c->traversals = std::min(1U, c->traversals);
+    }
+
+    this->root->dirichlet_noise_set = false;
+}
+
 const PuctNodeChild* PuctEvaluator::onNextMove(int max_evaluations, double end_time) {
     ASSERT(this->root != nullptr && this->initial_root != nullptr);
 
     this->stats.reset();
     this->do_playouts = true;
 
-    // reset root node?  XXX a bunch of arbirtary checks to see if will reset it...
+    // automatically reset root node?  XXX a bunch of arbirtary checks to see if will reset it...
     if (conf->think_time > 10 && !this->root->dirichlet_noise_set &&
         !this->root->is_finalised && this->root->visits > 10000) {
 
@@ -945,12 +958,7 @@ const PuctNodeChild* PuctEvaluator::onNextMove(int max_evaluations, double end_t
             K273::l_warning("Warning - reseting root node");
         }
 
-        for (int ii=0; ii<this->root->num_children; ii++) {
-            PuctNodeChild* c = this->root->getNodeChild(this->sm->getRoleCount(), ii);
-            // reset policy_prob
-            c->policy_prob = c->policy_prob_orig;
-            c->traversals = std::min(2U, c->traversals);
-        }
+        this->resetRootNode();
     }
 
     // this will be spawned as a coroutine (see addRunnable() below)
@@ -1294,6 +1302,11 @@ void PuctEvaluator::checkDrawStates(const PuctNode* node, PuctNode* next) {
 
         node = node->parent;
     }
+}
+
+void PuctEvaluator::dumpNode(const PuctNode* node,
+                             const PuctNodeChild* choice) const {
+    PuctNode::dumpNode(node, choice, "", true, this->sm);
 }
 
 void PuctEvaluator::logDebug(const PuctNodeChild* choice_root) {
