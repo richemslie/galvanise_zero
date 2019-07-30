@@ -126,6 +126,7 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
             // create a sample (call getProbabilities() to ensure probabilities are right for policy)
             this->pe->getProbabilities(node, this->conf->temperature_for_policy, false);
 
+            // comment out this for debugging
             // this->pe->dumpNode(node, choice);
 
             Sample* s = this->manager->createSample(this->pe, node);
@@ -137,6 +138,10 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
             const int skip_evals = std::max(16, (int) this->rng.getWithMax(evals / 3 + 1));
             this->pe->updateConf(this->conf->run_to_end_puct_config);
             choice = this->pe->onNextMove(skip_evals);
+
+            // comment out this for debugging
+            // this->pe->dumpNode(node, choice);
+
             this->pe->updateConf(this->conf->puct_config);
         }
 

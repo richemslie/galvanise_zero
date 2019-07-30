@@ -138,9 +138,6 @@ def get_puct_config(gen, **kwds):
         if not updated:
             log.warning("Unused setting %s:%s" % (k, v))
 
-    print "get_puct_config:"
-    at.pprint(config)
-
     return config
 
 

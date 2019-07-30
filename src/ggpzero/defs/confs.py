@@ -5,53 +5,6 @@ from ggpzero.defs.datadesc import GenerationDescription
 
 # DO NOT IMPORT msgs.py
 
-
-# @register_attrs
-# class PUCTEvaluatorConfig(object):
-#     verbose = attribute(False)
-
-#     # root level minmax ing, an old galvanise nn idea.  Expands the root node, and presets visits.
-#     # -1 off.
-#     root_expansions_preset_visits = attribute(-1)
-
-#     puct_constant = attribute(0.85)
-
-#     # added to root child policy pct (< 0 is off)
-#     dirichlet_noise_pct = attribute(0.25)
-
-#     # XXX experimental, feature likely to go away
-#     # policy squashing during noise will squash any probabilities in policy over
-#     # noise_policy_squash_prob to noise_policy_squash_prob.
-#     # the pct is whether it will activate or not during setting noise (< 0 is off)
-#     noise_policy_squash_pct = attribute(-1)
-#     noise_policy_squash_prob = attribute(0.05)
-
-#     # looks up method() to use.  one of (choose_top_visits | choose_temperature)
-#     choose = attribute("choose_top_visits")
-
-#     # debug, only if verbose is true
-#     max_dump_depth = attribute(2)
-
-#     random_scale = attribute(0.5)
-#     temperature = attribute(1.0)
-#     depth_temperature_start = attribute(5)
-#     depth_temperature_increment = attribute(0.5)
-#     depth_temperature_stop = attribute(10)
-#     depth_temperature_max = attribute(5.0)
-
-#     # popular leela-zero feature: First Play Urgency.  When the policy space is large - this might
-#     # be neccessary.  If > 0, applies the prior of the parent, minus a discount to unvisited nodes
-#     # < 0 is off.
-#     fpu_prior_discount = attribute(-1.0)
-#     fpu_prior_discount_root = attribute(-1.0)
-
-#     top_visits_best_guess_converge_ratio = attribute(0.85)
-#     evaluation_multiplier_to_convergence = attribute(2.0)
-
-#     # for repetition
-#     use_legals_count_draw = attribute(-1)
-
-
 @register_attrs
 class PUCTEvaluatorConfig(object):
     verbose = attribute(False)
@@ -109,6 +62,9 @@ class PUCTEvaluatorConfig(object):
 
     # XXX ADD support for ZZZ
     evaluation_multiplier_to_convergence = attribute(1.0)
+
+    # root level minmax-ing.  Expands the root node, and presets visits.
+    # -1 off.  XXX Currently unsupported?
     root_expansions_preset_visits = attribute(-1)
 
 
