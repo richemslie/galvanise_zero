@@ -1,6 +1,7 @@
 import random
 
 from ggplib.db import lookup
+from ggplib.util.symbols import SymbolFactory, Term, ListTerm
 
 from ggpzero.defs import confs
 
@@ -233,12 +234,49 @@ def determine_cords(game):
     # total channels 12 + 10 == 22
 
 
+def determine_legals(game):
+    factory = SymbolFactory()
+
+    def grouper(action, group_by):
+        if isinstance(action, Term):
+            base, ary = (str(action), 0)
+        else:
+            base, ary = (str(action[0]), len(action) - 1)
+
+        key = (base, ary)
+        if key not in group_by:
+            domains = group_by[key] = []
+            for i in range(ary):
+                domains.append(set())
+        else:
+            domains = group_by[key]
+
+        for i in range(ary):
+            domains[i].add(action[i+1])
+
+        return base, ary, domains
+
+    game_model = lookup.by_name(game).model
+    for ri, role in enumerate(game_model.roles):
+
+        group_by_role = {}
+        print "doing role", role
+
+        for a in game_model.actions[ri]:
+            action = factory.symbolize(a)
+            assert action[0] == "does"
+            assert action[1] == role, "%s != %s" % (action[1], role)
+            action = action[2]
+
+            grouper(action, group_by_role)
+
+        print group_by_role
+
+
 if __name__ == "__main__":
     import sys
-    try:
-        game = sys.argv[1]
-    except IndexError:
-        game = "skirmishNew"
+    game = sys.argv[1]
 
+    determine_legals(game)
     determine_cords(game)
     # do_data_samples(game)

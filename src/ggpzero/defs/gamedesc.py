@@ -523,3 +523,15 @@ class GameSymmetries(object):
 
     baduk_9x9 = baduk
     baduk_19x19 = baduk
+
+    def _amazons(self):
+        return Symmetries(skip_bases=["turn"],
+                          apply_bases=[ApplySymmetry("cell", 1, 2),
+                                       ApplySymmetry("justMoved", 1, 2)],
+                          skip_actions=["noop"],
+                          apply_actions=[ApplySymmetry("move", [1, 3], [2, 4]),
+                                         ApplySymmetry("fire", 1, 2)],
+                          do_rotations_90=True,
+                          do_reflection=True)
+
+    amazons_10x10 = _amazons

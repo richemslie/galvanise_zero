@@ -140,7 +140,7 @@ def translate_moves(sm, basestate, translator, do_reflection, rot_count):
 
 
 def test_translator_reversi2():
-    from gzero_games.battle.reversi import pretty_board
+    from ggpzero.battle.reversi import pretty_board
 
     info = lookup.by_name("reversi")
 
@@ -231,26 +231,26 @@ def game_test(game, pretty_board, advance_state_count):
 
 
 def test_game_reversi():
-    from gzero_games.battle.reversi import pretty_board
+    from ggpzero.battle.reversi import pretty_board
     game_test("reversi", partial(pretty_board, 8), 5)
     game_test("reversi", partial(pretty_board, 8), 15)
 
 
 def test_game_bts():
-    from gzero_games.battle.bt import pretty_board
+    from ggpzero.battle.bt import pretty_board
     game_test("breakthroughSmall", partial(pretty_board, 6), 2)
     game_test("breakthroughSmall", partial(pretty_board, 6), 8)
 
 
 def test_game_c6():
-    from gzero_games.battle.connect6 import MatchInfo
+    from ggpzero.battle.connect6 import MatchInfo
     match_info = MatchInfo()
     game_test("connect6", match_info.print_board, 3)
     game_test("connect6", match_info.print_board, 10)
 
 
 def test_game_hex11():
-    from gzero_games.battle.hex import MatchInfo
+    from ggpzero.battle.hex import MatchInfo
     match_info = MatchInfo(11)
 
     game_test("hexLG11", match_info.print_board, 3)
@@ -259,10 +259,19 @@ def test_game_hex11():
 
 
 def test_game_hex13():
-    from gzero_games.battle.hex import MatchInfo
+    from ggpzero.battle.hex import MatchInfo
     match_info = MatchInfo(13)
 
     game_test("hexLG13", match_info.print_board, 3)
     game_test("hexLG13", match_info.print_board, 10)
     game_test("hexLG13", match_info.print_board, 16)
+
+
+def test_game_amazons():
+    from ggpzero.battle.amazons import MatchInfo
+    match_info = MatchInfo()
+
+    game_test("amazons_10x10", match_info.print_board, 3)
+    game_test("amazons_10x10", match_info.print_board, 10)
+    game_test("amazons_10x10", match_info.print_board, 16)
 
