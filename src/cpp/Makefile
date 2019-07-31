@@ -14,30 +14,23 @@ SRCS = puct/node.cpp puct/evaluator.cpp player.cpp
 SRCS += gdltransformer.cpp scheduler.cpp selfplay.cpp selfplaymanager.cpp
 SRCS += supervisor.cpp ggpzero_interface.cpp
 
-EXT_SRCS = external/draughts_desc.cpp external/draughts_board.cpp external/draughts_sm.cpp external/draughts_init.cpp external/interface.cpp
-
-
 OBJS = $(patsubst %.cpp, %.o, $(SRCS))
-EXT_OBJS = $(patsubst %.cpp, %.o, $(EXT_SRCS))
 
 DEPS = $(SRCS:.cpp=.d)
 DEPS += $(E_SRCS:.cpp=.d)
 
 # Top level
-all: $(OBJS) $(EXT_OBJS) ggpzero_interface.so libgzero_games_cpp.so
+all: $(OBJS) ggpzero_interface.so
 
 ggpzero_interface.so: $(OBJS)
 	$(CPP) -shared $(LDFLAGS) $(OBJS) $(LIBS) -o $@
-
-libgzero_games_cpp.so: $(EXT_OBJS)
-	$(CPP) -shared $(LDFLAGS) $(EXT_OBJS) $(LIBS) -o $@
 
 %.o : %.cpp
 	$(CPP) $(INCLUDE_PATHS) $(CFLAGS) -c -o $@ $<
 
 # Cleans
 clean :
-	$(RM) $(OBJS) $(EXT_OBJS) $(DEPS)
+	$(RM) ggpzero_interface.so $(OBJS) $(DEPS)
 
 -include $(DEPS)
 .PHONY: all clean
