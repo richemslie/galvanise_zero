@@ -1,17 +1,37 @@
 gzero/galvanise_zero
 ====================
-gzero provides a framework for neural networks to learn solely based on self play.  This is largely based off Deepmind's papers on AlphaGo, AlphaGo Zero and AlphaZero, as well as the excellent
-Expert Iteration [paper](https://arxiv.org/abs/1705.08439). A number of Alpha*Zero open source projects were also inspirational.
+galvanise is a [General Game Player](https://en.wikipedia.org/wiki/General_game_playing), where
+games are written in [GDL](https://en.wikipedia.org/wiki/Game_Description_Language).  The original
+galvanise code was deprecated, but the spinoff library [ggplib](https://github.com/richemslie/ggplib)
+remains.
 
-The name gzero stems from the fact that this project was initially a spin off my galvanise player
-in [GGP](https://en.wikipedia.org/wiki/General_game_playing).
+galvanise_zero (gzero_bot as per Little Golem) adds AlphaZero style learning to galvanise.  Much
+inspiration was from Deepmind's related papers to AlphaZero, and the excellent Expert Iteration
+[paper](https://arxiv.org/abs/1705.08439). A number of Alpha*Zero open source projects were also
+inspirational: LeelaZero and KataGo (XXX add links).
 
-* this is an extension of [ggplib](https://github.com/ggplib/ggplib)
+There is *no* game specific code other than the GDL description of the games, a high level
+python configuration file describing gdl symbols to state mapping and symmetries (see
+[here](https://github.com/richemslie/galvanise_zero/issues/1) for more information).
+
+
+Features
+--------
+* fully automated, turn on leave to train, network replaced during training games
+* training is fast using proper coroutines at the C level.  1000s of concurrent games are trained
+  using large batch sizes on GPU (for small networks).  It generally takes 3-5 days in many of the
+  trained game types to become super human strength.
+* used same setting for training all games (cpuct 0.85, fpu 0.25).
+* uses smaller number of evaluations (200) than A0, oscillating sampling during training (75% of
+  moves are skipped, using much less evals to do so).
+* policy squashing and extra noise to prevent overfitting
+* models use dropout, global average pooling and squeeze_excite blocks (optional)
+
+
 
 Status
 ------
-All games are written in [GDL](https://en.wikipedia.org/wiki/Game_Description_Language) unless otherwise stated.  There is *no* game specific code other than 
-a single python file describing mappings for policy and state (see [here](https://github.com/richemslie/galvanise_zero/issues/1) for more information).
+See [gzero_bot](http://littlegolem.net/jsp/info/player.jsp?plid=58835) for how to play on Little Golem.
 
 Games with significant training, links to elo graphs and models:
 
@@ -24,36 +44,28 @@ Games with significant training, links to elo graphs and models:
 * [breakthrough](https://github.com/richemslie/gzero_data/tree/master/data/breakthrough)
 * [hex11](https://github.com/richemslie/gzero_data/tree/master/data/hexLG11)
 
+Little Golem Champion in last attempts @ Connect6, Hex13, Amazons and Breakthrough, winning all matches.
+Retired from further Championships.  Connect6 and Hex 13 are currently rated 1st and 2nd
+respectivelt on active users.
 
 Amazons and Breakthrough won gold medals at ICGA 2018 Computer Olympiad. :clap: :clap:
 
-LG Champion in last attempt @ Amazons, Breakthrough and Hex 13 (joint).
-
-Hex 13 / Connect6 are currently rated 2nd on active users on Little Golem.
-
-Reversi is also strong relative to humans on LG, yet performs a bit worse than top AB programs (about ntest level 20 the last time I tested).
+Reversi is also strong relative to humans on LG, yet performs a bit worse than top AB programs
+(about ntest level 20 the last time I tested).
 
 Also trained Baduk 9x9, it had a rating ~2900 elo on CGOS after 2-3 week of training.
 
 --------------------
 
-The code is in fairly good shape, but could do with some refactoring and
-documentation (especially a how to guide on how to train a game).  It would definitely be good to
-have an extra pair of eyes on it.  I'll welcome and support anyone willing to try training a game
-for themselves.  Some notes:
+The code is in fairly good shape, but could do with some refactoring and documentation (especially
+a how to guide on how to train a game).  It would definitely be good to have an extra pair of eyes
+on it.  I'll welcome and support anyone willing to try training a game for themselves.  Some notes:
 
 1. python is 2.7
 2. requires a GPU/tensorflow
 3. good starting point is https://github.com/richemslie/ggp-zero/blob/dev/src/ggpzero/defs
-4. cpp puct/puct2 really needs to be combined.
 
 How to run and install instruction coming soon!
-
-
-Little Golem
-------------
-Some games are have had success on the Little Golem website
-[gzero_bot](http://littlegolem.net/jsp/info/player.jsp?plid=58835).
 
 
 project goal(s)
