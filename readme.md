@@ -1,38 +1,33 @@
-gzero/galvanise_zero
-====================
+What?
+=====
 galvanise is a [General Game Player](https://en.wikipedia.org/wiki/General_game_playing), where
 games are written in [GDL](https://en.wikipedia.org/wiki/Game_Description_Language).  The original
-galvanise code was deprecated, but the spin off library [ggplib](https://github.com/richemslie/ggplib)
-remains.
-
-galvanise_zero (gzero_bot as per Little Golem) adds AlphaZero style learning to galvanise.  Much
-inspiration was from Deepmind's related papers to AlphaZero, and the excellent Expert Iteration
-[paper](https://arxiv.org/abs/1705.08439). A number of Alpha*Zero open source projects were also
-inspirational: LeelaZero and KataGo (XXX add links).
-
-There is *no* game specific code other than the GDL description of the games, a high level
-python configuration file describing GDL symbols to state mapping and symmetries (see
-[here](https://github.com/richemslie/galvanise_zero/issues/1) for more information).
-
+galvanise code was converted to a library [ggplib](https://github.com/richemslie/ggplib) and
+galvanise_zero adds AlphaZero style learning.  Much inspiration was from Deepmind's related papers,
+and the excellent Expert Iteration [paper](https://arxiv.org/abs/1705.08439). A number of
+Alpha*Zero open source projects were also inspirational: LeelaZero and KataGo (XXX add links).
 
 Features
 --------
-* fully automated, turn on leave to train, network replaced during training games
-* training is fast using proper coroutines at the C level.  1000s of concurrent games are trained
-  using large batch sizes on GPU (for small networks).  It generally takes 3-5 days in many of the
-  trained game types to become super human strength.
-* used same setting for training all games (cpuct 0.85, fpu 0.25).
+* there is *no* game specific code other than the GDL description of the games, a high level python
+configuration file describing GDL symbols to state mapping and symmetries (see
+[here](https://github.com/richemslie/galvanise_zero/issues/1) for more information).
+* fully automated, put in oven and strong model is baked
+* network replaced during training games
+* training is very fast using proper coroutines at the C level.  1000s of concurrent games are trained
+  using large batch sizes on GPU (for small networks).  Im generally takes 3-5 days in many of the
+  trained game types below to become super human strength.
+* used same setting for training all games types (cpuct 0.85, fpu 0.25).
 * uses smaller number of evaluations (200) than A0, oscillating sampling during training (75% of
   moves are skipped, using much less evals to do so).
 * policy squashing and extra noise to prevent overfitting
 * models use dropout, global average pooling and squeeze_excite blocks (optional)
 
+See [gzero_bot](http://littlegolem.net/jsp/info/player.jsp?plid=58835) for how to play on Little Golem.
 
 
 Status
 ------
-See [gzero_bot](http://littlegolem.net/jsp/info/player.jsp?plid=58835) for how to play on Little Golem.
-
 Games with significant training, links to elo graphs and models:
 
 * [chess](https://github.com/richemslie/gzero_data/tree/master/data/chess)
