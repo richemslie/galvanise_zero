@@ -2,7 +2,7 @@ gzero/galvanise_zero
 ====================
 galvanise is a [General Game Player](https://en.wikipedia.org/wiki/General_game_playing), where
 games are written in [GDL](https://en.wikipedia.org/wiki/Game_Description_Language).  The original
-galvanise code was deprecated, but the spinoff library [ggplib](https://github.com/richemslie/ggplib)
+galvanise code was deprecated, but the spin off library [ggplib](https://github.com/richemslie/ggplib)
 remains.
 
 galvanise_zero (gzero_bot as per Little Golem) adds AlphaZero style learning to galvanise.  Much
@@ -11,7 +11,7 @@ inspiration was from Deepmind's related papers to AlphaZero, and the excellent E
 inspirational: LeelaZero and KataGo (XXX add links).
 
 There is *no* game specific code other than the GDL description of the games, a high level
-python configuration file describing gdl symbols to state mapping and symmetries (see
+python configuration file describing GDL symbols to state mapping and symmetries (see
 [here](https://github.com/richemslie/galvanise_zero/issues/1) for more information).
 
 
@@ -46,7 +46,7 @@ Games with significant training, links to elo graphs and models:
 
 Little Golem Champion in last attempts @ Connect6, Hex13, Amazons and Breakthrough, winning all matches.
 Retired from further Championships.  Connect6 and Hex 13 are currently rated 1st and 2nd
-respectivelt on active users.
+respectively on active users.
 
 Amazons and Breakthrough won gold medals at ICGA 2018 Computer Olympiad. :clap: :clap:
 
@@ -66,22 +66,4 @@ on it.  I'll welcome and support anyone willing to try training a game for thems
 3. good starting point is https://github.com/richemslie/ggp-zero/blob/dev/src/ggpzero/defs
 
 How to run and install instruction coming soon!
-
-
-project goal(s)
----------------
-The initial goal of this project was to be able to train any game in
-[GGP](https://en.wikipedia.org/wiki/General_game_playing) ecosystem, to play at a higher level than
-the state of the art GGP players, given some (relatively) small time frame to train the game (a few
-days to a week, on commodity hardware - and not months/years worth of training time on hundreds of
-GPUs).
-
-Some game types which would be interesting to try:
-
-* non-zero sum games (such as the non zero sum variant of Skirmish)
-* multiplayer games (games with > 2 players)
-* games that are not easily represented as a 2D array of channels
-* simultaneous games
-
-
 
