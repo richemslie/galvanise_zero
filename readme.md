@@ -22,6 +22,7 @@ Games with significant training, links to elo graphs and models:
 * [reversi8](https://github.com/richemslie/gzero_data/tree/master/data/reversi_8x8)
 * [amazons](https://github.com/richemslie/gzero_data/tree/master/data/amazons_10x10)
 * [breakthrough](https://github.com/richemslie/gzero_data/tree/master/data/breakthrough)
+* [hex11](https://github.com/richemslie/gzero_data/tree/master/data/hexLG11)
 
 
 Amazons and Breakthrough won gold medals at ICGA 2018 Computer Olympiad. :clap: :clap:
