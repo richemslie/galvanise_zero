@@ -1157,7 +1157,7 @@ void PuctEvaluator::setDirichletNoise(PuctNode* node) {
     const float pct = this->conf->dirichlet_noise_pct;
 
     bool policy_squash = (this->conf->noise_policy_squash_pct > 0 &&
-                          this->rng.get() > this->conf->noise_policy_squash_pct);
+                          this->rng.get() < this->conf->noise_policy_squash_pct);
     if (policy_squash && node->getCurrentScore(node->lead_role_index) > 0.9) {
         policy_squash = false;
     }
