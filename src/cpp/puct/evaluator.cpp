@@ -1154,8 +1154,6 @@ void PuctEvaluator::setDirichletNoise(PuctNode* node) {
         dirichlet_noise[ii] /= total_noise;
     }
 
-    const float pct = this->conf->dirichlet_noise_pct;
-
     bool policy_squash = (this->conf->noise_policy_squash_pct > 0 &&
                           this->rng.get() < this->conf->noise_policy_squash_pct);
     if (policy_squash && node->getCurrentScore(node->lead_role_index) > 0.9) {
@@ -1173,11 +1171,12 @@ void PuctEvaluator::setDirichletNoise(PuctNode* node) {
                                       c->policy_prob);
         }
 
+        const float pct = this->conf->dirichlet_noise_pct;
         c->policy_prob = (1.0f - pct) * c->policy_prob + pct * dirichlet_noise[ii];
         total_policy += c->policy_prob;
     }
 
-    // re-normalize node (XXX shouldn't need to... look into later):
+    // re-normalize node
     for (int ii=0; ii<node->num_children; ii++) {
         PuctNodeChild* c = node->getNodeChild(this->sm->getRoleCount(), ii);
         c->policy_prob /= total_policy;

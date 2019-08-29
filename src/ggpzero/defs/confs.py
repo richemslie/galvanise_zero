@@ -15,7 +15,6 @@ class PUCTEvaluatorConfig(object):
     # added to root child policy pct (< 0 is off)
     dirichlet_noise_pct = attribute(0.25)
 
-    # XXX experimental, feature likely to go away
     # policy squashing during noise will squash any probabilities in policy over
     # noise_policy_squash_prob to noise_policy_squash_prob.
     # the pct is whether it will activate or not during setting noise (< 0 is off)
@@ -60,11 +59,12 @@ class PUCTEvaluatorConfig(object):
     backup_finalised = attribute(False)
     lookup_transpositions = attribute(False)
 
-    # XXX ADD support for ZZZ
+    # XXX currently not implemented in current PuctPlayer ZZZ
     evaluation_multiplier_to_convergence = attribute(1.0)
 
     # root level minmax-ing.  Expands the root node, and presets visits.
-    # -1 off.  XXX Currently unsupported?
+    # -1 off.
+    # XXX currently not implemented in current PuctPlayer ZZZ
     root_expansions_preset_visits = attribute(-1)
 
 
