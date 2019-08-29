@@ -12,16 +12,25 @@ Features
 * there is *no* game specific code other than the GDL description of the games, a high level python
 configuration file describing GDL symbols to state mapping and symmetries (see
 [here](https://github.com/richemslie/galvanise_zero/issues/1) for more information).
+* multiple policies - train assymetric games
 * fully automated, put in oven and strong model is baked
-* network replaced during training games
+* network replaced during self play games
 * training is very fast using proper coroutines at the C level.  1000s of concurrent games are trained
-  using large batch sizes on GPU (for small networks).  Im generally takes 3-5 days in many of the
-  trained game types below to become super human strength.
+  using large batch sizes on GPU (for small networks).
+* uses a post processed replay buffer, which uses the excellent bcolz (XXX link) project.  Training
+  can allow arbitrary sampling from the buffer (giving emphasis to most recent data).
+* initially project used expert iteration.  This was deprecated in favour of oscillating sampling
+  (similar to KataGo).
+* 3 value heads for games with draws
+
+Training
+--------
 * used same setting for training all games types (cpuct 0.85, fpu 0.25).
 * uses smaller number of evaluations (200) than A0, oscillating sampling during training (75% of
   moves are skipped, using much less evals to do so).
 * policy squashing and extra noise to prevent overfitting
-* models use dropout, global average pooling and squeeze_excite blocks (optional)
+* models use dropout, global average pooling and squeeze excite blocks (these are optional)
+* in general, takes 3-5 days in many of the trained game types below to become super human strength
 
 See [gzero_bot](http://littlegolem.net/jsp/info/player.jsp?plid=58835) for how to play on Little Golem.
 
