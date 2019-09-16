@@ -252,7 +252,3 @@ class ServerConfig(object):
 
     # save the samples every n seconds
     checkpoint_interval = attribute(60.0 * 5)
-
-    # XXX remove
-    # this forces the network to be reset to random weights, every n generations
-    reset_network_every_n_generations = attribute(-1)

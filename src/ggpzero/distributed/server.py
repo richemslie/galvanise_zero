@@ -56,15 +56,6 @@ class WorkerInfo(object):
         if self.conf is not None and self.conf.do_self_play:
             self.self_play_configured = False
 
-            # sent out up to this amount
-            self.unique_state_index = 0
-
-    def get_and_update(self, unique_states):
-        assert self.self_play_configured
-        new_states = unique_states[self.unique_state_index:]
-        self.unique_state_index += len(new_states)
-        return new_states
-
     def cleanup(self):
         self.valid = False
 
@@ -260,16 +251,10 @@ class ServerBroker(Broker):
             state = sample.state
 
             if cur_match_is_draw:
-                if False and sample.depth > 150 and math.fabs(sample.resultant_puct_score[0] - 0.5) < 0.05:
-                    if random.random() > 0.33:
-                        dropped_draw_count += 1
-                        if dedupe:
-                            continue
-                else:
-                    if random.random() > 0.5:
-                        dropped_draw_count += 1
-                        if dedupe:
-                            continue
+                if random.random() > 0.5:
+                    dropped_draw_count += 1
+                    if dedupe:
+                        continue
 
             # need to check it isn't a duplicate and drop it
             if state in self.unique_states_set:
@@ -288,13 +273,13 @@ class ServerBroker(Broker):
 
         log.info("Rx'd matches %s" % num_matches)
         if dropped_dupe_count or dropped_draw_count:
-            log.warning("duplicate: %s, dropped dupe %s, dropped_draw %s" %(dupe_counts,
-                                                                            dropped_dupe_count,
-                                                                            dropped_draw_count))
+            log.warning("duplicate: %s, dropped dupe %s, dropped_draw %s" % (dupe_counts,
+                                                                             dropped_dupe_count,
+                                                                             dropped_draw_count))
 
     def on_sample_response(self, worker, msg):
         info = self.workers[worker]
-        if len(msg.samples) > 0:
+        if msg.samples:
             self.add_new_samples(msg.samples)
 
             if msg.duplicates_seen:
@@ -388,12 +373,6 @@ class ServerBroker(Broker):
         m.game = self.conf.game
         m.train_conf = train_conf
 
-        if self.conf.reset_network_every_n_generations > 0:
-            if next_step % self.conf.reset_network_every_n_generations == 0:
-                m.train_conf.use_previous = False
-            else:
-                m.train_conf.use_previous = True
-
         m.network_model = self.conf.base_network_model
         m.generation_description = self.conf.base_generation_description
 
@@ -423,6 +402,10 @@ class ServerBroker(Broker):
         self.checkpoint()
 
         assert len(self.unique_states) == len(self.unique_states_set)
+
+        if not self.conf.base_training_config.use_previous:
+            log.warning("use_previous was False, setting to True")
+            self.conf.base_training_config.use_previous = True
 
         # store the server config
         self.save_our_config(rolled=True)
@@ -469,11 +452,7 @@ class ServerBroker(Broker):
 
             else:
                 if self.need_more_samples():
-                    updates = worker_info.get_and_update(self.unique_states)
-                    m = msgs.RequestSamples(updates)
-                    if updates:
-                        log.debug("sending request with %s updates" % len(updates))
-
+                    m = msgs.RequestSamples([])
                     worker_info.worker.send_msg(m)
                 else:
                     log.warning("capacity full! %d" % len(self.accumulated_samples))
