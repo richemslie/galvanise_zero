@@ -168,10 +168,11 @@ def get_network_model(conf, generation_descr):
 
     # choose between resnet_v2 and resnet_v1
     if conf.resnet_v2:
-        layer = klayers.Conv2D(conf.cnn_filter_size, 1,
-                               padding="same",
-                               use_bias=False,
-                               name='initial-conv')(inputs_board)
+        # initial conv2d/Resnet on cords
+        layer = conv2d_block(conf.cnn_filter_size, conf.cnn_kernel_size,
+                             activation=activation,
+                             padding="same",
+                             name='initial-conv')(inputs_board)
 
         if conf.squeeze_excite_layers:
             squeeze_excite = True
@@ -246,37 +247,30 @@ def get_network_model(conf, generation_descr):
         to_flatten2 = conv2d_block(1, 1,
                                    name='value_flatten',
                                    activation=activation,
-                                   do_bn=False,
                                    padding='valid')(layer)
 
         flat = klayers.concatenate([klayers.Flatten()(to_flatten1),
                                     klayers.Flatten()(to_flatten2)])
 
-        if conf.dropout_rate_value > 0:
-            flat = klayers.Dropout(conf.dropout_rate_value)(flat)
-
-        hidden = klayers.Dense(512, name="value_hidden", activation=activation)(flat)
-
-        value_head = klayers.Dense(num_value_heads,
-                                   activation='softmax',
-                                   name="value")(hidden)
-
     else:
         # old way, as per AG0
         to_flatten = conv2d_block(1, 1,
-                                  name='to_flatten_value_head',
-                                  padding='valid',
-                                  activation=activation)(layer)
+                                  name='value_flatten',
+                                  activation=activation,
+                                  do_bn=False,
+                                  padding='valid')(layer)
         flat = klayers.Flatten()(to_flatten)
 
-        if conf.dropout_rate_value > 0:
-            flat = klayers.Dropout(conf.dropout_rate_value)(flat)
+    if conf.dropout_rate_value > 0:
+        flat = klayers.Dropout(conf.dropout_rate_value)(flat)
 
-        hidden = klayers.Dense(conf.value_hidden_size, name="value_hidden_layer",
-                               activation="relu")(flat)
+    hidden = klayers.Dense(conf.value_hidden_size,
+                           name="value_hidden",
+                           activation=activation)(flat)
 
-        value_head = klayers.Dense(num_value_heads,
-                                   activation="sigmoid", name="value")(hidden)
+    value_head = klayers.Dense(num_value_heads,
+                               activation='softmax',
+                               name="value")(hidden)
 
     # model:
     outputs = policy_heads + [value_head]
