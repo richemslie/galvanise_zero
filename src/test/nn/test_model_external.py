@@ -35,12 +35,8 @@ def setup():
 
     np.set_printoptions(threshold=100000)
 
-    from gzero_games.ggphack import addgame
-    addgame.install_games()
 
-
-games = ["baduk_9x9", "draughts_bt_8x8", "draughts_10x10"]
-#games = ["baduk_9x9"]
+games = ["draughts_10x10", "draughts_killer_10x10"]
 
 
 def advance_state(sm, basestate):
@@ -86,5 +82,3 @@ def test_basic_config():
 
         basestate = advance_state(game_info.get_sm(), basestate)
         print transformer.state_to_channels(basestate.to_list())
-
-
