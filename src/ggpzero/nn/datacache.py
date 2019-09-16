@@ -167,6 +167,7 @@ class ChunkIndexer(object):
 
         self.train_levels = []
         self.validation_levels = []
+        self.num_games_levels = []
 
         # note: step_summaries : step is increasing from 0
 
@@ -189,24 +190,31 @@ class ChunkIndexer(object):
                 validation_start = index + int(summary.num_samples * validation_split)
                 self.train_levels.append((step, index, validation_start))
                 self.validation_levels.append((step, validation_start, index_end))
+                self.num_games_levels.append((step, summary.stats_unique_matches))
 
             index = index_end
 
         # want most recent first
         self.train_levels.reverse()
         self.validation_levels.reverse()
+        self.num_games_levels.reverse()
         assert len(self.train_levels) == len(self.validation_levels)
 
     def create_indices_for_level(self, level_index, validation=False, max_size=-1):
         ''' returns a shuffled list of indices '''
         step, start, end = self.validation_levels[level_index] if validation else self.train_levels[level_index]
-        if DEBUG:
-            print "create_indices_for_level", step, start, end
+        step2, num_games = self.num_games_levels[level_index]
+        assert step == step2
+
+        self.debug_create_indices.append((level_index, step, start, end, max_size, num_games))
 
         indices = range(start, end)
+
         random.shuffle(indices)
+
         if max_size > 0:
             indices = indices[:max_size]
+
         return indices
 
     def get_indices(self, max_size=None, validation=False, include_all=None):
@@ -224,11 +232,19 @@ class ChunkIndexer(object):
         shuffle.
         '''
 
+        do_debug = False
+
         # XXX add config option (actually best just an argument here)
         include_pct = 0.5
 
         levels = self.validation_levels if validation else self.train_levels
+        if do_debug:
+            print "levels", levels
+
         sizes = [end - start for _, start, end in levels]
+
+        if do_debug:
+            print "sizes1", sizes
 
         # apply buckets
         bucket_sizes = []
@@ -242,7 +258,9 @@ class ChunkIndexer(object):
 
         # do we have more data than needed for epoch?
         sizes = bucket_sizes
-        print "sizes1", sizes
+
+        if do_debug:
+            print "sizes2", sizes
 
         if max_size is not None or max_size > 0:
             # XXX whole thing needs a rewrite...
@@ -281,11 +299,35 @@ class ChunkIndexer(object):
 
             assert sum(sizes) <= max_size
 
-        print "sizes2", sizes
+        if do_debug:
+            print "sizes3", sizes
+
+        self.debug_create_indices = []
 
         all_indices = []
         for ii, s in enumerate(sizes):
             all_indices += self.create_indices_for_level(ii, validation=validation, max_size=s)
+
+        log.debug("debug_create_indices (depth, step, start, finish, sz, #games)")
+        if len(self.debug_create_indices) > 5:
+            log.debug("[%s, %s ... %s, %s]" % (self.debug_create_indices[0],
+                                               self.debug_create_indices[1],
+                                               self.debug_create_indices[-2],
+                                               self.debug_create_indices[-1]))
+        else:
+            log.debug("%s" % (self.debug_create_indices,))
+
+
+        total_unique_games = sum([dci[5] for dci in self.debug_create_indices])
+        def f(x):
+            return (x[4] / float(x[3] - x[2])) * x[5]
+        pct_total_unique_games = int(sum([f(dci) for dci in self.debug_create_indices]))
+
+        print "pct_total_unique_games", pct_total_unique_games
+
+        log.info("Considering %s levels, total/pct unique games: %d/%d" % (len(self.debug_create_indices),
+                                                                           total_unique_games,
+                                                                           pct_total_unique_games))
 
         random.shuffle(all_indices)
         return all_indices
