@@ -388,7 +388,7 @@ class Games(object):
                         "1 2 3 4 5 6 7 8 9 10 11".split(),
                         [cell], [control])
 
-    def _draughts_helper(self, n_rule_steps=10):
+    def _draughts_helper(self, n_rule_steps=20):
         n_rule_step = step_control("n_rule_step", 1, n_rule_steps)
 
         interim_status = simple_control("interim_status")
