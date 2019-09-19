@@ -111,13 +111,6 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
                 this->rng.get() > this->conf->oscillate_sampling_pct) {
                 do_skip = true;
             }
-
-            // hard coded for now, XXX add attribute
-            if (!do_skip &&
-                node->num_children == 1 &&
-                this->rng.get() > 0.5) {
-                do_skip= true;
-            }
         }
 
         if (!do_skip) {
