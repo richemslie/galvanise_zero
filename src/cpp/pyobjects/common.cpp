@@ -45,68 +45,6 @@ static void logExceptionWrapper(const std::string& name) {
     }
 }
 
-// static PuctConfig* createPuctConfig(PyObject* dict) {
-//     PuctConfig* config = new PuctConfig;
-
-//     auto asInt = [dict] (const char* name) {
-//         PyObject* borrowed = PyDict_GetItemString(dict, name);
-//         return PyInt_AsLong(borrowed);
-//     };
-
-//     auto asString = [dict] (const char* name) {
-//         PyObject* borrowed = PyDict_GetItemString(dict, name);
-//         return PyString_AsString(borrowed);
-//     };
-
-//     auto asFloat = [dict] (const char* name) {
-//         PyObject* borrowed = PyDict_GetItemString(dict, name);
-//         return (float) PyFloat_AsDouble(borrowed);
-//     };
-
-//     config->verbose = asInt("verbose");
-
-//     config->puct_constant = asFloat("puct_constant");
-
-//     // XXX temp
-//     config->puct_constant_root = config->puct_constant;
-
-//     config->root_expansions_preset_visits = asInt("root_expansions_preset_visits");
-//     config->dirichlet_noise_pct = asFloat("dirichlet_noise_pct");
-//     config->noise_policy_squash_pct = asFloat("noise_policy_squash_pct");
-//     config->noise_policy_squash_prob = asFloat("noise_policy_squash_prob");
-
-//     config->max_dump_depth = asInt("max_dump_depth");
-
-//     config->random_scale = asFloat("random_scale");
-//     config->temperature = asFloat("temperature");
-//     config->depth_temperature_start = asInt("depth_temperature_start");
-//     config->depth_temperature_increment = asFloat("depth_temperature_increment");
-//     config->depth_temperature_stop = asInt("depth_temperature_stop");
-//     config->depth_temperature_max = asFloat("depth_temperature_max");
-
-//     config->fpu_prior_discount = asFloat("fpu_prior_discount");
-//     config->fpu_prior_discount_root = asFloat("fpu_prior_discount_root");
-
-//     config->top_visits_best_guess_converge_ratio = asFloat("top_visits_best_guess_converge_ratio");
-
-//     config->evaluation_multiplier_to_convergence = asFloat("evaluation_multiplier_to_convergence");
-//     config->use_legals_count_draw = asInt("use_legals_count_draw");
-
-//     std::string choose_method = asString("choose");
-//     if (choose_method == "choose_top_visits") {
-//         config->choose = ChooseFn::choose_top_visits;
-
-//     } else if (choose_method == "choose_temperature") {
-//         config->choose = ChooseFn::choose_temperature;
-
-//     } else {
-//         K273::l_error("Choose method unknown: '%s', setting to top visits", choose_method.c_str());
-//         config->choose = ChooseFn::choose_top_visits;
-//     }
-
-//     return config;
-// }
-
 static GGPZero::PuctConfig* createPuctConfig(PyObject* dict) {
     GGPZero::PuctConfig* config = new GGPZero::PuctConfig;
 
@@ -159,6 +97,8 @@ static GGPZero::PuctConfig* createPuctConfig(PyObject* dict) {
 
     config->backup_finalised = asInt("backup_finalised");
     config->lookup_transpositions = asInt("lookup_transpositions");
+
+    config->evaluation_multiplier_to_convergence = asFloat("evaluation_multiplier_to_convergence");
 
     std::string choose_method = asString("choose");
     if (choose_method == "choose_top_visits") {

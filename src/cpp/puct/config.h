@@ -53,6 +53,9 @@ namespace GGPZero {
 
         // turn on transposition
         bool lookup_transpositions;
+
+        // when think time, multiples time.  when iterations, multiples iterations.
+        float evaluation_multiplier_to_convergence;
     };
 
 }

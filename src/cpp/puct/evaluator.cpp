@@ -83,9 +83,10 @@ void PuctEvaluator::updateConf(const PuctConfig* conf) {
                         conf->top_visits_best_guess_converge_ratio, conf->minimax_backup_ratio,
                         conf->extra_uct_exploration);
 
-        K273::l_verbose("think %.1f, converged_visits=%d, batch_size=%d",
-                        conf->think_time, conf->converged_visits, conf->batch_size);
-
+        K273::l_verbose("think %.1f, converged_visits=%d, converge_multiplier: %1f, batch_size=%d",
+                        conf->think_time, conf->converged_visits,
+                        conf->evaluation_multiplier_to_convergence,
+                        conf->batch_size);
 
         K273::l_verbose("transpositions %s / backup finalised %s, use_legals_count_draw %d",
                         conf->lookup_transpositions ? "true" : "false",
@@ -699,8 +700,8 @@ void PuctEvaluator::playoutMain(int max_evaluations, double end_time) {
 
     const bool use_think_time = this->conf->think_time > 0;
 
-    auto elapsed = [this, start_time](double multiplier) {
-        return K273::get_time() > (start_time + this->conf->think_time * multiplier);
+    auto elapsed = [start_time](double elasped_time) {
+        return K273::get_time() > (start_time + elasped_time);
     };
 
     double next_report_time = K273::get_time() + 2.5;
@@ -718,79 +719,84 @@ void PuctEvaluator::playoutMain(int max_evaluations, double end_time) {
         return false;
     };
 
-    const int max_tree_playouts = 4 * max_evaluations;
+
+#define LOG_BREAK(fmt, ...)                           \
+    if (this->conf->verbose) {                        \
+        K273::l_warning(fmt, ##__VA_ARGS__);          \
+    }                                                 \
+    break;                                            \
+
+    const int max_non_converged_evaluations = max_evaluations * conf->evaluation_multiplier_to_convergence;
+
+    // this is different from evaluations, and allows for hitting terminal nodes
+    const int max_tree_playouts = 4 * max_non_converged_evaluations;
+
     while (true) {
         const int our_role_index = this->root->lead_role_index;
+        const bool is_converged = this->converged(this->conf->converged_visits);
 
-        if (this->stats.num_evaluations > max_evaluations) {
-            if (this->conf->verbose) {
-                K273::l_warning("Breaking max evaluations");
-            }
-            break;
-        }
+        // A long list of break conditions:
 
-        if (this->stats.num_tree_playouts > max_tree_playouts) {
-            if (this->conf->verbose) {
-                K273::l_warning("Breaking max iterations");
-            }
-
-            break;
-        }
-
-        // XXX this should be configurable
-        if (this->number_of_nodes > 5000000) {
-            K273::l_warning("Breaking max nodes");
-            break;
-        }
-
-        if (this->root->is_finalised && this->stats.num_tree_playouts > 100) {
-            if (this->conf->verbose) {
-                K273::l_warning("Breaking early as finalised");
-            }
-
-            break;
-        }
-
+        // note this is hard time, and is different from think time
         if (end_time > 0 && K273::get_time() > end_time) {
-            K273::l_warning("Hit hard time limit");
-            break;
+            LOG_BREAK("Hit hard time limit");
         }
 
-        // use think time:
-        // XXX hacked up so can run in reasonable times during ICGA
-        if (use_think_time && this->stats.num_tree_playouts % 20 == 0 && K273::get_time() > (start_time + 0.1)) {
+        // finalised?
+        if (this->root->is_finalised && this->stats.num_tree_playouts > 100) {
+            LOG_BREAK("Breaking early as finalised");
+        }
 
-            if (elapsed(1.0)) {
+        if (is_converged && this->stats.num_tree_playouts > max_tree_playouts) {
+            LOG_BREAK("Breaking max tree playouts");
+        }
 
-                if (this->converged(this->conf->converged_visits)) {
-                    K273::l_warning("Breaking since converged");
-                    break;
-                }
+        // XXX add parameter for this
+        if (this->number_of_nodes > 5000000) {
+            LOG_BREAK("Breaking max nodes");
+        }
+
+        if (is_converged && this->stats.num_evaluations > max_evaluations) {
+            LOG_BREAK("Breaking max evaluations (converged).");
+        }
+
+        if (!is_converged && this->stats.num_evaluations > max_non_converged_evaluations) {
+            LOG_BREAK("Breaking max evaluations (non-converged).");
+        }
+
+        if (use_think_time) {
+            if (is_converged && elapsed(this->conf->think_time)) {
+                LOG_BREAK("Breaking (converged) - think time elapsed.");
+            }
+
+            if (!is_converged &&
+                elapsed(this->conf->think_time * this->conf->evaluation_multiplier_to_convergence)) {
+                LOG_BREAK("Breaking (non-converged) - think time elapsed.");
+            }
+
+            // break early if game is done (XXX add a parameter for this value)
+            if (elapsed(60.0) && is_converged) {
 
                 const PuctNodeChild* best = this->chooseTopVisits(this->root);
-                if (this->conf->think_time < 1.0 || best->to_node->getCurrentScore(our_role_index) > 0.98) {
-                    K273::l_warning("Breaking since: quick time OR score... (non converged)");
-                    break;
-                }
 
-                // XXX this needs to be configurable
-                if (elapsed(2.5)) {
-                    K273::l_warning("Breaking - but never converged :(");
-                    break;
+                if (best->to_node->getCurrentScore(our_role_index) > 0.995 ||
+                    best->to_node->getCurrentScore(our_role_index) < 0.005) {
+
+                    LOG_BREAK("Breaking early. game over, and converged. ");
                 }
             }
         }
 
-        // do some work here
+        // and... do some work here
         int depth = this->treePlayout();
+
+        // update some stats
         this->stats.playouts_max_depth = std::max(depth, this->stats.playouts_max_depth);
         this->stats.playouts_total_depth += depth;
 
         if (do_report()) {
             const PuctNodeChild* best = this->chooseTopVisits(this->root);
             if (best->to_node != nullptr) {
-                bool const is_converged = this->converged(this->conf->converged_visits);
-
                 const int choice = best->move.get(our_role_index);
                 K273::l_info("Evals %d/%d/%d, depth %.2f/%d, n/t: %d/%d, best: %.4f, converged %s:, move: %s",
                              this->stats.num_evaluations,
