@@ -427,6 +427,7 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
 
 
 void PuctEvaluator::backUpMiniMax(float* new_scores, const PathElement& cur) {
+    return;
 
     const int role_index = cur.node->lead_role_index;
     if (role_index == -1) {
@@ -549,23 +550,47 @@ void PuctEvaluator::backup(float* new_scores, const Path& path) {
 
         if (cur.choice != nullptr) {
             cur.choice->traversals++;
-            // apply policy dilution (only when the score is between 0.02 < s < 0.98)
-            if (cur.node->visits > 1000 &&
-                cur.node->getCurrentScore(cur.node->lead_role_index) < 0.98 &&
-                cur.node->getCurrentScore(cur.node->lead_role_index) > 0.02) {
 
-                // reasonable?
-                const float policy_dilute_apply = 0.99975;
-                const float policy_dilute_min = 0.01f;
+            // apply policy dilution (XXX abusing minimax_backup_ratio)
+            if (this->conf->minimax_backup_ratio > 0 && cur.node->visits > 23) {
+                if (cur.node->getCurrentScore(cur.node->lead_role_index) < 0.7 &&
+                    cur.node->getCurrentScore(cur.node->lead_role_index) > 0.3) {
 
-                if (cur.choice->policy_prob > policy_dilute_min) {
-                    cur.choice->policy_prob *= policy_dilute_apply;
-                    cur.choice->policy_prob = std::max(policy_dilute_min, cur.choice->policy_prob);
+                    // reasonable?
+                    const float policy_dilute_apply = 0.995;
+                    const float policy_dilute_min = 0.02f;
+
+                    if (cur.choice->policy_prob > policy_dilute_min) {
+                        cur.choice->policy_prob *= policy_dilute_apply;
+                        cur.choice->policy_prob = std::max(policy_dilute_min, cur.choice->policy_prob);
+                    }
+
+                } else if (cur.node->getCurrentScore(cur.node->lead_role_index) < 0.85 &&
+                           cur.node->getCurrentScore(cur.node->lead_role_index) > 0.15) {
+
+                    // reasonable?
+                    const float policy_dilute_apply = 0.9975;
+                    const float policy_dilute_min = 0.03f;
+
+                    if (cur.choice->policy_prob > policy_dilute_min) {
+                        cur.choice->policy_prob *= policy_dilute_apply;
+                        cur.choice->policy_prob = std::max(policy_dilute_min, cur.choice->policy_prob);
+                    }
+
+                } else {
+                    // restore policy
+                    if (!cur.node->dirichlet_noise_set) {
+                        for (int ii=0; ii<cur.node->num_children; ii++) {
+                            PuctNodeChild* c = cur.node->getNodeChild(this->sm->getRoleCount(), ii);
+                            // reset policy_prob
+                            c->policy_prob = c->policy_prob_orig;
+                        }
+                    }
                 }
             }
         }
 
-        if (cur.node->visits % 1000 == 0) {
+        if (cur.node->visits % 100 == 0) {
             // normalise policy_prob
             cur.node->normaliseX();
         }
