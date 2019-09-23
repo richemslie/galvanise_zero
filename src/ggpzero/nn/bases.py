@@ -154,10 +154,11 @@ class GdlBasesTransformer(object):
 
         if self.verbose:
             for channel_id, all in self.by_channel.items():
-                print
-                print "channel_id", channel_id
+                print()
+                print("channel_id: %s" % channel_id)
+
                 for x in all:
-                    print base_infos[x.base_indx].terms, "->", x
+                    print("%s -> %s" % (base_infos[x.base_indx].terms, x))
 
     def create_board_space(self, base_infos):
         board_space = []
