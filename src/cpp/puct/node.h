@@ -96,6 +96,9 @@ namespace GGPZero {
 
         // internal pointer to scores
         uint16_t final_score_ptr_incr;
+
+        // XXX base state could be deleted after num_children_expanded == num_children
+        // only useful for cases like hex, where basestate is massive
         uint16_t basestate_ptr_incr;
         uint16_t children_ptr_incr;
 
