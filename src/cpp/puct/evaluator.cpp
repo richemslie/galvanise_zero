@@ -280,7 +280,8 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
         return child;
     }
 
-    if (depth < 2) {
+    // XXX add an option to turn of dirichlet noise at depth 1
+    if (depth == 0) {
         this->setDirichletNoise(node);
     }
 
