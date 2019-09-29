@@ -18,6 +18,18 @@ namespace GGPZero {
     // Forwards
     struct PuctNode;
 
+    struct PuctNodeDebug {
+        int index_0;
+        int index_1;
+
+        float pct_traversals;
+
+        // from joint_move, based on lead_role_index
+        int move_index;
+
+        std::vector <int> variation;
+    };
+
     struct PuctNodeChild {
         PuctNode* to_node;
         bool unselectable;
@@ -205,6 +217,8 @@ namespace GGPZero {
         static Children sortedChildrenTraversals(const PuctNode* node,
                                                  int role_count,
                                                  bool next_probability=false);
+
+        static void debug(const PuctNode* node, int index_0, int index_1, int max_variation_depth, PuctNodeDebug& ref);
 
     };
 

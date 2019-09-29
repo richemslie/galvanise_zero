@@ -8,14 +8,13 @@
 #include <statemachine/jointmove.h>
 #include <statemachine/statemachine.h>
 
-#include <vector>
-
 namespace GGPZero {
 
     // forwards
     class PuctEvaluator;
     struct PuctConfig;
     struct PuctNodeChild;
+    struct PuctNodeDebug;
 
     // this is a bit of hack, wasnt really designed to actually play from c++
     class Player {
@@ -34,6 +33,7 @@ namespace GGPZero {
         void puctApplyMove(const GGPLib::JointMove* move);
         void puctPlayerMove(const GGPLib::BaseState* state, int iterations, double end_time);
         std::tuple <int, float, int> puctPlayerGetMove(int lead_role_index);
+        std::vector <PuctNodeDebug> treeDebugInfo();
 
         const ReadyEvent* poll(int predict_count, std::vector <float*>& data);
 

@@ -153,7 +153,7 @@ class PlayPoller(PollerBase):
                                                  self.c_transformer,
                                                  attr.asdict(conf))
 
-        for name in "reset apply_move move get_move update_config update_config".split():
+        for name in "reset apply_move move get_move update_config tree_debug".split():
             name = "player_" + name
             setattr(self, name, getattr(self.c_player, name))
 

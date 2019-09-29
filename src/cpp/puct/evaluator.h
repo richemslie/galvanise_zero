@@ -90,6 +90,10 @@ namespace GGPZero {
             return this->sm;
         }
 
+        const PuctNode* getRootNode() const {
+            return this->root;
+        }
+
     private:
         struct PlayoutStats {
             PlayoutStats() {

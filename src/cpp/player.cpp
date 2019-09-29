@@ -9,6 +9,7 @@
 #include <k273/logging.h>
 #include <k273/exception.h>
 
+#include <vector>
 
 using namespace GGPZero;
 
@@ -115,6 +116,51 @@ std::tuple <int, float, int> Player::puctPlayerGetMove(int lead_role_index) {
     return std::make_tuple(this->on_next_move_choice->move.get(lead_role_index),
                            probability,
                            this->evaluator->nodeCount());
+}
+
+std::vector <PuctNodeDebug> Player::treeDebugInfo() {
+    std::vector <PuctNodeDebug> res;
+    const PuctNode* root = this->evaluator->getRootNode();
+
+    if (root == nullptr) {
+        return res;
+    }
+
+    // XXX learn c++
+    struct X {
+        X(int x, int y) :
+            x(x),
+            y(y) {
+        }
+
+        int x, y;
+    };
+
+    std::vector <X> spec;
+    spec.emplace_back(0, -1);
+    spec.emplace_back(0, 0);
+    spec.emplace_back(0, 1);
+    spec.emplace_back(0, 2);
+    spec.emplace_back(0, 3);
+
+    spec.emplace_back(1, -1);
+    spec.emplace_back(1, 0);
+
+    spec.emplace_back(2, -1);
+    spec.emplace_back(2, 0);
+
+    for (X& x : spec) {
+
+        PuctNodeDebug info;
+        PuctNode::debug(root, x.x, x.y, 10, info);
+        if (info.index_0 < 0) {
+            return res;
+        }
+
+        res.push_back(info);
+    }
+
+    return res;
 }
 
 const GGPZero::ReadyEvent* Player::poll(int predict_count, std::vector <float*>& data) {

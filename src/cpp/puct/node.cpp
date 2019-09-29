@@ -371,6 +371,73 @@ Children PuctNode::sortedChildrenTraversals(const PuctNode* node,
     return children;
 }
 
+void PuctNode::debug(const PuctNode* node, int index_0, int index_1,
+                     int max_variation_depth, PuctNodeDebug& info) {
+
+    auto totalTraversals = [](const PuctNode* n) {
+        float total = 0;
+        for (int ii=0; ii<n->num_children; ii++) {
+            const PuctNodeChild* child = n->getNodeChild(2, ii);
+            total += child->traversals;
+        }
+
+        return total;
+    };
+
+    // indicates error condition on return
+    info.index_0 = -1;
+
+    if (index_0 >= node->num_children) {
+        return;
+    }
+
+    int child_index = index_0;
+    if (index_1 >= 0) {
+        // navigate to right node / child_index
+        Children node_children = sortedChildrenTraversals(node, 2, false);
+        node = node_children[index_0]->to_node;
+        if (node == nullptr) {
+            return;
+        }
+
+        child_index = index_1;
+    }
+
+    if (child_index >= node->num_children) {
+        return;
+    }
+
+    // sort children
+    Children node_children = sortedChildrenTraversals(node, 2, false);
+
+    const PuctNodeChild* child = node_children[child_index];
+
+    // set stuff on debug
+    info.index_0 = index_0;
+    info.index_1 = index_1;
+    info.pct_traversals = float(child->traversals) / totalTraversals(node);
+    info.move_index = child->move.get(node->lead_role_index);
+
+    // add variation to max_variation_depth
+    const PuctNode* cur = child->to_node;
+
+    for (int ii=0; ii<max_variation_depth; ii++) {
+        // break early?
+        if (cur == nullptr ||
+            cur->num_children == 0 ||
+            cur->visits < 100) {
+            return;
+        }
+
+        auto cur_children = PuctNode::sortedChildrenTraversals(cur, 2, false);
+
+        const PuctNodeChild* cur_top_child = cur_children[0];
+        info.variation.push_back(cur_top_child->move.get(cur->lead_role_index));
+
+        cur = cur_top_child->to_node;
+    }
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 
 const GGPLib::BaseState* PuctNodeRequest::getBaseState() const {
