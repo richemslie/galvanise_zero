@@ -63,7 +63,6 @@ static PyObject* Player_tree_debug(PyObject_Player* self, PyObject* args) {
 
         PyObject* variation = PyTuple_New(debug.variation.size());
         for (int jj=0; jj<debug.variation.size(); jj++) {
-            printf("XXXXXX %d %d\n", jj, debug.variation[jj]);
             PyTuple_SetItem(variation, jj, PyLong_FromLong(debug.variation[jj]));
         }
 
