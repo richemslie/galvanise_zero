@@ -297,6 +297,7 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
 
     PuctNodeChild* bad_fallback = nullptr;
 
+    float best_fallback_score = -1;
     PuctNodeChild* best_fallback = nullptr;
 
     int unselectables = 0;
@@ -378,12 +379,33 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
             child_score = (child_score * c->traversals) / (c->traversals + discounted_visits);
         }
 
+        // XXX add this back in *again*.  Basically in words: at the root node, if we are not
+        // exploring then there isn't any point in doing any search (this is for cases where it
+        // exploits 99% on one child).
+
+        float limit_latch_root = 0.66;
+
         // end product
         // use for debug/display
         c->debug_node_score = child_score;
         c->debug_puct_score = exploration_score;
 
         const double score = child_score + exploration_score;
+
+        if (node->visits > 1000 &&
+            node->visits < 40000000
+            && depth == 0 && this->rng.get() > 0.1) {
+
+            if (c->traversals > 16 && c->traversals > node->visits * limit_latch_root) {
+
+                if (best_fallback == nullptr || score > best_fallback_score) {
+                    best_fallback = c;
+                    best_fallback_score = score;
+                }
+
+                continue;
+            }
+        } 
 
         if (score > best_score) {
             best_child = c;
