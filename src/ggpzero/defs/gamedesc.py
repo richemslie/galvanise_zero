@@ -470,6 +470,19 @@ class Games(object):
                         "1 2 3 4 5 6 7 8 9 10 11".split(),
                         [channels], [control0, control1, can_swap])
 
+    def hex_lg_19(self):
+        control0 = simple_control("control", "black")
+        control1 = simple_control("control", "white")
+        can_swap = simple_control("can_swap")
+
+        channel_names = "black white blackNorth blackSouth whiteEast whiteWest".split()
+        channels = BoardChannels("cell", 2, 3, [BoardTerm(1, channel_names)])
+
+        return GameDesc("hex",
+                        "a b c d e f g h i j k l m n o p q r s".split(),
+                        "1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19".split(),
+                        [channels], [control0, control1, can_swap])
+
 
 class GameSymmetries(object):
     ''' class is only here to create a namespace '''
