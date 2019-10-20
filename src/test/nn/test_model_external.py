@@ -36,10 +36,11 @@ def setup():
     np.set_printoptions(threshold=100000)
 
 
-games = ["draughts_10x10", "draughts_killer_10x10"]
+#games = ["draughts_10x10", "draughts_killer_10x10"]
+games = ["hex_lg_11"]
 
 
-def advance_state(sm, basestate):
+def advance_state(sm, basestate, do_swap=False):
     sm.update_bases(basestate)
 
     # leaks, but who cares, it is a test
@@ -49,7 +50,11 @@ def advance_state(sm, basestate):
     for role_index in range(len(sm.get_roles())):
         ls = sm.get_legal_state(role_index)
         choice = ls.get_legal(random.randrange(0, ls.get_count()))
-        joint_move.set(role_index, choice)
+
+        if do_swap and role_index == 1:
+            joint_move.set(role_index, 1)
+        else:
+            joint_move.set(role_index, choice)
 
     # play move, the base_state will be new state
     sm.next_state(joint_move, base_state)
@@ -74,11 +79,20 @@ def test_basic_config():
         print transformer.x_cords
         print transformer.y_cords
 
-        print
-        print transformer.state_to_channels(basestate.to_list())
         basestate = advance_state(game_info.get_sm(), basestate)
-        print
+        print "1"
+        print "=" * 50
+
         print transformer.state_to_channels(basestate.to_list())
 
-        basestate = advance_state(game_info.get_sm(), basestate)
+        print "2"
+        print "=" * 50
+        basestate = advance_state(game_info.get_sm(), basestate, do_swap=True)
+        print transformer.state_to_channels(basestate.to_list())
+
+        for ii in range(20):
+            basestate = advance_state(game_info.get_sm(), basestate)
+
+        print "3"
+        print "=" * 50
         print transformer.state_to_channels(basestate.to_list())
