@@ -142,6 +142,17 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
             // comment out this for debugging
             // this->pe->dumpNode(node, choice);
 
+            // create a sample (call getProbabilities() to ensure probabilities are right for policy)
+            this->pe->getProbabilities(node, this->conf->temperature_for_policy, false);
+
+            // comment out this for debugging
+            // this->pe->dumpNode(node, choice);
+
+            Sample* s = this->manager->createSample(this->pe, node);
+
+            // keep a local ref to it for when we score it
+            this->game_samples.push_back(s);
+
             this->pe->updateConf(this->conf->puct_config);
         }
 
