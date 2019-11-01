@@ -9,6 +9,8 @@ from ggplib.db import lookup
 
 from ggpzero.battle.common import MatchGameInfo
 
+alphabet = "abcdefghijklmnopqrstuvwxyz"
+_alphabet = "_" + alphabet
 
 class MatchInfo(MatchGameInfo):
     def __init__(self, size=None):
@@ -26,14 +28,14 @@ class MatchInfo(MatchGameInfo):
             yield move
         else:
             gdl_role_move = "(place %s %s)" % (move[0],
-                                               "abcdefghijklmnopqrstuvwxyz".index(move[1]) + 1)
+                                               alphabet.index(move[1]) + 1)
             yield gdl_role_move
 
     def gdl_to_lg(self, move):
         if move != "swap":
             move = move.replace("(place", "").replace(")", "")
             parts = move.split()
-            move = parts[0] + "_abcdefghijklmnopqrstuvwxyz"[int(parts[1])]
+            move = parts[0] + _alphabet[int(parts[1])]
         return move
 
     def print_board(self, sm):
@@ -50,11 +52,11 @@ class MatchInfo(MatchGameInfo):
 
         for s in list(states):
             base = s[1]
-            print base
+            # print base
             if base[0] == "control":
                 control = base[1]
             elif base[0] == "cell":
-                key = "abcdefghijklmnoprstuvwxyz".index(base[2]) + 1, int(base[3]),
+                key = alphabet.index(base[2]) + 1, int(base[3]),
                 if base[1] == "white" or base[1] == "black":
                     board_map[key] = base[1]
                 else:
@@ -93,7 +95,7 @@ class MatchInfo(MatchGameInfo):
             lines.append("".join(ll) + " \\")
 
         lines.append("   %s  +" % indent(board_size + 1) + "-" * line_len + "+")
-        lines.append("   %s   " % indent(board_size + 1) + ' '.join('%s' % c for c in 'abcdefghijklmnopqrs'[:board_size]))
+        lines.append("   %s   " % indent(board_size + 1) + ' '.join('%s' % c for c in alphabet[:board_size]))
 
         print
         print
