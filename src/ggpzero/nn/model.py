@@ -108,6 +108,8 @@ def residual_block_v2(filter_size, kernel_size, num_convs,
 
         # is there a reason to use kernel_initializer='he_normal' ??? We use default everywhere
         # else?
+        assert filter_size // ratio > 8
+
         x = klayers.Dense(filter_size // ratio,
                           name=prefix + "se_compress",
                           kernel_initializer='he_normal',
@@ -140,7 +142,7 @@ def residual_block_v2(filter_size, kernel_size, num_convs,
         x = conv(x, num_convs)
 
         if squeeze_excite:
-            x = se_block(x, filter_size)
+            x = se_block(x, 3)
 
         x = klayers.add([tensor, x], name=prefix + "add")
 
@@ -168,11 +170,15 @@ def get_network_model(conf, generation_descr):
 
     # choose between resnet_v2 and resnet_v1
     if conf.resnet_v2:
+        all_layers = []
+
         # initial conv2d/Resnet on cords
-        layer = conv2d_block(conf.cnn_filter_size, conf.cnn_kernel_size,
+        layer = conv2d_block(conf.cnn_filter_size, 1,
                              activation=activation,
                              padding="same",
                              name='initial-conv')(inputs_board)
+
+        all_layers.append(layer)
 
         if conf.squeeze_excite_layers:
             squeeze_excite = True
@@ -189,6 +195,7 @@ def get_network_model(conf, generation_descr):
                                       squeeze_excite=squeeze_excite,
                                       dropout=dropout,
                                       activation=activation)(layer)
+            all_layers.append(layer)
 
     else:
         # AG0 way:
@@ -241,7 +248,18 @@ def get_network_model(conf, generation_descr):
     else:
         num_value_heads = 2
 
-    if conf.global_pooling_value:
+    if conf.concat_all_layers:
+        assert not conf.global_pooling_value
+
+        all_to_flatten = []
+        for idx, layer in enumerate(all_layers):
+            to_flatten = conv2d_block(1, 1, name='value_flatten_%s' % idx,
+                                      activation=activation,
+                                      padding='valid')(layer)
+            all_to_flatten.append(to_flatten)
+        flat = klayers.concatenate([klayers.Flatten()(f) for f in all_to_flatten])
+
+    elif conf.global_pooling_value:
         x = klayers.GlobalAveragePooling2D(name="value_average")(layer)
         to_flatten1 = klayers.Reshape((1, 1, conf.cnn_filter_size), name="value_reshape")(x)
         to_flatten2 = conv2d_block(1, 1,

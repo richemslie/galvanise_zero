@@ -143,6 +143,7 @@ class NNModelConfig(object):
     squeeze_excite_layers = attribute(False)
     resnet_v2 = attribute(False)
     global_pooling_value = attribute(False)
+    concat_all_layers = attribute(False)
 
 
 @register_attrs
