@@ -36,25 +36,6 @@ class Rollout(object):
         assert len(self.game_info.model.roles) == 2
         role0, role1 = self.game_info.model.roles
         self.piece_counts = []
-        for b in self.game_info.model.bases:
-            if 'control' in b:
-                self.piece_counts.append(None)
-            elif role0 in b and role1 not in b:
-                self.piece_counts.append(role0)
-            elif role1 in b and role0 not in b:
-                self.piece_counts.append(role1)
-            else:
-                self.piece_counts.append(None)
-
-    def count_states(self, basestate, ri):
-        role = self.game_info.model.roles[ri]
-        total = 0
-        for i in range(basestate.len()):
-            if basestate.get(i) == 0:
-                continue
-            if self.piece_counts[i] == role:
-                total += 1
-        return total
 
     def reset(self):
         self.sm.reset()
@@ -93,6 +74,9 @@ class Rollout(object):
         total = sum(p for _, p in policy_dist)
         policy_dist = [(l, p / total) for l, p in policy_dist]
 
+        print policy_dist
+        XXX
+
         # now we can create a sample :)
         return confs.Sample(None, state, policy_dist, final_score, d, self.depth, lead_role_index)
 
@@ -111,32 +95,26 @@ class Rollout(object):
         next_state = self.states[self.depth + 1]
 
         ls = self.sm.get_legal_state(lead_role_index)
-        best_moves = []
-        best_count = -1
 
-        # want to reduce this
-        for ii in range(ls.get_count()):
-            legal = ls.get_legal(ii)
-            self.lookahead_joint_move.set(lead_role_index, legal)
-            self.sm.next_state(self.lookahead_joint_move, next_state)
+        # best_moves = []
+        # best_count = -1
 
-            # move forward and see if we won the game?
-            self.sm.update_bases(next_state)
-            if self.sm.is_terminal():
-                if self.sm.get_goal_value(lead_role_index) == 100:
-                    # return this move (but fix the state of statemachine first)
-                    self.sm.update_bases(self.get_current_state())
-                    return legal
+        # # want to reduce this
+        # for ii in range(ls.get_count()):
+        #     legal = ls.get_legal(ii)
+        #     self.lookahead_joint_move.set(lead_role_index, legal)
+        #     self.sm.next_state(self.lookahead_joint_move, next_state)
 
-            count = self.count_states(next_state, other_role_index)
-            if count > best_count:
-                best_moves = [legal]
-                best_count = count
-            elif count == best_count:
-                best_moves.append(legal)
+        #     # move forward and see if we won the game?
+        #     self.sm.update_bases(next_state)
+        #     if self.sm.is_terminal():
+        #         if self.sm.get_goal_value(lead_role_index) == 100:
+        #             # return this move (but fix the state of statemachine first)
+        #             self.sm.update_bases(self.get_current_state())
+        #             return legal
 
-            # revert statemachine
-            self.sm.update_bases(self.get_current_state())
+        #     # revert statemachine
+        #     self.sm.update_bases(self.get_current_state())
 
         return random.choice(best_moves)
 
@@ -277,6 +255,6 @@ if __name__ == "__main__":
     import sys
     game = sys.argv[1]
 
-    determine_legals(game)
-    determine_cords(game)
-    # do_data_samples(game)
+    #determine_legals(game)
+    #determine_cords(game)
+    do_data_samples(game)

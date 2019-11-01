@@ -393,8 +393,9 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
         const double score = child_score + exploration_score;
 
         if (node->visits > 1000 &&
-            node->visits < 40000000
-            && depth == 0 && this->rng.get() > 0.1) {
+            node->visits < 40000000 &&
+            depth == 0 &&
+            this->rng.get() > 0.1) {
 
             if (c->traversals > 16 && c->traversals > node->visits * limit_latch_root) {
 
@@ -405,7 +406,7 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
 
                 continue;
             }
-        } 
+        }
 
         if (score > best_score) {
             best_child = c;
@@ -798,12 +799,12 @@ void PuctEvaluator::playoutMain(int max_evaluations, double end_time) {
             }
 
             // break early if game is done (XXX add a parameter for this value)
-            if (elapsed(60.0) && is_converged) {
+            if (elapsed(120.0) && is_converged) {
 
                 const PuctNodeChild* best = this->chooseTopVisits(this->root);
 
-                if (best->to_node->getCurrentScore(our_role_index) > 0.995 ||
-                    best->to_node->getCurrentScore(our_role_index) < 0.005) {
+                if (best->to_node->getCurrentScore(our_role_index) > 0.975 ||
+                    best->to_node->getCurrentScore(our_role_index) < 0.025) {
 
                     LOG_BREAK("Breaking early. game over, and converged. ");
                 }
@@ -1012,7 +1013,9 @@ const PuctNodeChild* PuctEvaluator::onNextMove(int max_evaluations, double end_t
             K273::l_warning("Warning - reseting root node");
         }
 
-        this->resetRootNode();
+        if (this->number_of_nodes < 3000000) {
+            this->resetRootNode();
+        }
     }
 
     // this will be spawned as a coroutine (see addRunnable() below)

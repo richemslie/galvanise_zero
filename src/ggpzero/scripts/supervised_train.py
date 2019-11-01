@@ -13,16 +13,16 @@ def get_train_config(game, gen_prefix, next_step, starting_step):
     config.starting_step = starting_step
 
     config.generation_prefix = gen_prefix
-    config.batch_size = 512
+    config.batch_size = 1024
     config.compile_strategy = "SGD"
-    config.epochs = 20
+    config.epochs = 10
 
-    config.learning_rate = 0.03
+    config.learning_rate = 0.01
 
     config.overwrite_existing = False
     config.use_previous = False
     config.validation_split = 0.95000
-    config.resample_buckets = [[-1, 1.0]]
+    config.resample_buckets = [[200, 1.0]]
     config.max_epoch_size = 1048576 * 2
 
     return config
@@ -37,6 +37,12 @@ def get_nn_model(game, transformer, size="small"):
 
     config.dropout_rate_policy = 0.25
     config.dropout_rate_value = 0.5
+
+    # config.concat_all_layers = True
+    # config.global_pooling_value = False
+
+    config.concat_all_layers = False
+    config.global_pooling_value = True
 
     return config
 
@@ -71,11 +77,11 @@ if __name__ == "__main__":
         gen_prefix_next = sys.argv[1]
 
         # modify these >>>
-        game = "reversi"
-        gen_prefix = "kt2"
+        game = "hex_lg_19"
+        gen_prefix = "h2"
 
-        next_step = 93
-        starting_step = 3
+        next_step = 220
+        starting_step = 0
         num_previous_states = 1
 
         do_training(game, gen_prefix, next_step, starting_step,

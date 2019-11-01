@@ -275,3 +275,11 @@ def test_game_amazons():
     game_test("amazons_10x10", match_info.print_board, 10)
     game_test("amazons_10x10", match_info.print_board, 16)
 
+
+def test_game_hex19():
+    from ggpzero.battle.hex2 import MatchInfo
+    match_info = MatchInfo(19)
+
+    game_test("hex_lg_19", match_info.print_board, 3)
+    game_test("hex_lg_19", match_info.print_board, 10)
+    game_test("hex_lg_19", match_info.print_board, 16)

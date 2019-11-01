@@ -1,6 +1,6 @@
 GAME=$1
 
-DATAPATH_FROM=rxe@hz0:/home/rxe/working/ggpzero/data
+DATAPATH_FROM=rxe@hz1:/home/rxe/working/ggpzero/data
 DATAPATH_TO=/home/rxe/working/ggpzero/data
 
 watch -n 15 "rsync -vaz -e ssh $DATAPATH_FROM/$GAME/generations/ $DATAPATH_TO/$GAME/generations && rsync -vaz -e ssh $DATAPATH_FROM/$GAME/models/ $DATAPATH_TO/$GAME/models && rsync -vaz -e ssh $DATAPATH_FROM/$GAME/weights/ $DATAPATH_TO/$GAME/weights"

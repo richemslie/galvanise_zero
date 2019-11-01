@@ -525,6 +525,17 @@ class GameSymmetries(object):
                           do_rotations_90=True,
                           do_reflection=True)
 
+
+    def hex_lg_19(self):
+        return Symmetries(skip_bases=["control", "can_swap", "pad_0", "pad_1", "meta_pad0", "meta_pad0",
+                                      "meta_pad1", "meta_pad2", "black_connected", "white_connected"],
+                          apply_bases=[ApplySymmetry("cell", 2, 3)],
+                          skip_actions=["noop", "swap"],
+                          apply_actions=[ApplySymmetry("place", 1, 2)],
+                          do_rotations_90=False,
+                          do_rotations_180=True,
+                          do_reflection=False)
+
     def _hex(self):
         ''' Thanks to Niall Cardin (who in turn extended his thanks to Jeff Klingner) for setting
             me right on my hex symmetries. '''

@@ -37,7 +37,7 @@ def setup():
 
 
 #games = ["draughts_10x10", "draughts_killer_10x10"]
-games = ["hex_lg_11"]
+games = ["hex_lg_19"]
 
 
 def advance_state(sm, basestate, do_swap=False):

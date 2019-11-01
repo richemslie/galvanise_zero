@@ -142,17 +142,6 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
             // comment out this for debugging
             // this->pe->dumpNode(node, choice);
 
-            // create a sample (call getProbabilities() to ensure probabilities are right for policy)
-            this->pe->getProbabilities(node, this->conf->temperature_for_policy, false);
-
-            // comment out this for debugging
-            // this->pe->dumpNode(node, choice);
-
-            Sample* s = this->manager->createSample(this->pe, node);
-
-            // keep a local ref to it for when we score it
-            this->game_samples.push_back(s);
-
             this->pe->updateConf(this->conf->puct_config);
         }
 
@@ -169,7 +158,7 @@ PuctNode* SelfPlay::collectSamples(PuctNode* node) {
             this->resign(node);
         }
 
-        // some of the time actually resign (if we have at least one sample)
+        // actually resign (if we have at least one sample)
         if (this->has_resigned && this->game_samples.size() > 1) {
             this->manager->incrResigns();
             break;
