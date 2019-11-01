@@ -1076,21 +1076,44 @@ const PuctNodeChild* PuctEvaluator::chooseTopVisits(const PuctNode* node) const 
     const int role_index = node->lead_role_index;
 
     // look for finalised first
-    if (node->is_finalised && node->getCurrentScore(role_index) > 1.0) {
-        for (auto c : children) {
-            if (c->to_node != nullptr && c->to_node->is_finalised &&
-                c->to_node->getCurrentScore(role_index) > 0.99) {
+    int indx0 = -1;
+    int indx1 = -1;
+
+    int count = 0;
+    for (auto c : children) {
+        if (c->to_node != nullptr && c->to_node->is_finalised) {
+
+            // finalised / choose forced win move
+            if (c->to_node->getCurrentScore(role_index) > 0.99) {
                 return c;
             }
+
+            // finalised forced loss / skip
+            if (c->to_node->getCurrentScore(role_index) < 0.01) {
+                count++;
+                continue;
+            }
         }
+
+        if (indx0 == -1) {
+            indx0 = count;
+
+        } else if (indx1 == -1) {
+            indx1 = count;
+        }
+
+        count++;
     }
 
-    // compare top two.  This is a heuristic to cheaply check if the node hasn't yet converged and
-    // chooses the one with the best score.  It isn't very accurate, the only way to get 100%
-    // accuracy is to keep running for longer, until it cleanly converges.  This is a best guess for now.
-    if (this->conf->top_visits_best_guess_converge_ratio > 0 && children.size() >= 2) {
-        const PuctNodeChild* c0 = children[0];
-        const PuctNodeChild* c1 = children[1];
+    if (this->conf->top_visits_best_guess_converge_ratio > 0 &&
+        indx0 != -1 &&
+        indx1 != -1) {
+
+        // compare top two.  This is a heuristic to cheaply check if the node hasn't yet converged and
+        // chooses the one with the best score.  It isn't very accurate, the only way to get 100%
+        // accuracy is to keep running for longer, until it cleanly converges.  This is a best guess for now.
+        const PuctNodeChild* c0 = children[indx0];
+        const PuctNodeChild* c1 = children[indx1];
 
         if (c0->to_node != nullptr && c1->to_node != nullptr) {
             if (c1->traversals > c0->traversals * this->conf->top_visits_best_guess_converge_ratio &&
