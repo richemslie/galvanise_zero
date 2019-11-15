@@ -42,6 +42,7 @@
   - [[https://github.com/richemslie/gzero_data/tree/master/data/breakthrough][breakthrough]]
   - [[https://github.com/richemslie/gzero_data/tree/master/data/hexLG11][hex11]]
   - [[https://github.com/richemslie/gzero_data/tree/master/data/draughts_killer][International Draughts (killer mode)]]
+  - [[https://github.com/richemslie/gzero_data/tree/master/data/hex19][hex19]]
 
   Little Golem Champion in last attempts @ Connect6, Hex13, Amazons and Breakthrough, winning all
   matches.  Retired from further Championships.  Connect6 and Hex 13 are currently rated 1st and
