@@ -178,6 +178,16 @@ class Games(object):
                         "1 2 3 4 5 6".split(),
                         [cell], [control])
 
+    def bt_7(self):
+        # one channel, sharing black/white
+        control = binary_control("control", "black", "white")
+        cell_holds = simple_board_channels("cellHolds", ["white", "black"])
+
+        return GameDesc("breakthrough",
+                        "1 2 3 4 5 6 7".split(),
+                        "1 2 3 4 5 6 7".split(),
+                        [cell_holds], [control])
+
     def cittaceot(self):
         # one channel, sharing roles
         control = binary_control("control", "xplayer", "yplayer")
@@ -495,6 +505,13 @@ class GameSymmetries(object):
                           do_reflection=True)
 
     def breakthrough(self):
+        return Symmetries(skip_bases=["control"],
+                          apply_bases=[ApplySymmetry("cellHolds", 1, 2)],
+                          skip_actions=["noop"],
+                          apply_actions=[ApplySymmetry("move", [1, 3], [2, 4])],
+                          do_reflection=True)
+
+    def bt_7(self):
         return Symmetries(skip_bases=["control"],
                           apply_bases=[ApplySymmetry("cellHolds", 1, 2)],
                           skip_actions=["noop"],

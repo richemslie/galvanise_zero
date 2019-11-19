@@ -10,9 +10,12 @@ def get_game_info(board_size):
     # add players
     if board_size == 8:
         game = "breakthrough"
-    else:
-        assert board_size == 6
+    elif board_size == 7:
+        game = "bt_7"
+    elif board_size == 6:
         game = "breakthroughSmall"
+    else:
+        assert "board_size not supported"
 
     return lookup.by_name(game)
 
@@ -30,7 +33,7 @@ def pretty_board(board_size, sm):
         if s[1][0] == "control":
             control = s[1][1]
         else:
-            if board_size == 8:
+            if board_size != 6:
                 assert s[1][0] == "cellHolds"
             else:
                 assert s[1][0] == "cell"
@@ -95,15 +98,7 @@ def parse_sgf(txt):
 class MatchInfo(MatchGameInfo):
     def __init__(self, board_size):
         self.board_size = board_size
-
-        # add players
-        if board_size == 8:
-            game = "breakthrough"
-        else:
-            assert board_size == 6
-            game = "breakthroughSmall"
-
-        game_info = lookup.by_name(game)
+        game_info = get_game_info(board_size)
         super().__init__(game_info)
 
     def print_board(self, sm):
@@ -113,6 +108,8 @@ class MatchInfo(MatchGameInfo):
         def to_cords(s):
             if self.board_size == 8:
                 mapping_x_cord = {x0 : x1 for x0, x1 in zip('abcdefgh', '87654321')}
+            elif self.board_size == 7:
+                mapping_x_cord = {x0 : x1 for x0, x1 in zip('abcdefg', '7654321')}
             else:
                 mapping_x_cord = {x0 : x1 for x0, x1 in zip('abcdef', '654321')}
             return mapping_x_cord[s[0]], s[1]
@@ -129,6 +126,8 @@ class MatchInfo(MatchGameInfo):
         a, b, c, d = move.split()
         if self.board_size == 8:
             mapping_x_cord = {x0 : x1 for x0, x1 in zip('87654321', 'abcdefgh')}
+        elif self.board_size == 7:
+            mapping_x_cord = {x0 : x1 for x0, x1 in zip('7654321', 'abcdefg')}
         else:
             mapping_x_cord = {x0 : x1 for x0, x1 in zip('654321', 'abcdef')}
 
@@ -137,15 +136,14 @@ class MatchInfo(MatchGameInfo):
     def gdl_to_lg(self, move):
         move = move.replace("(move", "").replace(")", "")
         a, b, c, d = move.split()
-        a = 8 - int(a)
+        a = self.board_size - int(a)
         b = int(b) - 1
-        c = 8 - int(c)
+        c = self.board_size - int(c)
         d = int(d) - 1
         return "%s%s%s%s" % (a, b, c, d)
 
     def parse_sgf(self, sgf):
         return parse_sgf(sgf)
-
 
     def print_board(self, sm):
         pretty_board(self.board_size, sm)

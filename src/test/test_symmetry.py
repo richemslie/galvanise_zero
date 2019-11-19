@@ -283,3 +283,12 @@ def test_game_hex19():
     game_test("hex_lg_19", match_info.print_board, 3)
     game_test("hex_lg_19", match_info.print_board, 10)
     game_test("hex_lg_19", match_info.print_board, 16)
+
+
+def test_game_bt_7():
+    from ggpzero.battle.bt import MatchInfo
+    match_info = MatchInfo(7)
+
+    game_test("bt_7", match_info.print_board, 3)
+    game_test("bt_7", match_info.print_board, 10)
+    game_test("bt_7", match_info.print_board, 16)
