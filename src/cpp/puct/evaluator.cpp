@@ -1,3 +1,4 @@
+
 #include "puct/evaluator.h"
 #include "puct/node.h"
 
@@ -602,6 +603,17 @@ void PuctEvaluator::backup(float* new_scores, const Path& path) {
                         cur.choice->policy_prob = std::max(policy_dilute_min, cur.choice->policy_prob);
                     }
 
+                } else if (cur.node->getCurrentScore(cur.node->lead_role_index) < 0.995 &&
+                           cur.node->getCurrentScore(cur.node->lead_role_index) > 0.005) {
+
+                    // reasonable?
+                    const float policy_dilute_apply = 0.9975;
+                    const float policy_dilute_min = 0.10f;
+
+                    if (cur.choice->policy_prob > policy_dilute_min) {
+                        cur.choice->policy_prob *= policy_dilute_apply;
+                        cur.choice->policy_prob = std::max(policy_dilute_min, cur.choice->policy_prob);
+                    }
                 } else {
                     // restore policy
                     if (!cur.node->dirichlet_noise_set) {
@@ -776,7 +788,7 @@ void PuctEvaluator::playoutMain(int max_evaluations, double end_time) {
         }
 
         // XXX add parameter for this
-        if (this->number_of_nodes > 5000000) {
+        if (this->number_of_nodes > 50000000) {
             LOG_BREAK("Breaking max nodes");
         }
 
@@ -1205,6 +1217,10 @@ void PuctEvaluator::setDirichletNoise(PuctNode* node) {
         return;
     }
 
+    if (node->getCurrentScore(node->lead_role_index) > 0.95) {
+        return;
+    }
+
     // calculate noise_alpha based on number of children - credit KataGo & LZ0
     // note this is what I have manually been doing by hand for max number of children
 
@@ -1236,16 +1252,13 @@ void PuctEvaluator::setDirichletNoise(PuctNode* node) {
 
     bool policy_squash = (this->conf->noise_policy_squash_pct > 0 &&
                           this->rng.get() < this->conf->noise_policy_squash_pct);
-    if (policy_squash && node->getCurrentScore(node->lead_role_index) > 0.9) {
-        policy_squash = false;
-    }
 
     // replace the policy_prob on the node
     float total_policy = 0;
     for (int ii=0; ii<node->num_children; ii++) {
         PuctNodeChild* c = node->getNodeChild(this->sm->getRoleCount(), ii);
 
-        // randomly reduce high fliers
+        // reduce high fliers
         if (policy_squash) {
             c->policy_prob = std::min(this->conf->noise_policy_squash_prob,
                                       c->policy_prob);
