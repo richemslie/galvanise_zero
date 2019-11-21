@@ -33,6 +33,8 @@ namespace GGPZero {
     struct PuctNodeChild {
         PuctNode* to_node;
         bool unselectable;
+        bool use_minimax;
+
         uint32_t traversals;
 
         float policy_prob_orig;

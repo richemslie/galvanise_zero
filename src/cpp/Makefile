@@ -12,8 +12,7 @@ CFLAGS += -fPIC
 # python specific compile flags
 CFLAGS += -Wno-register -Wno-strict-aliasing $(shell python2-config --includes)
 
-SRCS = puct/node.cpp puct/evaluator.cpp player.cpp
-#SRCS = minimax/node.cpp minimax/evaluator.cpp
+SRCS = puct/node.cpp puct/evaluator.cpp player.cpp puct/minimax.cpp
 
 SRCS += gdltransformer.cpp scheduler.cpp selfplay.cpp selfplaymanager.cpp
 SRCS += supervisor.cpp ggpzero_interface.cpp
@@ -24,7 +23,6 @@ DEPS = $(SRCS:.cpp=.d)
 
 # Top level
 all: $(OBJS) ggpzero_interface.so
-	@echo $(THE_PYTHONPATH)
 
 ggpzero_interface.so: $(OBJS)
 	$(CPP) -shared $(LDFLAGS) $(OBJS) $(LIBS) -o $@

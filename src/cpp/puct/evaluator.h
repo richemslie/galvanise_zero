@@ -47,6 +47,7 @@ namespace GGPZero {
         bool converged(int count) const;
 
         void checkDrawStates(const PuctNode* node, PuctNode* next);
+        PuctNode* expandChild(PuctNode* parent, PuctNodeChild* child);
 
     private:
         // tree manangement
@@ -54,7 +55,6 @@ namespace GGPZero {
         void releaseNodes(PuctNode*);
         PuctNode* lookupNode(const GGPLib::BaseState* bs, int depth);
         PuctNode* createNode(PuctNode* parent, const GGPLib::BaseState* state);
-        PuctNode* expandChild(PuctNode* parent, PuctNodeChild* child);
 
         PuctNodeChild* selectChild(PuctNode* node, Path& path);
 

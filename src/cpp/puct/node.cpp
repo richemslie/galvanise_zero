@@ -124,6 +124,7 @@ static int initialiseChildHelper(PuctNode* node, int role_index, int child_index
             child->to_node = nullptr;
 
             child->unselectable = false;
+            child->use_minimax = false;
             child->traversals = 0;
 
             // by default set to 1.0, will be overridden
