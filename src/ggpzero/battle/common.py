@@ -108,15 +108,12 @@ def get_puct_config(gen, **kwds):
 
                                             max_dump_depth=2,
 
-                                            minimax_backup_ratio=0.75,
-
                                             top_visits_best_guess_converge_ratio=0.8,
 
                                             think_time=2.0,
                                             converged_visits=2000,
 
-                                            batch_size=32,
-                                            extra_uct_exploration=-1.0)
+                                            batch_size=32)
 
     config = confs.PUCTPlayerConfig(name="puct",
                                     verbose=True,

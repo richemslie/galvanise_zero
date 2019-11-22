@@ -63,36 +63,35 @@ PuctEvaluator::~PuctEvaluator() {
 
 void PuctEvaluator::updateConf(const PuctConfig* conf) {
     if (conf->verbose) {
-        K273::l_verbose("config verbose: %d, dump_depth: %d, choice: %s",
-                        conf->verbose, conf->max_dump_depth,
-                        (conf->choose == ChooseFn::choose_top_visits) ? "choose_top_visits" : "choose_temperature");
+        K273::l_verbose("config verbose: %d, dump_depth: %d, choice: %s", conf->verbose,
+                        conf->max_dump_depth,
+                        (conf->choose == ChooseFn::choose_top_visits) ? "choose_top_visits"
+                                                                      : "choose_temperature");
 
-        K273::l_verbose("puct constant %.2f, root: %.2f",
-                        conf->puct_constant, conf->puct_constant_root);
+        K273::l_verbose("think %.1f, puct constant %.2f, root: %.2f, batch_size=%d",
+                        conf->think_time, conf->puct_constant, conf->puct_constant_root,
+                        conf->batch_size);
 
         K273::l_verbose("dirichlet_noise (pct: %.2f), fpu_prior_discount: %.2f/%.2f",
-                        conf->dirichlet_noise_pct, conf->fpu_prior_discount, conf->fpu_prior_discount_root);
+                        conf->dirichlet_noise_pct, conf->fpu_prior_discount,
+                        conf->fpu_prior_discount_root);
 
         K273::l_verbose("noise policy squash (pct: %.2f, prob: %.2f),",
                         conf->noise_policy_squash_pct, conf->noise_policy_squash_prob);
 
-        K273::l_verbose("temperature: %.2f, start(%d), stop(%d), incr(%.2f), max(%.2f) scale(%.2f)",
-                        conf->temperature, conf->depth_temperature_start, conf->depth_temperature_stop,
-                        conf->depth_temperature_max, conf->depth_temperature_increment, conf->random_scale);
+        K273::l_verbose(
+            "temperature: %.2f, start(%d), stop(%d), incr(%.2f), max(%.2f) scale(%.2f)",
+            conf->temperature, conf->depth_temperature_start, conf->depth_temperature_stop,
+            conf->depth_temperature_max, conf->depth_temperature_increment, conf->random_scale);
 
-        K273::l_verbose("converge_ratio: %.2f, minimax ratio: %.2f, extra_uct_exploration: %f",
-                        conf->top_visits_best_guess_converge_ratio, conf->minimax_backup_ratio,
-                        conf->extra_uct_exploration);
-
-        K273::l_verbose("think %.1f, converged_visits=%d, converge_multiplier: %1f, batch_size=%d",
-                        conf->think_time, conf->converged_visits,
-                        conf->evaluation_multiplier_to_convergence,
-                        conf->batch_size);
+        K273::l_verbose(
+            "converge: visits=%d, multiplier=%1f, ratio=%.2f, ",
+            conf->converged_visits, conf->evaluation_multiplier_to_convergence,
+            conf->top_visits_best_guess_converge_ratio);
 
         K273::l_verbose("transpositions %s / backup finalised %s, use_legals_count_draw %d",
                         conf->lookup_transpositions ? "true" : "false",
-                        conf->backup_finalised ? "true" : "false",
-                        conf->use_legals_count_draw);
+                        conf->backup_finalised ? "true" : "false", conf->use_legals_count_draw);
     }
 
     this->conf = conf;
@@ -331,14 +330,6 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
         // standard PUCT as per AG0 paper
         double exploration_score = node->puct_constant * c->policy_prob * sqrt_node_visits / (traversals + inflight_visits);
 
-        // extra exploration for top nodes?  Note minimax_backup_ratio must be set for this.
-        if (this->conf->extra_uct_exploration > 0 && node->visits > 10000 * depth && count < 5) {
-            const double extra = this->conf->extra_uct_exploration * (std::sqrt(std::log((double) node->visits + 1) /
-                                                                          (traversals + inflight_visits)));
-
-            exploration_score += extra;
-      }
-
         if (c->to_node != nullptr) {
             PuctNode* cn = c->to_node;
             child_score = cn->getCurrentScore(node->lead_role_index);
@@ -451,41 +442,6 @@ PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
     return best_child;
 }
 
-
-void PuctEvaluator::backUpMiniMax(float* new_scores, const PathElement& cur) {
-    return;
-
-    const int role_index = cur.node->lead_role_index;
-    if (role_index == -1) {
-        return;
-    }
-
-    // valid and enabled?
-    if (cur.best == nullptr ||
-        cur.best->to_node == nullptr ||
-        this->conf->minimax_backup_ratio < 0.0) {
-        return;
-    }
-
-    // was a good choice?
-    if (cur.choice == cur.best) {
-        return;
-    }
-
-    // nothing to do in this case
-    if (cur.node->visits == 0) {
-        return;
-    }
-
-    PuctNode* best = cur.best->to_node;
-    double ratio = this->conf->minimax_backup_ratio;
-
-    for (int ii=0; ii<this->sm->getRoleCount(); ii++) {
-        new_scores[ii] = (ratio * best->getCurrentScore(ii) +
-                          (1.0 - ratio) * new_scores[ii]);
-    }
-}
-
 void PuctEvaluator::backup(float* new_scores, const Path& path) {
     const int role_count = this->sm->getRoleCount();
 
@@ -553,8 +509,6 @@ void PuctEvaluator::backup(float* new_scores, const Path& path) {
             }
 
         } else {
-            // if configured, will minimax
-            this->backUpMiniMax(new_scores, cur);
             for (int ii=0; ii<this->sm->getRoleCount(); ii++) {
                 float visits = cur.node->visits;
                 if (visits > 100000) {
@@ -577,10 +531,12 @@ void PuctEvaluator::backup(float* new_scores, const Path& path) {
         if (cur.choice != nullptr) {
             cur.choice->traversals++;
 
-            // apply policy dilution (XXX abusing minimax_backup_ratio)
-            if (this->conf->minimax_backup_ratio > 0 && cur.node->visits > 23) {
-                if (cur.node->getCurrentScore(cur.node->lead_role_index) < 0.7 &&
-                    cur.node->getCurrentScore(cur.node->lead_role_index) > 0.3) {
+            // apply policy dilution (XXX add an option)
+            if (cur.node->visits > 23) {
+                const float cur_score = cur.node->getCurrentScore(cur.node->lead_role_index);
+
+                // widen ranges
+                if (cur_score > 0.3 && cur_score < 0.7) {
 
                     // reasonable?
                     const float policy_dilute_apply = 0.995;
@@ -591,8 +547,7 @@ void PuctEvaluator::backup(float* new_scores, const Path& path) {
                         cur.choice->policy_prob = std::max(policy_dilute_min, cur.choice->policy_prob);
                     }
 
-                } else if (cur.node->getCurrentScore(cur.node->lead_role_index) < 0.85 &&
-                           cur.node->getCurrentScore(cur.node->lead_role_index) > 0.15) {
+                } else if (cur_score > 0.15 && cur_score < 0.85) {
 
                     // reasonable?
                     const float policy_dilute_apply = 0.9975;
@@ -603,8 +558,7 @@ void PuctEvaluator::backup(float* new_scores, const Path& path) {
                         cur.choice->policy_prob = std::max(policy_dilute_min, cur.choice->policy_prob);
                     }
 
-                } else if (cur.node->getCurrentScore(cur.node->lead_role_index) < 0.995 &&
-                           cur.node->getCurrentScore(cur.node->lead_role_index) > 0.005) {
+                } else {
 
                     // reasonable?
                     const float policy_dilute_apply = 0.9975;
@@ -613,15 +567,6 @@ void PuctEvaluator::backup(float* new_scores, const Path& path) {
                     if (cur.choice->policy_prob > policy_dilute_min) {
                         cur.choice->policy_prob *= policy_dilute_apply;
                         cur.choice->policy_prob = std::max(policy_dilute_min, cur.choice->policy_prob);
-                    }
-                } else {
-                    // restore policy
-                    if (!cur.node->dirichlet_noise_set) {
-                        for (int ii=0; ii<cur.node->num_children; ii++) {
-                            PuctNodeChild* c = cur.node->getNodeChild(this->sm->getRoleCount(), ii);
-                            // reset policy_prob
-                            c->policy_prob = c->policy_prob_orig;
-                        }
                     }
                 }
             }

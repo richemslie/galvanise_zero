@@ -9,15 +9,16 @@ from ggpzero.defs.datadesc import GenerationDescription
 class PUCTEvaluatorConfig(object):
     verbose = attribute(False)
 
-    puct_constant = attribute(0.75)
+    puct_constant = attribute(0.85)
     puct_constant_root = attribute(2.5)
 
     # added to root child policy pct (< 0 is off)
     dirichlet_noise_pct = attribute(0.25)
 
     # policy squashing during noise will squash any probabilities in policy over
-    # noise_policy_squash_prob to noise_policy_squash_prob.
-    # the pct is whether it will activate or not during setting noise (< 0 is off)
+    # noise_policy_squash_prob to noise_policy_squash_prob.  the pct is whether it will activate or
+    # not during setting noise (< 0 is off) hence, it is an option to prevent overfitting self-play
+    # with strong policy and to let dirichlet noise do its thing
     noise_policy_squash_pct = attribute(-1)
     noise_policy_squash_prob = attribute(0.05)
 
@@ -27,6 +28,7 @@ class PUCTEvaluatorConfig(object):
     # debug, only if verbose is true
     max_dump_depth = attribute(2)
 
+    # all the temperature settings
     random_scale = attribute(0.5)
     temperature = attribute(1.0)
     depth_temperature_start = attribute(5)
@@ -37,15 +39,26 @@ class PUCTEvaluatorConfig(object):
     # popular leela-zero feature: First Play Urgency.  When the policy space is large - this might
     # be neccessary.  If > 0, applies the prior of the parent, minus a discount to unvisited nodes
     # < 0 is off.
-    fpu_prior_discount = attribute(-1.0)
-    fpu_prior_discount_root = attribute(-1.0)
+    fpu_prior_discount = attribute(0.25)
+    fpu_prior_discount_root = attribute(0.25)
 
-    minimax_backup_ratio = attribute(0.75)
+    # main control for real matches
+    think_time = attribute(10.0)
 
+    # converge options.  converge basically means: top_visits == top_score in root.
+
+    # says if we have visited more than enought so that converge-ment has occured
+    converged_visits = attribute(5000)
+
+    # if we need to bail and not converged, will allow some relaxation at choice time
     top_visits_best_guess_converge_ratio = attribute(0.8)
 
-    think_time = attribute(10.0)
-    converged_visits = attribute(5000)
+    # if using think_time, will multiply the think_time until converged
+    # if using evals_per_move, then will multiply until converged.  Very useful for self-play and low evals.
+
+    # XXX evals_per_move is called playouts_per_iteration below, need to fix this remnant.  In
+    # SelfPlayConfig it is correctly named.
+    evaluation_multiplier_to_convergence = attribute(1.0)
 
     # batches to GPU.  number of greenlets to run, along with virtual lossesa
     batch_size = attribute(32)
@@ -53,19 +66,11 @@ class PUCTEvaluatorConfig(object):
     # for repetition
     use_legals_count_draw = attribute(-1)
 
-    # experimental for long running searches: extra_uct_exploration
-    extra_uct_exploration = attribute(-1.0)
-
+    # turns on the MCTS prover during back propagation of scores.
     backup_finalised = attribute(False)
+
+    # allow transpositions in the game tree.  Non wise to use this in self-play.
     lookup_transpositions = attribute(False)
-
-    # XXX currently not implemented in current PuctPlayer ZZZ
-    evaluation_multiplier_to_convergence = attribute(1.0)
-
-    # root level minmax-ing.  Expands the root node, and presets visits.
-    # -1 off.
-    # XXX currently not implemented in current PuctPlayer ZZZ
-    root_expansions_preset_visits = attribute(-1)
 
 
 @register_attrs
@@ -92,7 +97,7 @@ class SelfPlayConfig(object):
     # This is just the simplest way to introduce concept without changing much code.  < 0, off.
     oscillate_sampling_pct = attribute(0.25)
 
-    # temperature for policy
+    # temperature for policy (XXX remove this, I have never used it)
     temperature_for_policy = attribute(1.0)
 
     # sample is the actual sample we take to train for.  The focus is on good policy distribution.
@@ -167,7 +172,7 @@ class TrainNNConfig(object):
 
     # one of adam / amsgrad/ SGD
     compile_strategy = attribute("SGD")
-    learning_rate = attribute(0.03)
+    learning_rate = attribute(0.01)
     l2_regularisation = attribute(0.0001)
 
     # list of tuple.  This is the replay buffer.
@@ -179,6 +184,7 @@ class TrainNNConfig(object):
     # [(-1, 1.0)]
     # Will take all generations with 100% data.
 
+    # XXX better name would be replay_sample_buckets
     resample_buckets = attribute(default=attr_factory(list))
 
     # set the maximum size for an epoch.  buckets will be scaled accordingly.

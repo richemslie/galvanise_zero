@@ -83,8 +83,6 @@ static GGPZero::PuctConfig* createPuctConfig(PyObject* dict) {
     config->fpu_prior_discount = asFloat("fpu_prior_discount");
     config->fpu_prior_discount_root = asFloat("fpu_prior_discount_root");
 
-    config->minimax_backup_ratio = asFloat("minimax_backup_ratio");
-
     config->top_visits_best_guess_converge_ratio = asFloat("top_visits_best_guess_converge_ratio");
 
     config->think_time = asFloat("think_time");
@@ -93,7 +91,6 @@ static GGPZero::PuctConfig* createPuctConfig(PyObject* dict) {
     config->batch_size = asInt("batch_size");
 
     config->use_legals_count_draw = asInt("use_legals_count_draw");
-    config->extra_uct_exploration = asFloat("extra_uct_exploration");
 
     config->backup_finalised = asInt("backup_finalised");
     config->lookup_transpositions = asInt("lookup_transpositions");

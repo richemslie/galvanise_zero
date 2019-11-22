@@ -32,9 +32,6 @@ namespace GGPZero {
         float fpu_prior_discount_root;
 
         // < 0, off
-        float minimax_backup_ratio;
-
-        // < 0, off
         float top_visits_best_guess_converge_ratio;
 
         float think_time;
@@ -44,9 +41,6 @@ namespace GGPZero {
 
         // <= 0, off (XXX unused currently)
         int use_legals_count_draw;
-
-        // extra exploration
-        float extra_uct_exploration;
 
         // MCTS prover
         bool backup_finalised;
