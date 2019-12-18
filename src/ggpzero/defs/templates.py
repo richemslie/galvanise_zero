@@ -72,24 +72,29 @@ def nn_model_config_template(game, network_size_hint, transformer, features=Fals
 
 def base_puct_config(**kwds):
     config = confs.PUCTEvaluatorConfig(verbose=False,
+                                       backup_finalised=False,
+                                       batch_size=1,
+
                                        dirichlet_noise_pct=-1,
 
-                                       root_expansions_preset_visits=-1,
+                                       puct_constant=0.85,
+                                       puct_constant_root=0.85,
+
                                        fpu_prior_discount=0.25,
                                        fpu_prior_discount_root=0.25,
 
-                                       puct_constant=0.85,
-
                                        choose="choose_temperature",
                                        temperature=1.0,
-                                       depth_temperature_max=10.0,
-                                       depth_temperature_start=8,
+                                       depth_temperature_max=5.0,
+                                       depth_temperature_start=2,
                                        depth_temperature_increment=0.2,
-                                       depth_temperature_stop=40,
+                                       depth_temperature_stop=6,
                                        random_scale=0.95,
 
+                                       think_time=-1,
                                        max_dump_depth=0,
                                        top_visits_best_guess_converge_ratio=0.85,
+                                       converged_visits=1,
                                        evaluation_multiplier_to_convergence=2.0)
     # ZZZ everyting else?
 
@@ -104,8 +109,8 @@ def selfplay_config_template():
     conf.oscillate_sampling_pct = 0.25
     conf.temperature_for_policy = 1.0
 
-    conf.puct_config = base_puct_config(dirichlet_noise_pct=0.35)
-    conf.evals_per_move = 200
+    conf.puct_config = base_puct_config(dirichlet_noise_pct=0.25)
+    conf.evals_per_move = 100
 
     conf.resign0_score_probability = 0.1
     conf.resign0_pct = 0.99
@@ -113,13 +118,9 @@ def selfplay_config_template():
     conf.resign1_pct = 0.95
 
     conf.run_to_end_pct = 0.01
-    conf.run_to_end_evals = 42
+    conf.run_to_end_evals = 32
     conf.run_to_end_puct_config = base_puct_config(dirichlet_noise_pct=0.15,
-                                                   temperature=2.0,
-                                                   depth_temperature_start=0,
-                                                   depth_temperature_increment=0.5,
-                                                   depth_temperature_max=20.0,
-                                                   random_scale=0.8)
+                                                   random_scale=0.75)
     conf.run_to_end_early_score = 0.01
     conf.run_to_end_minimum_game_depth = 30
 
@@ -139,35 +140,19 @@ def train_config_template(game, gen_prefix):
     conf.validation_split = 0.95
     conf.overwrite_existing = False
 
-    conf.epochs = 2
-    conf.batch_size = 512
+    conf.epochs = 1
+    conf.batch_size = 256
     conf.compile_strategy = "SGD"
-    conf.l2_regularisation = 0.0001
-    conf.learning_rate = 0.03
+    conf.l2_regularisation = 0.00002
+    conf.learning_rate = 0.01
 
     conf.initial_value_weight = 1.0
-    conf.max_epoch_size = 1024 * 1024 * 2
+    conf.max_epoch_size = 1024 * 1024
 
     conf.resample_buckets = [
         [
-            15,
+            100,
             1.00000
-        ],
-        [
-            30,
-            0.80000
-        ],
-        [
-            45,
-            0.60000
-        ],
-        [
-            60,
-            0.40000
-        ],
-        [
-            75,
-            0.20000
         ]]
 
     return conf
