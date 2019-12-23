@@ -372,51 +372,50 @@ Children PuctNode::sortedChildrenTraversals(const PuctNode* node,
     return children;
 }
 
-void PuctNode::debug(const PuctNode* node, int index_0, int index_1,
-                     int max_variation_depth, PuctNodeDebug& info) {
 
-    auto totalTraversals = [](const PuctNode* n) {
-        float total = 0;
-        for (int ii=0; ii<n->num_children; ii++) {
-            const PuctNodeChild* child = n->getNodeChild(2, ii);
-            total += child->traversals;
+/* sorts children first by traversals, then by score */
+Children sortedChildrenDebug(const PuctNode* node, int role_count) {
+
+    Children children;
+    for (int ii=0; ii<node->num_children; ii++) {
+        const PuctNodeChild* child = node->getNodeChild(role_count, ii);
+        children.push_back(child);
+    }
+
+    const int ri = node->lead_role_index;
+    auto f = [ri](const PuctNodeChild* a, const PuctNodeChild* b) {
+        if (a->traversals != b->traversals) {
+            return a->traversals > b->traversals;
         }
 
-        return total;
+        float a_prob = a->to_node != nullptr ? a->to_node->getCurrentScore(ri) : -1.0f;
+        float b_prob = b->to_node != nullptr ? b->to_node->getCurrentScore(ri) : -1.0f;
+        return a_prob > b_prob;
     };
 
-    // indicates error condition on return
-    info.index_0 = -1;
+    std::sort(children.begin(), children.end(), f);
+    return children;
+}
 
-    if (index_0 >= node->num_children) {
-        return;
-    }
-
-    int child_index = index_0;
-    if (index_1 >= 0) {
-        // navigate to right node / child_index
-        Children node_children = sortedChildrenTraversals(node, 2, false);
-        node = node_children[index_0]->to_node;
-        if (node == nullptr) {
-            return;
-        }
-
-        child_index = index_1;
-    }
+void PuctNode::debug(const PuctNode* node, int child_index,
+                     int max_variation_depth, PuctNodeDebug& info) {
 
     if (child_index >= node->num_children) {
         return;
     }
 
     // sort children
-    Children node_children = sortedChildrenTraversals(node, 2, false);
+    Children node_children = sortedChildrenDebug(node, 2);
 
     const PuctNodeChild* child = node_children[child_index];
 
+    if (child->to_node == nullptr) {
+        return;
+    }
+
     // set stuff on debug
-    info.index_0 = index_0;
-    info.index_1 = index_1;
-    info.pct_traversals = float(child->traversals) / totalTraversals(node);
+    info.lead_role_index = node->lead_role_index;
+    info.score = child->to_node->getCurrentScore(node->lead_role_index);
     info.move_index = child->move.get(node->lead_role_index);
 
     // add variation to max_variation_depth
@@ -433,7 +432,9 @@ void PuctNode::debug(const PuctNode* node, int index_0, int index_1,
         auto cur_children = PuctNode::sortedChildrenTraversals(cur, 2, false);
 
         const PuctNodeChild* cur_top_child = cur_children[0];
-        info.variation.push_back(cur_top_child->move.get(cur->lead_role_index));
+
+        info.variation.emplace_back(cur->lead_role_index,
+                                    cur_top_child->move.get(cur->lead_role_index));
 
         cur = cur_top_child->to_node;
     }

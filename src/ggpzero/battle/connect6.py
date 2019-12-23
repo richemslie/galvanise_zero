@@ -41,7 +41,7 @@ class MatchInfo(MatchGameInfo):
         def to_cord(x):
             return "_abcdefghijklmnopqrs"[int(x)]
 
-        return "%s%s%s%s" % tuple(to_cord(x) for x in move_a+move_b)
+        return "%s%s%s%s" % tuple(to_cord(x) for x in move_a + move_b)
 
     def print_board(self, sm):
         from ggplib.util.symbols import SymbolFactory

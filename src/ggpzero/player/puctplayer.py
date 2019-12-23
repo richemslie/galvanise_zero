@@ -92,6 +92,10 @@ class PUCTPlayer(MatchPlayer):
         self.last_node_count = node_count
         return move
 
+    def balance_moves(self, max_count):
+        self.poller.player_balance_moves(max_count)
+        self.poller.poll_loop()
+
     def tree_debug(self):
         return self.poller.player_tree_debug()
 

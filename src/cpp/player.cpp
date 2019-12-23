@@ -118,45 +118,25 @@ std::tuple <int, float, int> Player::puctPlayerGetMove(int lead_role_index) {
                            this->evaluator->nodeCount());
 }
 
-std::vector <PuctNodeDebug> Player::treeDebugInfo() {
-    std::vector <PuctNodeDebug> res;
+void Player::balanceNode(int max_count) {
+    // ask the evaluator to balance the first 5 moves
+    K273::l_verbose("ask the evaluator to balance the first %d moves", max_count);
+    this->scheduler->createMainLoop();
+    auto f = [this, max_count]() { this->evaluator->balanceFirstMoves(max_count); };
+    this->scheduler->addRunnable(f);
+}
+
+std::vector<PuctNodeDebug> Player::treeDebugInfo() {
+    std::vector<PuctNodeDebug> res;
     const PuctNode* root = this->evaluator->getRootNode();
 
     if (root == nullptr) {
         return res;
     }
 
-    // XXX learn c++
-    struct X {
-        X(int x, int y) :
-            x(x),
-            y(y) {
-        }
-
-        int x, y;
-    };
-
-    std::vector <X> spec;
-    spec.emplace_back(0, -1);
-    spec.emplace_back(0, 0);
-    spec.emplace_back(0, 1);
-    spec.emplace_back(0, 2);
-    spec.emplace_back(0, 3);
-
-    spec.emplace_back(1, -1);
-    spec.emplace_back(1, 0);
-
-    spec.emplace_back(2, -1);
-    spec.emplace_back(2, 0);
-
-    for (X& x : spec) {
-
+    for (int ii = 0; ii < 5; ii++) {
         PuctNodeDebug info;
-        PuctNode::debug(root, x.x, x.y, 10, info);
-        if (info.index_0 < 0) {
-            return res;
-        }
-
+        PuctNode::debug(root, ii, 10, info);
         res.push_back(info);
     }
 

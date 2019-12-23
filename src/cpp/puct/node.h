@@ -18,16 +18,25 @@ namespace GGPZero {
     // Forwards
     struct PuctNode;
 
-    struct PuctNodeDebug {
-        int index_0;
-        int index_1;
+    struct VariationDesc {
+        VariationDesc(int lead_role_index, int move_index) :
+            lead_role_index(lead_role_index),
+            move_index(move_index) {
+        }
 
-        float pct_traversals;
+        int lead_role_index;
+        int move_index;
+    };
+
+    struct PuctNodeDebug {
+        float score;
+
+        int lead_role_index;
 
         // from joint_move, based on lead_role_index
         int move_index;
 
-        std::vector <int> variation;
+        std::vector <VariationDesc> variation;
     };
 
     struct PuctNodeChild {
@@ -223,7 +232,9 @@ namespace GGPZero {
                                                  int role_count,
                                                  bool next_probability=false);
 
-        static void debug(const PuctNode* node, int index_0, int index_1, int max_variation_depth, PuctNodeDebug& ref);
+        static void debug(const PuctNode* node, int child_index,
+                          int max_variation_depth, PuctNodeDebug& info);
+
 
     };
 

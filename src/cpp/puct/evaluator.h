@@ -49,6 +49,8 @@ namespace GGPZero {
         void checkDrawStates(const PuctNode* node, PuctNode* next);
         PuctNode* expandChild(PuctNode* parent, PuctNodeChild* child);
 
+        void balanceFirstMoves(int max_moves);
+
     private:
         // tree manangement
         void removeNode(PuctNode*);
@@ -61,10 +63,11 @@ namespace GGPZero {
         void backUpMiniMax(float* new_scores, const PathElement& cur);
         void backup(float* new_scores, const Path& path);
 
-        int treePlayout();
+        int treePlayout(PuctNode* current, std::vector <PathElement>&path);
 
         void playoutWorker(int worker_id);
         void playoutMain(int max_evaluations, double end_time);
+
         void logDebug(const PuctNodeChild* choice_root);
 
     public:

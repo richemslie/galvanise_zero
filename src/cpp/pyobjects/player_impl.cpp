@@ -52,6 +52,17 @@ static PyObject* Player_get_move(PyObject_Player* self, PyObject* args) {
     return ::Py_BuildValue("ifi", a, b, c);
 }
 
+static PyObject* Player_balance_moves(PyObject_Player* self, PyObject* args) {
+    int max_count = 0;
+    if (! ::PyArg_ParseTuple(args, "i", &max_count)) {
+        return nullptr;
+    }
+
+    self->impl->balanceNode(max_count);
+
+    Py_RETURN_NONE;
+}
+
 #include <stdio.h>
 static PyObject* Player_tree_debug(PyObject_Player* self, PyObject* args) {
     std::vector <PuctNodeDebug> debug_list = self->impl->treeDebugInfo();
@@ -63,13 +74,15 @@ static PyObject* Player_tree_debug(PyObject_Player* self, PyObject* args) {
 
         PyObject* variation = PyTuple_New(debug.variation.size());
         for (int jj=0; jj<debug.variation.size(); jj++) {
-            PyTuple_SetItem(variation, jj, PyLong_FromLong(debug.variation[jj]));
+            PyObject* variation_desc = ::Py_BuildValue("ii",
+                                                       debug.variation[jj].lead_role_index,
+                                                       debug.variation[jj].move_index);
+            PyTuple_SetItem(variation, jj, variation_desc);
         }
 
-        PyObject* el = ::Py_BuildValue("iifiO",
-                                       debug.index_0,
-                                       debug.index_1,
-                                       debug.pct_traversals,
+        PyObject* el = ::Py_BuildValue("fiiO",
+                                       debug.score,
+                                       debug.lead_role_index,
                                        debug.move_index,
                                        variation);
 
@@ -101,6 +114,8 @@ static struct PyMethodDef Player_methods[] = {
     {"player_apply_move", (PyCFunction) Player_apply_move, METH_VARARGS, "player_apply_move"},
     {"player_move", (PyCFunction) Player_move, METH_VARARGS, "player_move"},
     {"player_get_move", (PyCFunction) Player_get_move, METH_VARARGS, "player_get_move"},
+
+    {"player_balance_moves", (PyCFunction) Player_balance_moves, METH_VARARGS, "player_balance_moves"},
     {"player_tree_debug", (PyCFunction) Player_tree_debug, METH_VARARGS, "player_get_move"},
 
     {"poll", (PyCFunction) Player_poll, METH_VARARGS, "poll"},

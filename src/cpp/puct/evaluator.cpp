@@ -238,7 +238,6 @@ PuctNode* PuctEvaluator::expandChild(PuctNode* parent, PuctNodeChild* child) {
     return child->to_node;
 }
 
-
 typedef std::vector <PuctNodeChild*> SortedChildren;
 static SortedChildren sortedChildrenSelect(PuctNode* node, int role_count) {
 
@@ -263,6 +262,81 @@ static SortedChildren sortedChildrenSelect(PuctNode* node, int role_count) {
     return children;
 }
 
+
+static SortedChildren sortedTraversals(PuctNode* node, int role_count) {
+    SortedChildren children;
+    for (int ii = 0; ii < node->num_children; ii++) {
+        PuctNodeChild* child = node->getNodeChild(role_count, ii);
+        children.push_back(child);
+    }
+
+    auto f = [](const PuctNodeChild* a, const PuctNodeChild* b) {
+        return a->traversals > b->traversals;
+    };
+
+    std::sort(children.begin(), children.end(), f);
+    return children;
+}
+
+
+void PuctEvaluator::balanceFirstMoves(int max_moves) {
+    ASSERT(this->root != nullptr);
+
+    if (this->root->isTerminal()) {
+        return;
+    }
+
+    // limit if root doesn't have max_moves
+    max_moves = std::min(max_moves, (int) root->num_children);
+
+    auto children = sortedTraversals(this->root, this->sm->getRoleCount());
+
+    int wanted_traversals = -1;
+    for (int ii = 0; ii < max_moves; ii++) {
+        auto child = children[ii];
+
+        if (ii == 0) {
+            // get best
+            wanted_traversals = child->traversals;
+            continue;
+        }
+
+        ASSERT(wanted_traversals > 0);
+
+        K273::l_info("Balance @ index %d, wanted %d / got %d", ii, wanted_traversals,
+                     child->traversals);
+
+        while (child->traversals < wanted_traversals) {
+            // get new root and some basic checks
+            auto temp_root = child->to_node;
+            if (temp_root == nullptr || temp_root->isTerminal()) {
+                break;
+            }
+
+            int worker_count = 0;
+            auto f = [this, child, temp_root, &worker_count]() {
+                // add child to path
+                std::vector<PathElement> path;
+                PathElement e(this->root, child, child);
+                path.push_back(e);
+
+                // call treePlayout
+
+                this->treePlayout(temp_root, path);
+                worker_count--;
+            };
+
+            for (int jj=0; jj<this->conf->batch_size; jj++) {
+                worker_count++;
+                this->scheduler->addRunnable(f);
+            }
+
+            while (worker_count > 0) {
+                this->scheduler->yield();
+            }
+        }
+    }
+}
 
 PuctNodeChild* PuctEvaluator::selectChild(PuctNode* node, Path& path) {
     ASSERT(!node->isTerminal());
@@ -581,12 +655,9 @@ void PuctEvaluator::backup(float* new_scores, const Path& path) {
     }
 }
 
-int PuctEvaluator::treePlayout() {
-
-    PuctNode* current = this->root;
+int PuctEvaluator::treePlayout(PuctNode* current, std::vector <PathElement>&path) {
     ASSERT(current != nullptr && !current->isTerminal());
 
-    std::vector <PathElement> path;
     float scores[this->sm->getRoleCount()];
 
     PuctNodeChild* child = nullptr;
@@ -662,7 +733,8 @@ void PuctEvaluator::playoutWorker(int worker_id) {
             break;
         }
 
-        int depth = this->treePlayout();
+        std::vector <PathElement> path;
+        int depth = this->treePlayout(this->root, path);
 
         this->stats.playouts_max_depth = std::max(depth, this->stats.playouts_max_depth);
         this->stats.playouts_total_depth += depth;
@@ -769,7 +841,8 @@ void PuctEvaluator::playoutMain(int max_evaluations, double end_time) {
         }
 
         // and... do some work here
-        int depth = this->treePlayout();
+        std::vector <PathElement> path;
+        int depth = this->treePlayout(this->root, path);
 
         // update some stats
         this->stats.playouts_max_depth = std::max(depth, this->stats.playouts_max_depth);

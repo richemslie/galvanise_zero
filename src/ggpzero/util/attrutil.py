@@ -19,6 +19,7 @@ def register_clz(clz):
 
 
 def get_clz(mod, name):
+    # XXX these look terrible monkey patching hacks :(
     if mod == 'ggpzero.defs.confs' and name == 'Generation':
         mod = 'ggpzero.defs.datadesc'
         name = 'GenerationSamples'
