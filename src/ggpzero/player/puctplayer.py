@@ -96,13 +96,11 @@ class PUCTPlayer(MatchPlayer):
         self.poller.player_balance_moves(max_count)
         self.poller.poll_loop()
 
-    def tree_debug(self):
-        return self.poller.player_tree_debug()
+    def tree_debug(self, max_count):
+        return self.poller.player_tree_debug(max_count)
 
     def update_config(self, *args, **kwds):
         self.poller.player_update_config(*args, **kwds)
 
     def __repr__(self):
         return self.get_name()
-
-

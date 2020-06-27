@@ -65,7 +65,12 @@ static PyObject* Player_balance_moves(PyObject_Player* self, PyObject* args) {
 
 #include <stdio.h>
 static PyObject* Player_tree_debug(PyObject_Player* self, PyObject* args) {
-    std::vector <PuctNodeDebug> debug_list = self->impl->treeDebugInfo();
+    int max_count = 0;
+    if (! ::PyArg_ParseTuple(args, "i", &max_count)) {
+        return nullptr;
+    }
+
+    std::vector <PuctNodeDebug> debug_list = self->impl->treeDebugInfo(max_count);
 
     PyObject* result = PyTuple_New(debug_list.size());
 

@@ -35,7 +35,7 @@ namespace GGPZero {
         std::tuple <int, float, int> puctPlayerGetMove(int lead_role_index);
 
         void balanceNode(int max_count);
-        std::vector <PuctNodeDebug> treeDebugInfo();
+        std::vector <PuctNodeDebug> treeDebugInfo(int max_count);
 
         const ReadyEvent* poll(int predict_count, std::vector <float*>& data);
 

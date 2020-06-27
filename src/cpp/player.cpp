@@ -119,14 +119,22 @@ std::tuple <int, float, int> Player::puctPlayerGetMove(int lead_role_index) {
 }
 
 void Player::balanceNode(int max_count) {
-    // ask the evaluator to balance the first 5 moves
+    // ask the evaluator to balance the first 'max_count' moves
     K273::l_verbose("ask the evaluator to balance the first %d moves", max_count);
     this->scheduler->createMainLoop();
+
+    const PuctNode* root = this->evaluator->getRootNode();
+    if (root == nullptr) {
+        return;
+    }
+
+    max_count = std::min((int) root->num_children, max_count);
+
     auto f = [this, max_count]() { this->evaluator->balanceFirstMoves(max_count); };
     this->scheduler->addRunnable(f);
 }
 
-std::vector<PuctNodeDebug> Player::treeDebugInfo() {
+std::vector<PuctNodeDebug> Player::treeDebugInfo(int max_count) {
     std::vector<PuctNodeDebug> res;
     const PuctNode* root = this->evaluator->getRootNode();
 
@@ -134,7 +142,8 @@ std::vector<PuctNodeDebug> Player::treeDebugInfo() {
         return res;
     }
 
-    for (int ii = 0; ii < 5; ii++) {
+    max_count = std::min((int) root->num_children, max_count);
+    for (int ii = 0; ii < max_count; ii++) {
         PuctNodeDebug info;
         PuctNode::debug(root, ii, 10, info);
         res.push_back(info);
